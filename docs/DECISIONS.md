@@ -81,3 +81,25 @@ from the keyboard suggestion (`AutofillHints.oneTimeCode`).
   respawn after a forced isolate kill, process-death restart straight to
   `Ready`.
 - TalkBack pass over every auth screen.
+
+## D13. AI-action model: SmolLM2-360M-Instruct (Q4_0, 230 MB), not FunctionGemma
+The owner asked for the smallest model that can turn a message into a
+calendar event, alarm, reminder or note. I measured the candidates on this
+machine's CPU with `test/integration/llm_eval_test.dart`: grammar-constrained
+JSON, few-shot label prompt, 14 dev messages plus **16 held-out messages**
+written after tuning.
+
+| Model | Size | Held-out, model | Held-out, + guardrails | Avg latency |
+|---|---|---|---|---|
+| SmolLM2-360M-Instruct | 230 MB | 10/16 | **12/16** | 0.67 s |
+| SmolLM2-135M-Instruct (Q8) | 145 MB | 8/16 | 10/16 | 0.38 s |
+| FunctionGemma 270M | 242 MB | 5/16 | 8/16 | 1.1 s |
+| Gemma 3 270M-it / LFM2-350M-Extract | ~220–240 MB | 3/14, 2/14 (dev) | n/a | 3.6 s |
+
+FunctionGemma in native function-calling mode mostly refused in prose
+(3/7). Its Mobile-Actions fine-tune is gated on Hugging Face. Decision:
+SmolLM2-360M labels the message (action and title only), deterministic
+`ActionGuardrails` settle unambiguous phrasing, `DateResolver` computes
+dates and times, and the user confirms in an editable sheet. Re-run the
+eval before changing the model or the prompt:
+`LUMINA_LLM_SET=heldout LUMINA_LLM_MODE=label LUMINA_LLM_MODELS=assets/models/SmolLM2-360M-Instruct-Q4_0.gguf flutter test test/integration/llm_eval_test.dart`.

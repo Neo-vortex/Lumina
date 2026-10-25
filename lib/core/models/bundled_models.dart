@@ -20,10 +20,12 @@ class BundledModel {
     bytes: 59707625,
   );
 
-  static const functionGemma = BundledModel(
-    asset: 'assets/models/functiongemma-270m-it-Q4_0.gguf',
-    fileName: 'functiongemma-270m-it-Q4_0.gguf',
-    bytes: 241587424,
+  /// AI actions. Chosen by measurement over FunctionGemma 270M, Gemma 3
+  /// 270M, SmolLM2-135M and LFM2-350M-Extract; see docs/DECISIONS.md D13.
+  static const actionModel = BundledModel(
+    asset: 'assets/models/SmolLM2-360M-Instruct-Q4_0.gguf',
+    fileName: 'SmolLM2-360M-Instruct-Q4_0.gguf',
+    bytes: 229733280,
   );
 }
 

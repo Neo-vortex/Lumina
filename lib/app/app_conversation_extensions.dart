@@ -7,12 +7,17 @@ import 'package:handy_tdlib_next/api.dart' as td;
 import '../core/media/ffmpeg_service.dart';
 import '../core/media/waveform.dart';
 import '../core/storage/app_preferences.dart';
+import '../core/telegram/display.dart';
+import '../core/telegram/telegram_cache.dart';
 import '../core/theme/glow_colors.dart';
+import '../features/assistant/data/action_extractor.dart';
+import '../features/assistant/presentation/action_sheet.dart';
 import '../features/auth/bloc/auth_bloc.dart';
 import '../features/auth/domain/auth_step.dart';
 import '../features/conversation/bloc/conversation_cubit.dart';
 import '../features/conversation/data/messages_repository.dart';
 import '../features/conversation/presentation/widgets/conversation_extensions.dart';
+import '../features/conversation/presentation/widgets/message_menu.dart';
 import '../features/media/presentation/screens/send_media_screen.dart';
 import '../features/conversation/presentation/widgets/send_orb.dart';
 import '../features/media/presentation/widgets/attach_sheet.dart';
@@ -38,6 +43,41 @@ class AppConversationExtensions extends ConversationExtensions {
 
   @override
   Listenable get composerListenable => Listenable.merge([recorder, _dictation]);
+
+  // ---- AI actions (tiny on-device LLM) ---------------------------------------
+
+  @override
+  List<ExtraMenuEntry> menuEntries(td.Message message) => [
+    if (messageText(message) != null)
+      const ExtraMenuEntry(
+        MessageAction.aiAction,
+        Icons.auto_awesome_rounded,
+        'AI action: event, alarm, note',
+      ),
+  ];
+
+  @override
+  Future<void> onMenuAction(BuildContext context, MessageAction action, td.Message message) async {
+    if (action != MessageAction.aiAction) return;
+    final text = messageText(message)?.text;
+    if (text == null) return;
+    final cache = context.read<TelegramCache>();
+    final me = switch (context.read<AuthBloc>().state.step) {
+      AuthReady(:final me) => me,
+      _ => null,
+    };
+    await showAssistantActionSheet(
+      context,
+      messageText: text,
+      assistantContext: AssistantContext(
+        userName: Display.userName(me),
+        username: me?.usernames?.activeUsernames.firstOrNull ?? '',
+        senderName: message.isOutgoing ? 'the user' : Display.senderName(cache, message.senderId),
+        messageTime: Display.messageDate(message),
+        now: DateTime.now(),
+      ),
+    );
+  }
 
   // ---- Transcription & dictation (phase 6) ----------------------------------
 

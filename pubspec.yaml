@@ -53,6 +53,7 @@ dependencies:
   whisper_edge: ^0.2.0
   sqlite3: ^3.8.0
   provider: ^6.1.5+1
+  llamadart: ^0.16.2
 
 dev_dependencies:
   flutter_test:
@@ -74,9 +75,9 @@ flutter:
   uses-material-design: true
 
   assets:
-    # Git LFS. Whisper base (speech-to-text) and FunctionGemma 270M (AI actions).
+    # Git LFS. Whisper base (speech-to-text) and SmolLM2-360M-Instruct (AI actions).
     - assets/models/ggml-base-q5_1.bin
-    - assets/models/functiongemma-270m-it-Q4_0.gguf
+    - assets/models/SmolLM2-360M-Instruct-Q4_0.gguf
 
   # To add assets to your application, add an assets section, like this:
   # assets:
