@@ -5,6 +5,7 @@ import 'package:handy_tdlib_next/api.dart' as td;
 
 import '../../../core/tdlib/td_errors.dart';
 import '../../../core/telegram/telegram_cache.dart';
+import '../../../core/telegram/entity_edit.dart';
 import '../data/messages_repository.dart';
 
 part 'conversation_state.dart';
@@ -244,17 +245,35 @@ class ConversationCubit extends Cubit<ConversationState> {
   void cancelComposerMode() => emit(state.copyWith(replyTo: () => null, editing: () => null));
 
   /// Sends (or saves an edit). Returns an error message, or null on success.
-  Future<String?> send(String text, {SendOptions options = const SendOptions()}) async {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) return null;
+  Future<String?> send(
+    String text, {
+    List<td.TextEntity> entities = const [],
+    SendOptions options = const SendOptions(),
+    td.LinkPreviewOptions? linkPreview,
+  }) async {
+    final f = EntityEdit.trim(text, entities);
+    if (f.text.isEmpty) return null;
     final editing = state.editing;
     final replyTo = state.replyTo;
     try {
       if (editing != null) {
-        await _repository.editText(chatId, editing.id, trimmed);
+        await _repository.editText(
+          chatId,
+          editing.id,
+          f.text,
+          entities: f.entities,
+          linkPreviewOptions: linkPreview,
+        );
       } else {
         if (state.hasNewer) await _loadLatest(scroll: true);
-        await _repository.sendText(chatId, trimmed, replyToMessageId: replyTo?.id, options: options);
+        await _repository.sendText(
+          chatId,
+          f.text,
+          entities: f.entities,
+          replyToMessageId: replyTo?.id,
+          options: options,
+          linkPreviewOptions: linkPreview,
+        );
       }
       emit(state.copyWith(replyTo: () => null, editing: () => null));
       return null;
@@ -302,8 +321,11 @@ class ConversationCubit extends Cubit<ConversationState> {
 
   void chatAction(td.ChatAction? action) => _repository.sendAction(chatId, action).ignore();
 
-  Future<void> saveDraft(String text) =>
-      _repository.saveDraft(chatId, text, replyToMessageId: state.replyTo?.id).catchError((_) {});
+  Future<void> saveDraft(String text, {List<td.TextEntity> entities = const []}) => _repository
+      .saveDraft(chatId, text, entities: entities, replyToMessageId: state.replyTo?.id)
+      .catchError((_) {});
+
+  Future<td.LinkPreview?> linkPreview(td.FormattedText text) => _repository.linkPreview(text);
 
   // ---- Message actions -------------------------------------------------------
 

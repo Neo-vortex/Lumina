@@ -48,7 +48,12 @@ class MessageContentView extends StatelessWidget {
       return MediaCluster(messages: messages, textColor: textColor, footer: overlayFooter);
     }
     return switch (m.content) {
-      td.MessageText(:final text) => TextContent(text: text, color: textColor, footer: footer),
+      td.MessageText(:final text, :final linkPreview) => TextContent(
+        text: text,
+        color: textColor,
+        footer: footer,
+        linkPreview: linkPreview,
+      ),
       td.MessagePhoto() || td.MessageVideo() || td.MessageAnimation() => VisualContent(
         message: m,
         textColor: textColor,

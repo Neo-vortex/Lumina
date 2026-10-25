@@ -126,6 +126,20 @@ class AppPreferences {
 
   // ---- Misc ------------------------------------------------------------------
 
+  // ---- Links -----------------------------------------------------------------
+
+  /// Attach a link preview when sending a message with a link.
+  bool get linkPreviewsOnSend => _bool('links.previewOnSend', true);
+  set linkPreviewsOnSend(bool v) => _set('links.previewOnSend', v);
+
+  /// Show link preview cards (and Instant View) in received messages.
+  bool get showLinkPreviews => _bool('links.showPreviews', true);
+  set showLinkPreviews(bool v) => _set('links.showPreviews', v);
+
+  /// Open web links in the browser app instead of a Chromium Custom Tab.
+  bool get openLinksExternally => _bool('links.external', false);
+  set openLinksExternally(bool v) => _set('links.external', v);
+
   /// Delete cached media not opened for this many days; 0 keeps forever.
   int get keepMediaDays => _values['storage.keepMediaDays'] as int? ?? 0;
   set keepMediaDays(int v) => _set('storage.keepMediaDays', v);

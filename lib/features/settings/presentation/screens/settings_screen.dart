@@ -145,6 +145,29 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ],
               ),
+              SettingsSection(
+                title: 'Links',
+                children: [
+                  SwitchListTile(
+                    value: prefs.linkPreviewsOnSend,
+                    onChanged: (v) => prefs.linkPreviewsOnSend = v,
+                    title: const Text('Link previews when sending'),
+                    subtitle: const Text('Shows the preview above the composer; tap ✕ to send one message without it'),
+                  ),
+                  SwitchListTile(
+                    value: prefs.showLinkPreviews,
+                    onChanged: (v) => prefs.showLinkPreviews = v,
+                    title: const Text('Show link previews in chats'),
+                    subtitle: const Text('Including Instant View for articles'),
+                  ),
+                  SwitchListTile(
+                    value: prefs.openLinksExternally,
+                    onChanged: (v) => prefs.openLinksExternally = v,
+                    title: const Text('Open links in browser app'),
+                    subtitle: const Text('Off: a Chromium Custom Tab over Lumina (no embedded WebView)'),
+                  ),
+                ],
+              ),
               ...extras,
               const SizedBox(height: 28),
               GlowButton.warm(label: 'Log out', onPressed: () => _confirmLogout(context)),

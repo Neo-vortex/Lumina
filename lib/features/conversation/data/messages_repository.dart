@@ -1,5 +1,7 @@
 import 'package:handy_tdlib_next/api.dart' as td;
 
+import '../../../core/tdlib/td_errors.dart';
+
 import '../../../core/storage/app_preferences.dart';
 import '../../../core/tdlib/td_client.dart';
 
@@ -82,14 +84,29 @@ class MessagesRepository {
     return result is td.FormattedText ? result : td.FormattedText(text: text, entities: const []);
   }
 
+  /// Hand-applied [entities] win; otherwise Markdown in [text] is parsed.
+  Future<td.FormattedText> _format(String text, List<td.TextEntity> entities) async =>
+      entities.isEmpty ? parseMarkdown(text) : td.FormattedText(text: text, entities: entities);
+
+  /// The preview Telegram would attach to [text], or null.
+  Future<td.LinkPreview?> linkPreview(td.FormattedText text) async {
+    try {
+      return await _client.invoke<td.LinkPreview>(td.GetLinkPreview(text: text));
+    } on TdException {
+      return null;
+    }
+  }
+
   Future<td.Message> sendText(
     int chatId,
     String text, {
+    List<td.TextEntity> entities = const [],
     int? replyToMessageId,
     SendOptions options = const SendOptions(),
     bool disableLinkPreview = false,
+    td.LinkPreviewOptions? linkPreviewOptions,
   }) async {
-    final formatted = await parseMarkdown(text);
+    final formatted = await _format(text, entities);
     return _client.invoke<td.Message>(
       td.SendMessage(
         chatId: chatId,
@@ -98,15 +115,17 @@ class MessagesRepository {
         options: options.toTd(),
         inputMessageContent: td.InputMessageText(
           text: formatted,
-          linkPreviewOptions: disableLinkPreview
-              ? const td.LinkPreviewOptions(
-                  isDisabled: true,
-                  url: '',
-                  forceSmallMedia: false,
-                  forceLargeMedia: false,
-                  showAboveText: false,
-                )
-              : null,
+          linkPreviewOptions:
+              linkPreviewOptions ??
+              (disableLinkPreview
+                  ? const td.LinkPreviewOptions(
+                      isDisabled: true,
+                      url: '',
+                      forceSmallMedia: false,
+                      forceLargeMedia: false,
+                      showAboveText: false,
+                    )
+                  : null),
           clearDraft: true,
         ),
       ),
@@ -144,13 +163,23 @@ class MessagesRepository {
     ),
   );
 
-  Future<void> editText(int chatId, int messageId, String text) async {
-    final formatted = await parseMarkdown(text);
+  Future<void> editText(
+    int chatId,
+    int messageId,
+    String text, {
+    List<td.TextEntity> entities = const [],
+    td.LinkPreviewOptions? linkPreviewOptions,
+  }) async {
+    final formatted = await _format(text, entities);
     await _client.invoke<td.Message>(
       td.EditMessageText(
         chatId: chatId,
         messageId: messageId,
-        inputMessageContent: td.InputMessageText(text: formatted, clearDraft: false),
+        inputMessageContent: td.InputMessageText(
+          text: formatted,
+          linkPreviewOptions: linkPreviewOptions,
+          clearDraft: false,
+        ),
       ),
     );
   }
@@ -228,7 +257,12 @@ class MessagesRepository {
     return result.messages;
   }
 
-  Future<void> saveDraft(int chatId, String text, {int? replyToMessageId}) => _client.invoke<td.Ok>(
+  Future<void> saveDraft(
+    int chatId,
+    String text, {
+    List<td.TextEntity> entities = const [],
+    int? replyToMessageId,
+  }) => _client.invoke<td.Ok>(
     td.SetChatDraftMessage(
       chatId: chatId,
       messageThreadId: 0,
@@ -240,7 +274,7 @@ class MessagesRepository {
                   : td.InputMessageReplyToMessage(messageId: replyToMessageId),
               date: DateTime.now().millisecondsSinceEpoch ~/ 1000,
               inputMessageText: td.InputMessageText(
-                text: td.FormattedText(text: text, entities: const []),
+                text: td.FormattedText(text: text, entities: entities),
                 clearDraft: false,
               ),
               effectId: 0,

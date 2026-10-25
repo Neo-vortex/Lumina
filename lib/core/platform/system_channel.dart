@@ -17,7 +17,11 @@ class SystemChannel {
   Future<({double latitude, double longitude, String name})?> currentLocation() async {
     final r = await _ch.invokeMapMethod<String, Object?>('currentLocation');
     if (r == null) return null;
-    return (latitude: r['latitude']! as double, longitude: r['longitude']! as double, name: (r['name'] ?? '') as String);
+    return (
+      latitude: r['latitude']! as double,
+      longitude: r['longitude']! as double,
+      name: (r['name'] ?? '') as String,
+    );
   }
 
   Future<int> totalRam() async => (await _ch.invokeMethod<int>('totalRam')) ?? 0;
