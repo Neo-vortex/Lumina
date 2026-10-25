@@ -38,7 +38,8 @@ td.InputMessagePoll? buildPoll({
     options: [for (final o in options) td.InputPollOption(text: f(o))],
     isAnonymous: anonymous,
     allowsMultipleAnswers: !quiz && multiple,
-    allowsRevoting: false,
+    // Regular Telegram polls have always allowed changing a vote.
+    allowsRevoting: !quiz,
     membersOnly: false,
     countryCodes: const [],
     shuffleOptions: false,

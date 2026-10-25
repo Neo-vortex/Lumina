@@ -36,7 +36,8 @@ mkdir -p "$out"
 cp "tdlib/libs/$abi/libtdjson.so" "$out/"
 
 # The binary must be the release the Dart API was generated from.
-strings "$out/libtdjson.so" | grep -qx "$version" || { echo "libtdjson.so is not TDLib $version" >&2; exit 1; }
+# grep without -q reads all input, so strings never gets SIGPIPE under pipefail.
+strings "$out/libtdjson.so" | grep -Fx "$version" >/dev/null || { echo "libtdjson.so is not TDLib $version" >&2; exit 1; }
 if readelf -lW "$out/libtdjson.so" | awk '$1 == "LOAD" && $NF != "0x4000" { bad = 1 } END { exit !bad }'; then
   echo "libtdjson.so has LOAD segments that aren't 16 KB aligned" >&2
   exit 1
