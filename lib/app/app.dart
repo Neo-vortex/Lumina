@@ -13,6 +13,9 @@ import '../core/telegram/telegram_cache.dart';
 import '../core/theme/glow_theme.dart';
 import '../features/auth/bloc/auth_bloc.dart';
 import '../features/auth/data/auth_repository.dart';
+import '../features/calls/bloc/call_cubit.dart';
+import '../features/calls/data/call_engine.dart';
+import '../features/calls/data/calls_repository.dart';
 import '../features/chats/data/chats_repository.dart';
 import '../features/conversation/data/messages_repository.dart';
 import 'auth_gate.dart';
@@ -51,7 +54,8 @@ class LuminaApp extends StatelessWidget {
         RepositoryProvider(create: (_) => CustomEmojiStore(client)),
         RepositoryProvider(create: (c) => TdStreamServer(c.read<FileStore>()), dispose: (s) => s.stop()),
         RepositoryProvider(
-          create: (_) => AuthRepository(client: client, secureStore: secure, paths: paths, settings: settings),
+          create: (_) =>
+              AuthRepository(client: client, secureStore: secure, paths: paths, settings: settings),
         ),
         RepositoryProvider(
           create: (c) => ChatsRepository(client: client, cache: c.read<TelegramCache>()),
@@ -61,8 +65,19 @@ class LuminaApp extends StatelessWidget {
         ),
         ...featureProviders(),
       ],
-      child: BlocProvider(
-        create: (context) => AuthBloc(repository: context.read<AuthRepository>())..add(const AuthStarted()),
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider(
+            create: (context) =>
+                AuthBloc(repository: context.read<AuthRepository>())..add(const AuthStarted()),
+          ),
+          // App-wide and not lazy: incoming calls ring wherever the user is.
+          BlocProvider(
+            lazy: false,
+            create: (context) =>
+                CallCubit(repository: context.read<CallsRepository>(), engine: context.read<CallEngine>()),
+          ),
+        ],
         child: MaterialApp(
           title: 'Lumina',
           debugShowCheckedModeBanner: false,

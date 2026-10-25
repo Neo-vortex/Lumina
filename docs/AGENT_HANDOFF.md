@@ -213,8 +213,27 @@ does not copy Telegram's look.
     registered in `main.dart`; Settings → "About & licenses".
 - Not verified yet: the engine on a device (`NativeCall.load`, versions),
   the x86_64 build (first CI run), R8 keep rules (`calls-rules.pro`).
-- Next: phase 2/3, a `dev.lumina/calls` channel around `NativeCall` and
-  `features/calls/` signaling over TDLib.
+- Phases 2–3 (engine channel + signaling) are written, without UI:
+  - Kotlin `dev/lumina/calls/CallChannel.kt` ("dev.lumina/calls" +
+    "/events"): available, capabilities (versions, max layer, device
+    AEC/NS), start (from `EngineParams.toMap`), receiveSignaling, setMuted,
+    stop. Holds communication audio mode and focus during a call; video
+    frames are dropped until phase 5.
+  - Dart `features/calls/`: `domain/engine_params.dart` (`callProtocol`,
+    `engineParamsFor`: reflector ids 1…n by id, `reflector` + hex peer tag
+    credentials, server-config AEC/NS, proxy turns P2P off),
+    `data/call_engine.dart` (`CallEngine`, `ChannelCallEngine`, event
+    decoding), `data/calls_repository.dart` (TDLib requests, timeouts from
+    `call_connect_timeout_ms` / `call_packet_timeout_ms`),
+    `bloc/call_cubit.dart` (app-wide, non-lazy in `app.dart`; buffers
+    signaling until the engine runs, declines a second incoming call,
+    sends debug info when TDLib asks, rating).
+  - Incoming calls only ring while the app process runs (Lumina has no
+    push notifications).
+- Next: phase 4, the call UI: call buttons (conversation header, chat
+  info), in-call / incoming screen driven by `CallCubit`, microphone
+  permission, a `phoneCall|microphone` foreground service and incoming-call
+  notification.
 
 **C. CI / release**
 - Confirm a green run of `.github/workflows/android.yml`:
@@ -283,9 +302,9 @@ does not copy Telegram's look.
 | Rich text (code blocks, quotes, custom emoji, card numbers, media timestamps), composer formatting menu, link previews (receive + compose with size/position/remove), Instant View reader, Custom Tab links | ✅ | `core/telegram/entity_edit.dart`, `formatted_text_view.dart`, `conversation/.../formatting_controller.dart`, `link_preview_card.dart`, `instant_view_screen.dart` |
 | Hardening (cache/optimizeStorage, battery prompt, 16 KB check) | ✅ | `lib/features/maintenance/` (StorageRepository: usage by kind, clear, keep-media auto clean; Background settings + one-time battery prompt in `LifecycleWatcher`); memory pressure frees the LLM and Whisper; `tool/check_16kb.py <apk>` |
 
-Tests: `flutter test`, 151 tests covering routing, auth FSM (bloc_test),
+Tests: `flutter test`, 161 tests covering routing, auth FSM (bloc_test),
 error mapping, cache ordering, row grouping, video presets, search, assistant,
-chat info, stories, storage, the attach hub, polls, music, send options, live locations, the scheduled list and reply quotes. Run
+chat info, stories, storage, the attach hub, polls, music, send options, live locations, the scheduled list, reply quotes and calls signaling. Run
 `flutter analyze` too; it must stay at zero issues.
 
 ## 4. Environment & build
