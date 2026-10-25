@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/search/message_search.dart';
@@ -197,7 +197,7 @@ class MessageIndexer extends ChangeNotifier implements MessageSearch {
         await w.setProgress(chatId, from, done: true);
         return any;
       }
-      final older = result.messages.where((m) => from == 0 || m.id < from).toList();
+      final older = result.messages.nonNulls.where((m) => from == 0 || m.id < from).toList();
       if (older.isEmpty) {
         await w.setProgress(chatId, from, done: true);
         return any;

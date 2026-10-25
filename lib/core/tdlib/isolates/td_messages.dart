@@ -1,6 +1,6 @@
 import 'dart:isolate';
 
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 // Messages exchanged between the UI isolate and the two TDLib isolates.
 // Everything here must be sendable through a SendPort: plain immutable data,

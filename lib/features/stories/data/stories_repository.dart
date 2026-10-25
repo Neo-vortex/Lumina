@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../core/media/ffmpeg_service.dart';
 import '../../../core/storage/app_preferences.dart';
@@ -56,9 +56,9 @@ class StoriesRepository extends ChangeNotifier {
         _active[activeStories.chatId] = activeStories;
         notifyListeners();
       case td.UpdateStory(:final story):
-        _stories[(story.senderChatId, story.id)] = story;
-      case td.UpdateStoryDeleted(:final storySenderChatId, :final storyId):
-        _stories.remove((storySenderChatId, storyId));
+        _stories[(story.posterChatId, story.id)] = story;
+      case td.UpdateStoryDeleted(:final storyPosterChatId, :final storyId):
+        _stories.remove((storyPosterChatId, storyId));
       case td.UpdateAuthorizationState(authorizationState: td.AuthorizationStateReady()):
         loadMain().ignore();
       case td.UpdateAuthorizationState(authorizationState: td.AuthorizationStateClosed()):
@@ -96,7 +96,7 @@ class StoriesRepository extends ChangeNotifier {
     final cached = _stories[(chatId, storyId)];
     if (cached != null) return cached;
     final s = await _client.invoke<td.Story>(
-      td.GetStory(storySenderChatId: chatId, storyId: storyId, onlyLocal: false),
+      td.GetStory(storyPosterChatId: chatId, storyId: storyId, onlyLocal: false),
     );
     return _stories[(chatId, storyId)] = s;
   }
@@ -104,17 +104,17 @@ class StoriesRepository extends ChangeNotifier {
   /// Marks the story as viewed, unless the user hides story views (ghost mode).
   Future<void> open(int chatId, int storyId) async {
     if (_prefs.hideStoryViews) return;
-    await _client.invoke<td.Ok>(td.OpenStory(storySenderChatId: chatId, storyId: storyId));
+    await _client.invoke<td.Ok>(td.OpenStory(storyPosterChatId: chatId, storyId: storyId));
   }
 
   Future<void> close(int chatId, int storyId) async {
     if (_prefs.hideStoryViews) return;
-    await _client.invoke<td.Ok>(td.CloseStory(storySenderChatId: chatId, storyId: storyId));
+    await _client.invoke<td.Ok>(td.CloseStory(storyPosterChatId: chatId, storyId: storyId));
   }
 
   Future<void> react(int chatId, int storyId, String? emoji) => _client.invoke<td.Ok>(
     td.SetStoryReaction(
-      storySenderChatId: chatId,
+      storyPosterChatId: chatId,
       storyId: storyId,
       reactionType: emoji == null ? null : td.ReactionTypeEmoji(emoji: emoji),
       updateRecentReactions: true,
@@ -124,8 +124,7 @@ class StoriesRepository extends ChangeNotifier {
   Future<void> reply(int chatId, int storyId, String text) => _client.invoke<td.Message>(
     td.SendMessage(
       chatId: chatId,
-      messageThreadId: 0,
-      replyTo: td.InputMessageReplyToStory(storySenderChatId: chatId, storyId: storyId),
+      replyTo: td.InputMessageReplyToStory(storyPosterChatId: chatId, storyId: storyId),
       inputMessageContent: td.InputMessageText(
         text: td.FormattedText(text: text, entities: const []),
         clearDraft: false,
@@ -146,7 +145,7 @@ class StoriesRepository extends ChangeNotifier {
   }) => _client.invoke<td.StoryInteractions>(
     asChat
         ? td.GetChatStoryInteractions(
-            storySenderChatId: story.senderChatId,
+            storyPosterChatId: story.posterChatId,
             storyId: story.id,
             preferForwards: false,
             offset: offset,
@@ -167,7 +166,7 @@ class StoriesRepository extends ChangeNotifier {
   /// themselves). Each must still pass [cannotPost].
   Future<List<int>> postTargets() async {
     try {
-      return (await _client.invoke<td.Chats>(const td.GetChatsToSendStories())).chatIds;
+      return (await _client.invoke<td.Chats>(const td.GetChatsToPostStories())).chatIds;
     } on TdException {
       return const [];
     }
@@ -176,16 +175,17 @@ class StoriesRepository extends ChangeNotifier {
   /// Why [chatId] can't post a story right now, or null when it can.
   Future<String?> cannotPost(int chatId) async {
     try {
-      final r = await _client.invoke<td.CanSendStoryResult>(td.CanSendStory(chatId: chatId));
+      final r = await _client.invoke<td.CanPostStoryResult>(td.CanPostStory(chatId: chatId));
       return switch (r) {
-        td.CanSendStoryResultOk() => null,
-        td.CanSendStoryResultPremiumNeeded() => 'Posting stories needs Telegram Premium on this account.',
-        td.CanSendStoryResultBoostNeeded() => 'This channel needs more boosts to post stories.',
-        td.CanSendStoryResultActiveStoryLimitExceeded() => 'You have reached the limit of active stories.',
-        td.CanSendStoryResultWeeklyLimitExceeded(:final retryAfter) =>
+        td.CanPostStoryResultOk() => null,
+        td.CanPostStoryResultPremiumNeeded() => 'Posting stories needs Telegram Premium on this account.',
+        td.CanPostStoryResultBoostNeeded() => 'This channel needs more boosts to post stories.',
+        td.CanPostStoryResultActiveStoryLimitExceeded() => 'You have reached the limit of active stories.',
+        td.CanPostStoryResultWeeklyLimitExceeded(:final retryAfter) =>
           'Weekly story limit reached. Try again in ${(retryAfter / 3600).ceil()} h.',
-        td.CanSendStoryResultMonthlyLimitExceeded(:final retryAfter) =>
+        td.CanPostStoryResultMonthlyLimitExceeded(:final retryAfter) =>
           'Monthly story limit reached. Try again in ${(retryAfter / 86400).ceil()} days.',
+        td.CanPostStoryResultLiveStoryIsActive() => 'A live story is already running in this chat.',
       };
     } on TdException catch (e) {
       return e.message;
@@ -242,12 +242,13 @@ class StoriesRepository extends ChangeNotifier {
     }
     try {
       await _client.invoke<td.Story>(
-        td.SendStory(
+        td.PostStory(
           chatId: chatId,
           content: content,
           areas: areas.isEmpty ? null : td.InputStoryAreas(areas: areas),
           caption: caption.isEmpty ? null : td.FormattedText(text: caption, entities: const []),
           privacySettings: audience.privacy,
+          albumIds: const [],
           activePeriod: 86400,
           isPostedToChatPage: keepOnProfile,
           protectContent: protect,

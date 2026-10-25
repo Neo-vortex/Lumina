@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:lumina/core/media/ffmpeg_service.dart';
 import 'package:lumina/features/media/data/media_sender.dart';
 
@@ -54,7 +54,7 @@ void main() {
       probe: audioProbe(title: 'x' * 80, performer: 'Band'),
     );
     final content = await MediaSender(FfmpegService()).build(media, caption: null);
-    final audio = content as td.InputMessageAudio;
+    final audio = (content as td.InputMessageAudio).audio;
     expect(audio.title.length, 64);
     expect(audio.performer, 'Band');
     expect(audio.duration, 215);

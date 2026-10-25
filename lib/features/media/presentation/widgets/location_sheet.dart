@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../core/platform/system_channel.dart';
 import '../../../../core/theme/glow_colors.dart';
@@ -21,12 +21,24 @@ Future<AttachPick?> showLocationSheet(BuildContext context) async {
       builder: (context, snap) {
         final here = snap.data;
         final loading = snap.connectionState != ConnectionState.done;
-        td.InputMessageContent content(int live) => td.InputMessageLocation(
-          location: td.Location(latitude: here!.latitude, longitude: here.longitude, horizontalAccuracy: 0),
-          livePeriod: live,
-          heading: 0,
-          proximityAlertRadius: 0,
-        );
+        td.InputMessageContent content(int live) {
+          final location = td.Location(
+            latitude: here!.latitude,
+            longitude: here.longitude,
+            horizontalAccuracy: 0,
+          );
+          return live == 0
+              ? td.InputMessageLocation(location: location)
+              : td.InputMessageLiveLocation(
+                  location: td.LiveLocation(
+                    location: location,
+                    livePeriod: live,
+                    heading: 0,
+                    proximityAlertRadius: 0,
+                  ),
+                );
+        }
+
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),

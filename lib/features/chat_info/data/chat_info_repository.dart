@@ -1,4 +1,4 @@
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../core/tdlib/td_client.dart';
 import '../../../core/tdlib/td_errors.dart';
@@ -132,16 +132,26 @@ class ChatInfoRepository {
   );
 
   /// Admin rights editor; null [rights] demotes to a regular member.
-  Future<void> setAdmin(td.Chat chat, int userId, td.ChatAdministratorRights? rights, {String title = ''}) =>
-      _client.invoke<td.Ok>(
-        td.SetChatMemberStatus(
-          chatId: chat.id,
-          memberId: td.MessageSenderUser(userId: userId),
-          status: rights == null
-              ? const td.ChatMemberStatusMember(memberUntilDate: 0)
-              : td.ChatMemberStatusAdministrator(customTitle: title, canBeEdited: true, rights: rights),
-        ),
-      );
+  Future<void> setAdmin(
+    td.Chat chat,
+    int userId,
+    td.ChatAdministratorRights? rights, {
+    String title = '',
+  }) async {
+    await _client.invoke<td.Ok>(
+      td.SetChatMemberStatus(
+        chatId: chat.id,
+        memberId: td.MessageSenderUser(userId: userId),
+        status: rights == null
+            ? const td.ChatMemberStatusMember(memberUntilDate: 0)
+            : td.ChatMemberStatusAdministrator(canBeEdited: true, rights: rights),
+      ),
+    );
+    // An admin's custom title is their member tag since TDLib 1.8.6x.
+    if (rights != null && title.isNotEmpty) {
+      await _client.invoke<td.Ok>(td.SetChatMemberTag(chatId: chat.id, userId: userId, tag: title));
+    }
+  }
 
   Future<void> setPermissions(td.Chat chat, td.ChatPermissions p) =>
       _client.invoke<td.Ok>(td.SetChatPermissions(chatId: chat.id, permissions: p));

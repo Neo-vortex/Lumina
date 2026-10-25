@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../core/tdlib/td_errors.dart';
 import '../data/auth_repository.dart';
@@ -74,6 +74,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(_enter(AuthWaitRegistration(termsOfService.text.text)));
       case td.AuthorizationStateWaitOtherDeviceConfirmation(:final link):
         emit(_enter(AuthWaitOtherDevice(link)));
+      case td.AuthorizationStateWaitPremiumPurchase():
+        // Needs a Google Play purchase through Telegram's own app.
+        emit(
+          state.copyWith(
+            inlineError: () =>
+                'Telegram asks this account to buy Premium before signing in. '
+                'Sign in once with the official Telegram app, then try again.',
+          ),
+        );
       case td.AuthorizationStateReady():
         try {
           final me = await _repository.getMe();

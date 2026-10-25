@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../core/telegram/display.dart';
 import '../../../../core/telegram/permissions.dart';
@@ -171,6 +171,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
               canPostStories: channel,
               canEditStories: channel,
               canDeleteStories: channel,
+              canManageDirectMessages: channel,
+              canManageTags: !channel,
+              canSendWelcomeMessages: true,
               isAnonymous: false,
             ),
           ),
@@ -467,8 +470,8 @@ class _MemberTile extends StatelessWidget {
       _ => null,
     };
     final badge = switch (member.status) {
-      td.ChatMemberStatusCreator(:final customTitle) => customTitle.isEmpty ? 'owner' : customTitle,
-      td.ChatMemberStatusAdministrator(:final customTitle) => customTitle.isEmpty ? 'admin' : customTitle,
+      td.ChatMemberStatusCreator() => member.tag.isEmpty ? 'owner' : member.tag,
+      td.ChatMemberStatusAdministrator() => member.tag.isEmpty ? 'admin' : member.tag,
       td.ChatMemberStatusRestricted() => 'restricted',
       _ => null,
     };

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 /// Lowest call protocol layer the engine speaks (Telegram's CALL_MIN_LAYER).
 const callMinLayer = 65;

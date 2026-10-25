@@ -1,23 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:lumina/features/stories/presentation/story_message_opener.dart';
 import 'package:lumina/features/stories/presentation/widgets/story_areas_layer.dart';
 
 td.Story _story(List<td.StoryArea> areas) => td.Story(
   id: 1,
-  senderChatId: 42,
+  posterChatId: 42,
   date: 1760000000,
-  isBeingSent: false,
+  isBeingPosted: false,
   isBeingEdited: false,
   isEdited: false,
   isPostedToChatPage: false,
   isVisibleOnlyForSelf: false,
+  canBeAddedToAlbum: false,
   canBeDeleted: false,
   canBeEdited: false,
   canBeForwarded: true,
   canBeReplied: true,
+  canSetPrivacySettings: false,
   canToggleIsPostedToChatPage: false,
   canGetStatistics: false,
   canGetInteractions: false,
@@ -26,9 +28,10 @@ td.Story _story(List<td.StoryArea> areas) => td.Story(
   content: const td.StoryContentUnsupported(),
   areas: areas,
   caption: const td.FormattedText(text: '', entities: []),
+  albumIds: const [],
 );
 
-const _middle = td.StoryAreaPosition(
+const _middle = td.AreaPosition(
   xPercentage: 50,
   yPercentage: 50,
   widthPercentage: 60,

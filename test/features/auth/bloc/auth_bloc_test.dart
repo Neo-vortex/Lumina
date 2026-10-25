@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:lumina/core/config/app_config.dart';
 import 'package:lumina/features/auth/bloc/auth_bloc.dart';
 import 'package:lumina/features/auth/domain/auth_step.dart';

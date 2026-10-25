@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../core/telegram/display.dart';
 import '../../../../core/telegram/link_opener.dart';
@@ -17,9 +17,13 @@ import '../screens/instant_view_screen.dart';
       mini: photo?.minithumbnail,
       playable: false,
     ),
+    td.LinkPreviewTypeWebApp(:final photo) => (
+      file: best(photo),
+      mini: photo?.minithumbnail,
+      playable: false,
+    ),
     td.LinkPreviewTypePhoto(:final photo) ||
-    td.LinkPreviewTypeApp(:final photo) ||
-    td.LinkPreviewTypeWebApp(:final photo) => (file: best(photo), mini: photo.minithumbnail, playable: false),
+    td.LinkPreviewTypeApp(:final photo) => (file: best(photo), mini: photo.minithumbnail, playable: false),
     td.LinkPreviewTypeEmbeddedVideoPlayer(:final thumbnail) ||
     td.LinkPreviewTypeEmbeddedAnimationPlayer(
       :final thumbnail,

@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/glow_colors.dart';
@@ -108,6 +108,9 @@ class StoryAreasLayer extends StatelessWidget {
         );
       case td.StoryAreaTypeLink(:final url):
         return _Tap(label: 'Open link', onTap: () => _confirmOpen(context, url, Uri.tryParse(url)));
+      case td.StoryAreaTypeUpgradedGift(:final giftName):
+        final url = 'https://t.me/nft/$giftName';
+        return _Tap(label: 'Open gift', onTap: () => _confirmOpen(context, url, Uri.tryParse(url)));
       case td.StoryAreaTypeLocation(:final location, :final address):
         final name = [
           address?.street,

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../../core/telegram/display.dart';
 import '../../../../../core/telegram/telegram_cache.dart';
@@ -68,7 +68,7 @@ class MessageContentView extends StatelessWidget {
         footer: footer,
       ),
       td.MessageSticker(:final sticker) => StickerContent(sticker: sticker, footer: overlayFooter),
-      td.MessageLocation() || td.MessageVenue() => LocationContent(
+      td.MessageLocation() || td.MessageLiveLocation() || td.MessageVenue() => LocationContent(
         message: m,
         textColor: textColor,
         mutedColor: mutedColor,

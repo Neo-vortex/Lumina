@@ -1,4 +1,4 @@
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../core/tdlib/td_errors.dart';
 
@@ -16,8 +16,14 @@ class MessagesRepository {
   final TdClient _client;
   final AppPreferences _prefs;
 
-  static td.InputMessageReplyTo? _replyTo(int? messageId, td.InputTextQuote? quote) =>
-      messageId == null ? null : td.InputMessageReplyToMessage(messageId: messageId, quote: quote);
+  static td.InputMessageReplyTo? _replyTo(int? messageId, td.InputTextQuote? quote) => messageId == null
+      ? null
+      : td.InputMessageReplyToMessage(
+          messageId: messageId,
+          quote: quote,
+          checklistTaskId: 0,
+          pollOptionId: '',
+        );
 
   Future<void> openChat(int chatId) => _client.invoke<td.Ok>(td.OpenChat(chatId: chatId));
 
@@ -40,7 +46,7 @@ class MessagesRepository {
         onlyLocal: false,
       ),
     );
-    return result.messages;
+    return result.messages.nonNulls.toList();
   }
 
   Future<td.Message> message(int chatId, int messageId) =>
@@ -92,7 +98,6 @@ class MessagesRepository {
     return _client.invoke<td.Message>(
       td.SendMessage(
         chatId: chatId,
-        messageThreadId: 0,
         replyTo: _replyTo(replyToMessageId, quote),
         options: options.toTd(),
         inputMessageContent: td.InputMessageText(
@@ -124,7 +129,6 @@ class MessagesRepository {
   }) => _client.invoke<td.Message>(
     td.SendMessage(
       chatId: chatId,
-      messageThreadId: 0,
       replyTo: _replyTo(replyToMessageId, quote),
       options: options.toTd(),
       inputMessageContent: content,
@@ -140,7 +144,6 @@ class MessagesRepository {
   }) => _client.invoke<td.Messages>(
     td.SendMessageAlbum(
       chatId: chatId,
-      messageThreadId: 0,
       replyTo: _replyTo(replyToMessageId, quote),
       options: options.toTd(),
       inputMessageContents: contents,
@@ -184,7 +187,6 @@ class MessagesRepository {
   }) => _client.invoke<td.Messages>(
     td.ForwardMessages(
       chatId: toChatId,
-      messageThreadId: 0,
       fromChatId: fromChatId,
       messageIds: messageIds,
       options: options.toTd(),
@@ -229,8 +231,6 @@ class MessagesRepository {
         offset: 0,
         limit: limit,
         filter: filter,
-        messageThreadId: 0,
-        savedMessagesTopicId: 0,
       ),
     );
     return found.messages;
@@ -238,7 +238,7 @@ class MessagesRepository {
 
   Future<List<td.Message>> scheduled(int chatId) async {
     final result = await _client.invoke<td.Messages>(td.GetChatScheduledMessages(chatId: chatId));
-    return result.messages;
+    return result.messages.nonNulls.toList();
   }
 
   /// Sends a scheduled message right away.
@@ -253,7 +253,10 @@ class MessagesRepository {
           messageId: messageId,
           schedulingState: whenOnline
               ? const td.MessageSchedulingStateSendWhenOnline()
-              : td.MessageSchedulingStateSendAtDate(sendDate: at!.millisecondsSinceEpoch ~/ 1000),
+              : td.MessageSchedulingStateSendAtDate(
+                  sendDate: at!.millisecondsSinceEpoch ~/ 1000,
+                  repeatPeriod: 0,
+                ),
         ),
       );
 
@@ -278,15 +281,13 @@ class MessagesRepository {
   }) => _client.invoke<td.Ok>(
     td.SetChatDraftMessage(
       chatId: chatId,
-      messageThreadId: 0,
       draftMessage: text.trim().isEmpty && replyToMessageId == null
           ? null
           : td.DraftMessage(
               replyTo: _replyTo(replyToMessageId, quote),
               date: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-              inputMessageText: td.InputMessageText(
+              content: td.DraftMessageContentText(
                 text: td.FormattedText(text: text, entities: entities),
-                clearDraft: false,
               ),
               effectId: 0,
             ),
@@ -324,9 +325,7 @@ class MessagesRepository {
   /// Typing / recording indicator, suppressed when the user hides typing.
   Future<void> sendAction(int chatId, td.ChatAction? action) async {
     if (_prefs.hideTyping) return;
-    await _client.invoke<td.Ok>(
-      td.SendChatAction(chatId: chatId, messageThreadId: 0, businessConnectionId: '', action: action),
-    );
+    await _client.invoke<td.Ok>(td.SendChatAction(chatId: chatId, businessConnectionId: '', action: action));
   }
 
   Future<String> link(int chatId, int messageId) async {
@@ -335,6 +334,8 @@ class MessagesRepository {
         chatId: chatId,
         messageId: messageId,
         mediaTimestamp: 0,
+        checklistTaskId: 0,
+        pollOptionId: '',
         forAlbum: false,
         inMessageThread: false,
       ),
@@ -354,8 +355,14 @@ class MessagesRepository {
   Future<void> viewSponsored(int chatId, int messageId) =>
       _client.invoke<td.Ok>(td.ViewMessages(chatId: chatId, messageIds: [messageId], forceRead: true));
 
-  Future<void> clickSponsored(int chatId, int messageId) =>
-      _client.invoke<td.Ok>(td.ClickChatSponsoredMessage(chatId: chatId, messageId: messageId));
+  Future<void> clickSponsored(int chatId, int messageId) => _client.invoke<td.Ok>(
+    td.ClickChatSponsoredMessage(
+      chatId: chatId,
+      messageId: messageId,
+      isMediaClick: false,
+      fromFullscreen: false,
+    ),
+  );
 
   /// Official ad toggle (Premium accounts).
   Future<void> setSponsoredEnabled(bool enabled) =>

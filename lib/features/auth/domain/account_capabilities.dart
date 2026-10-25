@@ -1,4 +1,4 @@
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 /// What the signed-in account may do. Bots get a reduced surface; features
 /// consult this instead of checking the account type themselves.

@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../core/media/ffmpeg_service.dart';
 import '../core/media/waveform.dart';
@@ -237,9 +237,11 @@ class AppConversationExtensions extends ConversationExtensions {
         }
         final error = await cubit.sendContent(
           td.InputMessageVoiceNote(
-            voiceNote: td.InputFileLocal(path: ogg),
-            duration: recording.duration.inSeconds,
-            waveform: Waveform.encode(recording.waveform),
+            voiceNote: td.InputVoiceNote(
+              voiceNote: td.InputFileLocal(path: ogg),
+              duration: recording.duration.inSeconds,
+              waveform: Waveform.encode(recording.waveform),
+            ),
           ),
         );
         if (error != null) messenger.showSnackBar(SnackBar(content: Text(error)));

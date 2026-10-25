@@ -1,4 +1,4 @@
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 enum ProxyKind { socks5, http, mtproto }
 
@@ -33,32 +33,39 @@ class ProxyConfig {
     ProxyKind.mtproto => td.ProxyTypeMtproto(secret: secret),
   };
 
-  factory ProxyConfig.fromTd(td.Proxy p) => switch (p.type) {
-    td.ProxyTypeSocks5(:final username, :final password) => ProxyConfig(
-      server: p.server,
-      port: p.port,
-      kind: ProxyKind.socks5,
-      username: username,
-      password: password,
-      enabled: p.isEnabled,
-    ),
-    td.ProxyTypeHttp(:final username, :final password, :final httpOnly) => ProxyConfig(
-      server: p.server,
-      port: p.port,
-      kind: ProxyKind.http,
-      username: username,
-      password: password,
-      httpOnly: httpOnly,
-      enabled: p.isEnabled,
-    ),
-    td.ProxyTypeMtproto(:final secret) => ProxyConfig(
-      server: p.server,
-      port: p.port,
-      kind: ProxyKind.mtproto,
-      secret: secret,
-      enabled: p.isEnabled,
-    ),
-  };
+  td.Proxy toTdProxy() => td.Proxy(server: server, port: port, type: toTd());
+
+  /// Null for proxy kinds Lumina can't edit (web proxies).
+  static ProxyConfig? fromTd(td.AddedProxy added) {
+    final p = added.proxy;
+    return switch (p.type) {
+      td.ProxyTypeSocks5(:final username, :final password) => ProxyConfig(
+        server: p.server,
+        port: p.port,
+        kind: ProxyKind.socks5,
+        username: username,
+        password: password,
+        enabled: added.isEnabled,
+      ),
+      td.ProxyTypeHttp(:final username, :final password, :final httpOnly) => ProxyConfig(
+        server: p.server,
+        port: p.port,
+        kind: ProxyKind.http,
+        username: username,
+        password: password,
+        httpOnly: httpOnly,
+        enabled: added.isEnabled,
+      ),
+      td.ProxyTypeMtproto(:final secret) => ProxyConfig(
+        server: p.server,
+        port: p.port,
+        kind: ProxyKind.mtproto,
+        secret: secret,
+        enabled: added.isEnabled,
+      ),
+      td.ProxyTypeWeb() => null,
+    };
+  }
 
   /// Non-secret fields only.
   Map<String, Object> toJson() => {

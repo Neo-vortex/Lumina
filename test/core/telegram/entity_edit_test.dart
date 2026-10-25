@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:lumina/core/telegram/entity_edit.dart';
 import 'package:lumina/core/telegram/widgets/formatted_text_view.dart';
 import 'package:lumina/features/conversation/presentation/widgets/formatting_controller.dart';

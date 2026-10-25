@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../core/media/tdlib_stream_server.dart';
 import '../../../../core/telegram/display.dart';
@@ -205,12 +205,12 @@ class _ChatStoriesState extends State<_ChatStories> with SingleTickerProviderSta
 
   void _markOpen() {
     final s = _story;
-    if (s != null && widget.active) _repo.open(s.senderChatId, s.id).ignore();
+    if (s != null && widget.active) _repo.open(s.posterChatId, s.id).ignore();
   }
 
   void _closeCurrent() {
     final s = _story;
-    if (s != null) _repo.close(s.senderChatId, s.id).ignore();
+    if (s != null) _repo.close(s.posterChatId, s.id).ignore();
   }
 
   void _syncTimer() {
@@ -265,7 +265,7 @@ class _ChatStoriesState extends State<_ChatStories> with SingleTickerProviderSta
     _reply.clear();
     _closeReply();
     try {
-      await _repo.reply(s.senderChatId, s.id, text);
+      await _repo.reply(s.posterChatId, s.id, text);
       messenger.showSnackBar(const SnackBar(content: Text('Reply sent')));
     } catch (_) {
       messenger.showSnackBar(const SnackBar(content: Text('Could not send the reply')));
@@ -283,8 +283,8 @@ class _ChatStoriesState extends State<_ChatStories> with SingleTickerProviderSta
     if (s == null) return;
     HapticFeedback.lightImpact();
     try {
-      await _repo.react(s.senderChatId, s.id, emoji);
-      final fresh = await _repo.story(s.senderChatId, s.id);
+      await _repo.react(s.posterChatId, s.id, emoji);
+      final fresh = await _repo.story(s.posterChatId, s.id);
       if (mounted && _story?.id == s.id) {
         setState(
           () => _story = fresh.copyWith(
@@ -588,7 +588,7 @@ class _SaveButton extends StatelessWidget {
     return ListenableBuilder(
       listenable: store,
       builder: (context, _) {
-        final saved = store.isSaved(story.senderChatId, story.id);
+        final saved = store.isSaved(story.posterChatId, story.id);
         if (!story.canBeForwarded) {
           return const IconButton(
             tooltip: 'The poster turned off saving',

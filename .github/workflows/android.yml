@@ -26,11 +26,15 @@ jobs:
   engine:
     uses: ./.github/workflows/calls-engine.yml
 
+  # libtdjson.so at the pinned TDLib release (see tdlib.yml).
+  tdlib:
+    uses: ./.github/workflows/tdlib.yml
+
   build:
-    needs: engine
+    needs: [engine, tdlib]
     # A failed engine build still produces an APK (calls then say they're
-    # unavailable); the step below warns.
-    if: ${{ !cancelled() }}
+    # unavailable; the step below warns); TDLib is required.
+    if: ${{ !cancelled() && needs.tdlib.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -91,9 +95,33 @@ jobs:
             echo "::warning::Calls engine $KEY is not available; this APK has no calls"
           fi
 
+      - name: TDLib
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ needs.tdlib.outputs.key }}
+        run: |
+          gh release download "tdlib-$KEY" -p 'libtdjson-*.so' -D tdlib
+          for abi in arm64-v8a x86_64; do
+            mkdir -p "android/app/src/main/jniLibs/$abi"
+            mv "tdlib/libtdjson-$abi.so" "android/app/src/main/jniLibs/$abi/libtdjson.so"
+          done
+          ls -l android/app/src/main/jniLibs/*/libtdjson.so
+
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
+
+      - name: lumina_tdlib tests and generated-code check
+        working-directory: packages/lumina_tdlib
+        run: |
+          dart pub get
+          dart test
+          dart run tool/generate.dart
+          if [ -n "$(git status --porcelain -- lib/src/tdapi)" ]; then
+            echo "::error::lib/src/tdapi is stale; run 'dart run tool/generate.dart' in packages/lumina_tdlib"
+            git status --porcelain -- lib/src/tdapi | head -20
+            exit 1
+          fi
 
       # A stable debug key keeps APKs from different runs installable over
       # each other. Store one as the DEBUG_KEYSTORE_B64 secret (see
@@ -129,7 +157,10 @@ jobs:
           ls -lh
 
       - name: Check 16 KB page alignment
-        run: python3 -I tool/check_16kb.py build/app/outputs/flutter-apk/lumina-arm64-v8a-release.apk
+        run: |
+          python3 -I tool/check_16kb.py build/app/outputs/flutter-apk/lumina-arm64-v8a-release.apk
+          unzip -l build/app/outputs/flutter-apk/lumina-arm64-v8a-release.apk | grep -q 'lib/arm64-v8a/libtdjson.so' \
+            || { echo "::error::libtdjson.so is missing from the APK"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:lumina/core/media/ffmpeg_service.dart';
 import 'package:lumina/core/storage/app_preferences.dart';
 import 'package:lumina/features/maintenance/data/storage_repository.dart';

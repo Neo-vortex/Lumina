@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:super_sliver_list/super_sliver_list.dart';
 
 import '../../../../core/storage/app_preferences.dart';
@@ -79,7 +79,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   void initState() {
     super.initState();
     final draft = _cubit.state.chat?.draftMessage;
-    if (draft?.inputMessageText case td.InputMessageText(:final text)) _text.setFormatted(text);
+    if (draft?.content case td.DraftMessageContentText(:final text)) _text.setFormatted(text);
     _cubit.restoreDraftReply(draft?.replyTo).ignore();
     _scroll.addListener(_onScroll);
   }

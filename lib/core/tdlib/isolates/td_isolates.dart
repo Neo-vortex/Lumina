@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
 
-import 'package:handy_tdlib_next/api.dart' as td;
-import 'package:handy_tdlib_next/client.dart';
+import 'package:lumina_tdlib/api.dart' as td;
+import 'package:lumina_tdlib/client.dart';
 
 import 'td_messages.dart';
 

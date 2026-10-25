@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../core/tdlib/td_client.dart';
 import '../../../core/telegram/display.dart';
@@ -172,7 +172,6 @@ class NotificationCenter with WidgetsBindingObserver {
         await _client.invoke<td.Message>(
           td.SendMessage(
             chatId: chatId,
-            messageThreadId: 0,
             inputMessageContent: td.InputMessageText(
               text: td.FormattedText(text: text.trim(), entities: const []),
               clearDraft: false,

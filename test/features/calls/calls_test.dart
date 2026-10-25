@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:lumina/features/calls/bloc/call_cubit.dart';
 import 'package:lumina/features/calls/data/call_engine.dart';
 import 'package:lumina/features/calls/data/calls_repository.dart';
@@ -117,11 +117,12 @@ td.CallStateReady ready({String config = '{}', bool allowP2p = true}) => td.Call
   encryptionKey: _key,
   emojis: const ['🐱', '🍕', '🚀', '🌙'],
   allowP2p: allowP2p,
+  isGroupCallSupported: false,
   customParameters: '{"x":1}',
 );
 
 td.Call call(int id, td.CallState state, {bool outgoing = true, bool video = false}) =>
-    td.Call(id: id, userId: 42, isOutgoing: outgoing, isVideo: video, state: state);
+    td.Call(id: id, uniqueId: 0, userId: 42, isOutgoing: outgoing, isVideo: video, state: state);
 
 void main() {
   systemTests();

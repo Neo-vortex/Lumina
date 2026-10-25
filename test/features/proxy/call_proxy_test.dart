@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:lumina/app/feature_wiring.dart';
 import 'package:lumina/core/storage/app_preferences.dart';
 import 'package:lumina/features/proxy/data/proxy_repository.dart';
@@ -9,17 +9,22 @@ import '../../helpers/fakes.dart';
 
 /// Answers GetProxies with [proxies] (FakeTdClient's built-in says none).
 class ProxyClient extends FakeTdClient {
-  List<td.Proxy> proxies = [];
+  List<td.AddedProxy> proxies = [];
 
   @override
   Future<T> invoke<T extends td.TdObject>(td.TdFunction function, {Duration? timeout}) async {
-    if (function is td.GetProxies) return td.Proxies(proxies: proxies) as T;
+    if (function is td.GetProxies) return td.AddedProxies(proxies: proxies) as T;
     return super.invoke(function, timeout: timeout);
   }
 }
 
-td.Proxy proxy(int id, td.ProxyType type, {bool enabled = true}) =>
-    td.Proxy(id: id, server: 'proxy.example', port: 1080, lastUsedDate: 0, isEnabled: enabled, type: type);
+td.AddedProxy proxy(int id, td.ProxyType type, {bool enabled = true}) => td.AddedProxy(
+  id: id,
+  lastUsedDate: 0,
+  isEnabled: enabled,
+  comment: '',
+  proxy: td.Proxy(server: 'proxy.example', port: 1080, type: type),
+);
 
 void main() {
   late ProxyClient client;
@@ -45,6 +50,14 @@ void main() {
     ];
     final p = (await callProxyFor(repo))!;
     expect((p.host, p.port, p.login, p.password), ('proxy.example', 1080, 'u', 'p'));
+  });
+
+  test('web proxies, which Lumina cannot edit, are left out of the list', () async {
+    client.proxies = [
+      proxy(1, const td.ProxyTypeWeb(path: '/p', secret: 's')),
+      proxy(2, const td.ProxyTypeSocks5(username: 'u', password: 'p')),
+    ];
+    expect((await repo.list()).map((p) => p.id), [2]);
   });
 
   test('MTProto / HTTP proxies cannot carry calls', () async {

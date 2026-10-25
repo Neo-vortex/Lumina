@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../core/platform/system_channel.dart';
 import '../../../core/storage/app_preferences.dart';
@@ -156,14 +156,28 @@ class LiveLocationService extends ChangeNotifier {
         final stale = s.lastAt == null || now.difference(s.lastAt!) >= refreshEvery;
         if (!moved && !stale) continue;
         try {
+          // An edit carries the whole live location, so keep the message's own period.
+          final sent = await _client.invoke<td.Message>(
+            td.GetMessage(chatId: s.chatId, messageId: s.messageId),
+          );
+          final period = switch (sent.content) {
+            td.MessageLiveLocation(:final location) => location.livePeriod,
+            _ => null,
+          };
+          if (period == null) {
+            _remove(s);
+            continue;
+          }
           await _client.invoke<td.Message>(
             td.EditMessageLiveLocation(
               chatId: s.chatId,
               messageId: s.messageId,
-              location: here,
-              livePeriod: 0,
-              heading: 0,
-              proximityAlertRadius: 0,
+              location: td.LiveLocation(
+                location: here,
+                livePeriod: period,
+                heading: 0,
+                proximityAlertRadius: 0,
+              ),
             ),
           );
           s
@@ -195,7 +209,7 @@ class LiveLocationService extends ChangeNotifier {
         if (s != null) _remove(s);
       case td.UpdateMessageContent(:final chatId, :final messageId, :final newContent):
         final s = _find(chatId, messageId);
-        if (s != null && newContent is td.MessageLocation && newContent.expiresIn == 0) _remove(s);
+        if (s != null && newContent is td.MessageLiveLocation && newContent.expiresIn == 0) _remove(s);
       case td.UpdateDeleteMessages(:final chatId, :final messageIds, :final isPermanent) when isPermanent:
         for (final id in messageIds) {
           final s = _find(chatId, id);

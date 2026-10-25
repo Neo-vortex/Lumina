@@ -2,7 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../custom_emoji_store.dart';
 import '../link_opener.dart';
@@ -221,6 +221,12 @@ class _FormattedTextViewState extends State<FormattedTextView> {
             style = style.copyWith(color: link);
             final w = whole(e);
             recognizer = _tap(() => _copy(w.replaceAll(' ', ''), 'Card number copied'));
+          case td.TextEntityTypeDateTime():
+            break;
+          case td.TextEntityTypeTonAddress():
+            style = style.copyWith(color: link);
+            final w = whole(e);
+            recognizer = _tap(() => _copy(w, 'Address copied'));
           case td.TextEntityTypeMention():
             style = style.copyWith(color: link);
             final w = whole(e);

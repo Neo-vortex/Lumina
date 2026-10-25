@@ -1,4 +1,4 @@
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 /// Pure helpers for keeping [td.TextEntity] ranges right while text is
 /// edited, trimmed or formatted. Offsets are UTF-16 units, like Dart.
