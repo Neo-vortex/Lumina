@@ -1,0 +1,95 @@
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+/// Non-secret user preferences, persisted with shared_preferences. Listen to
+/// [changes] to react immediately.
+class AppPreferences {
+  AppPreferences(this._prefs);
+
+  /// For tests.
+  AppPreferences.inMemory() : _prefs = null;
+
+  final SharedPreferencesAsync? _prefs;
+  final _values = <String, Object>{};
+  final _changes = ValueNotifier<int>(0);
+
+  /// Fires after any preference changes.
+  Listenable get changes => _changes;
+
+  static Future<AppPreferences> load() async {
+    final prefs = AppPreferences(SharedPreferencesAsync());
+    await prefs._loadAll();
+    return prefs;
+  }
+
+  Future<void> _loadAll() async {
+    final all = await _prefs?.getAll() ?? const {};
+    for (final e in all.entries) {
+      if (e.value != null) _values[e.key] = e.value!;
+    }
+  }
+
+  bool _bool(String key, bool fallback) => _values[key] as bool? ?? fallback;
+  double _double(String key, double fallback) => (_values[key] as num?)?.toDouble() ?? fallback;
+  String? _string(String key) => _values[key] as String?;
+
+  Future<void> _set(String key, Object value) async {
+    _values[key] = value;
+    _changes.value++;
+    switch (value) {
+      case bool v:
+        await _prefs?.setBool(key, v);
+      case double v:
+        await _prefs?.setDouble(key, v);
+      case int v:
+        await _prefs?.setInt(key, v);
+      case String v:
+        await _prefs?.setString(key, v);
+    }
+  }
+
+  // ---- Privacy ("ghost mode", user request) -------------------------------
+
+  /// Don't send read receipts automatically; messages are marked read only
+  /// via "Mark as read".
+  bool get hideReadReceipts => _bool('privacy.hideReadReceipts', false);
+  set hideReadReceipts(bool v) => _set('privacy.hideReadReceipts', v);
+
+  /// Don't broadcast typing / recording actions.
+  bool get hideTyping => _bool('privacy.hideTyping', false);
+  set hideTyping(bool v) => _set('privacy.hideTyping', v);
+
+  /// Don't report the app as online while it is in the foreground.
+  bool get appearOffline => _bool('privacy.appearOffline', false);
+  set appearOffline(bool v) => _set('privacy.appearOffline', v);
+
+  // ---- Stories ---------------------------------------------------------------
+
+  /// Hide stories everywhere (most-voted suggestion on bugs.telegram.org).
+  bool get hideStories => _bool('stories.hidden', false);
+  set hideStories(bool v) => _set('stories.hidden', v);
+
+  // ---- Media -----------------------------------------------------------------
+
+  /// Voice/audio playback speed, 0.5–4.0×.
+  double get playbackSpeed => _double('media.playbackSpeed', 1.0);
+  set playbackSpeed(double v) => _set('media.playbackSpeed', v.clamp(0.5, 4.0));
+
+  bool get autoplayVideos => _bool('media.autoplayVideos', true);
+  set autoplayVideos(bool v) => _set('media.autoplayVideos', v);
+
+  // ---- Dictation (Whisper) ---------------------------------------------------
+
+  /// Send a dictated message automatically once transcribed (opt-in, §8.2).
+  bool get dictationAutoSend => _bool('dictation.autoSend', false);
+  set dictationAutoSend(bool v) => _set('dictation.autoSend', v);
+
+  /// Whisper language hint ("auto" or ISO code).
+  String get whisperLanguage => _string('dictation.language') ?? 'auto';
+  set whisperLanguage(String v) => _set('dictation.language', v);
+
+  // ---- Misc ------------------------------------------------------------------
+
+  bool get batteryPromptShown => _bool('system.batteryPromptShown', false);
+  set batteryPromptShown(bool v) => _set('system.batteryPromptShown', v);
+}
