@@ -1,14 +1,16 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:handy_tdlib_next/api.dart' as td;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/glow_colors.dart';
+import '../story_message_opener.dart';
 
 /// Interactive story areas over the 9:16 media: reaction bubbles and
-/// weather (drawn here, as Telegram apps do), and tappable links, places
-/// and venues (drawn into the media by the poster).
+/// weather (drawn here, as Telegram apps do), and tappable links, places,
+/// venues and reposted messages (drawn into the media by the poster).
 class StoryAreasLayer extends StatelessWidget {
   const StoryAreasLayer({super.key, required this.story, required this.onReact, this.onBusy});
 
@@ -120,8 +122,22 @@ class StoryAreasLayer extends StatelessWidget {
           label: 'Open ${venue.title}',
           onTap: () => _confirmOpen(context, venue.title, _geo(venue.location, venue.title)),
         );
-      default:
-        return null;
+      case td.StoryAreaTypeMessage(:final chatId, :final messageId):
+        final StoryMessageOpener opener;
+        try {
+          opener = context.read<StoryMessageOpener>();
+        } on ProviderNotFoundException {
+          return null;
+        }
+        return _Tap(
+          label: 'Open message',
+          onTap: () async {
+            // Paused while the chat is open; resumes on return.
+            onBusy?.call(true);
+            await opener.open(context, chatId, messageId);
+            onBusy?.call(false);
+          },
+        );
     }
   }
 

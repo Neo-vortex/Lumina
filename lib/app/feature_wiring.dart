@@ -32,6 +32,7 @@ import '../features/maintenance/presentation/widgets/storage_settings.dart';
 import '../features/chats/presentation/widgets/chat_row_extensions.dart';
 import '../features/stories/data/stories_repository.dart';
 import '../features/stories/data/saved_stories_store.dart';
+import '../features/stories/presentation/story_message_opener.dart';
 import '../features/chat_info/presentation/chat_info_extensions.dart';
 import '../features/chat_info/data/chat_info_repository.dart';
 import '../features/chat_info/presentation/compose_flows.dart';
@@ -98,6 +99,12 @@ List<RepositoryProvider<Object>> featureProviders() => [
       whisper: c.read<WhisperService>(),
       files: c.read<FileStore>(),
       prefs: c.read<AppPreferences>(),
+    ),
+  ),
+  RepositoryProvider<StoryMessageOpener>(
+    create: (_) => StoryMessageOpener(
+      (context, chatId, messageId) =>
+          Navigator.of(context).push(ConversationScreen.route(chatId, focusMessageId: messageId)),
     ),
   ),
   RepositoryProvider<ComposeFlows>(

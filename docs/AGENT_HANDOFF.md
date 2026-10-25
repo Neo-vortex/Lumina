@@ -216,7 +216,10 @@ does not copy Telegram's look.
 
 **E. Stories leftovers**
 - The weather area is rendered but can't be created (no weather source).
-- The story *message* area (`StoryAreaTypeMessage`) is not tappable.
+- Done: the story *message* area (`StoryAreaTypeMessage`, a reposted
+  post) is tappable and opens the chat at that message through the
+  injected `StoryMessageOpener` (wired in `feature_wiring.dart`); the
+  story pauses while the chat is open.
 - Saved-story history is a JSON index in app-private storage, not
   encrypted.
 
@@ -250,7 +253,7 @@ does not copy Telegram's look.
 | Rich text (code blocks, quotes, custom emoji, card numbers, media timestamps), composer formatting menu, link previews (receive + compose with size/position/remove), Instant View reader, Custom Tab links | ✅ | `core/telegram/entity_edit.dart`, `formatted_text_view.dart`, `conversation/.../formatting_controller.dart`, `link_preview_card.dart`, `instant_view_screen.dart` |
 | Hardening (cache/optimizeStorage, battery prompt, 16 KB check) | ✅ | `lib/features/maintenance/` (StorageRepository: usage by kind, clear, keep-media auto clean; Background settings + one-time battery prompt in `LifecycleWatcher`); memory pressure frees the LLM and Whisper; `tool/check_16kb.py <apk>` |
 
-Tests: `flutter test`, 141 tests covering routing, auth FSM (bloc_test),
+Tests: `flutter test`, 143 tests covering routing, auth FSM (bloc_test),
 error mapping, cache ordering, row grouping, video presets, search, assistant,
 chat info, stories, storage, the attach hub, polls, music, send options, live locations and the scheduled list. Run
 `flutter analyze` too; it must stay at zero issues.
