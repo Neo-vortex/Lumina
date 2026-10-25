@@ -24,6 +24,7 @@ import '../features/transcription/presentation/widgets/speech_settings.dart';
 import '../features/voice/data/voice_recorder.dart';
 import '../features/calls/data/call_engine.dart';
 import '../features/calls/data/calls_repository.dart';
+import '../features/calls/presentation/call_settings.dart';
 import '../features/media/data/live_location_service.dart';
 import '../features/media/data/media_sender.dart';
 import 'app_conversation_extensions.dart';
@@ -171,6 +172,7 @@ List<RepositoryProvider<Object>> featureProviders() => [
   RepositoryProvider<SettingsEntries>(
     create: (_) => SettingsEntries(
       (context) => [
+        const CallSettings(),
         const ConnectionSettings(),
         const StorageSettings(),
         const SearchSettings(),

@@ -262,9 +262,16 @@ does not copy Telegram's look.
     (`onShowIncomingCallUi`) or refuses, maps end reasons to
     `DisconnectCause`, handles hold, speaker, permissions.
   - Pref `calls.callingAccount` (`AppPreferences.callsUseCallingAccount`).
-- Next: the call UI (Dart): call buttons via a `ConversationExtensions`
-  hook, call screen + "return to call" pill, Settings → Calls (calling
-  account toggle + "Open Phone settings"), rating sheet.
+- Call UI (Dart, `features/calls/presentation/`): `CallButtons` in the
+  conversation header (`ConversationExtensions.headerActions`; private
+  chats with regular users, never for bots or yourself), `CallScreen`
+  (pulsing halo, status/duration, key emojis with explanation, signal
+  bars, mute/speaker/end, answer/decline, rating), `CallHost` in
+  `MaterialApp.builder` (opens the screen when a call starts unless the
+  Phone app shows it, "return to call" pill), Settings → Calls.
+  Video button waits for phase 5.
+- Next: verify on a device (audio call end to end, Telecom both modes,
+  dialing from the Phone app with Lumina closed); then phase 5 (video).
 
 **G. Background notifications without Firebase (owner item 22), not started**
 - `LuminaEngine` (process-wide cached FlutterEngine, written with the calls
@@ -342,7 +349,7 @@ does not copy Telegram's look.
 | Rich text (code blocks, quotes, custom emoji, card numbers, media timestamps), composer formatting menu, link previews (receive + compose with size/position/remove), Instant View reader, Custom Tab links | ✅ | `core/telegram/entity_edit.dart`, `formatted_text_view.dart`, `conversation/.../formatting_controller.dart`, `link_preview_card.dart`, `instant_view_screen.dart` |
 | Hardening (cache/optimizeStorage, battery prompt, 16 KB check) | ✅ | `lib/features/maintenance/` (StorageRepository: usage by kind, clear, keep-media auto clean; Background settings + one-time battery prompt in `LifecycleWatcher`); memory pressure frees the LLM and Whisper; `tool/check_16kb.py <apk>` |
 
-Tests: `flutter test`, 169 tests covering routing, auth FSM (bloc_test),
+Tests: `flutter test`, 172 tests covering routing, auth FSM (bloc_test),
 error mapping, cache ordering, row grouping, video presets, search, assistant,
 chat info, stories, storage, the attach hub, polls, music, send options, live locations, the scheduled list, reply quotes and calls signaling. Run
 `flutter analyze` too; it must stay at zero issues.

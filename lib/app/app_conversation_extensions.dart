@@ -13,6 +13,7 @@ import '../core/theme/glow_colors.dart';
 import '../features/assistant/data/action_extractor.dart';
 import '../features/assistant/presentation/action_sheet.dart';
 import '../features/auth/bloc/auth_bloc.dart';
+import '../features/calls/presentation/call_buttons.dart';
 import '../features/chat_info/presentation/compose_flows.dart';
 import '../features/chat_info/presentation/screens/chat_info_screen.dart';
 import '../features/auth/domain/auth_step.dart';
@@ -54,6 +55,19 @@ class AppConversationExtensions extends ConversationExtensions {
   @override
   void openChatInfo(BuildContext context, td.Chat chat) =>
       Navigator.of(context).push(ChatInfoScreen.route(chat.id, openChat: flows.openChat));
+
+  @override
+  List<Widget> headerActions(BuildContext context, td.Chat chat) {
+    final type = chat.type;
+    if (type is! td.ChatTypePrivate) return const [];
+    final me = switch (context.read<AuthBloc>().state.step) {
+      AuthReady(:final me, :final capabilities) when !capabilities.isBot => me,
+      _ => null,
+    };
+    final user = context.read<TelegramCache>().users[type.userId];
+    if (me == null || user == null || user.type is! td.UserTypeRegular || user.id == me.id) return const [];
+    return [CallButtons(userId: user.id)];
+  }
 
   /// Dictation progress (Whisper running on the recorded speech).
   final _dictation = ValueNotifier<double?>(null);

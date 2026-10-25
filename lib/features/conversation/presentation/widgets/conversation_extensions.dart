@@ -28,6 +28,9 @@ class ConversationExtensions {
 
   void openChatInfo(BuildContext context, td.Chat chat) {}
 
+  /// Extra header buttons (calls).
+  List<Widget> headerActions(BuildContext context, td.Chat chat) => const [];
+
   void onAttach(BuildContext context, td.Chat chat) {}
 
   void onVoice(BuildContext context, td.Chat chat, TextEditingController text) {}

@@ -318,6 +318,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     showPresence: !isBot,
                     onTitleTap: () => extensions.openChatInfo(context, chat),
                     actions: [
+                      ...ConversationExtensions.of(context).headerActions(context, chat),
                       if (chat.hasScheduledMessages)
                         IconButton(
                           tooltip: 'Scheduled messages',
