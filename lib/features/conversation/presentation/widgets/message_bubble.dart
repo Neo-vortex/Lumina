@@ -186,11 +186,12 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
                 ),
               ),
             if (m.forwardInfo != null) _ForwardHeader(info: m.forwardInfo!, color: mutedColor),
-            if (m.replyTo case td.MessageReplyToMessage(:final messageId, :final chatId)
+            if (m.replyTo case td.MessageReplyToMessage(:final messageId, :final chatId, :final quote)
                 when chatId == m.chatId || chatId == 0)
               _ReplyQuote(
                 chatId: m.chatId,
                 messageId: messageId,
+                quote: quote?.isManual ?? false ? quote!.text.text : null,
                 outgoing: outgoing,
                 onTap: () => widget.onReplyQuoteTap(messageId),
               ),
@@ -454,16 +455,19 @@ class _ForwardHeader extends StatelessWidget {
 }
 
 /// Quote of the replied-to message; loads it lazily from TDLib's cache.
+/// A passage the sender picked ([quote]) replaces the message preview.
 class _ReplyQuote extends StatefulWidget {
   const _ReplyQuote({
     required this.chatId,
     required this.messageId,
     required this.outgoing,
     required this.onTap,
+    this.quote,
   });
 
   final int chatId;
   final int messageId;
+  final String? quote;
   final bool outgoing;
   final VoidCallback onTap;
 
@@ -505,15 +509,35 @@ class _ReplyQuoteState extends State<_ReplyQuote> {
               m == null ? 'Reply' : (m.isOutgoing ? 'You' : Display.senderName(cache, m.senderId)),
               style: TextStyle(color: accent, fontWeight: FontWeight.w600, fontSize: 12),
             ),
-            Text(
-              m == null ? '…' : Display.preview(cache, m),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: widget.outgoing ? GlowColors.onAccent : GlowColors.textMuted,
-                fontSize: 13,
+            if (widget.quote case final quote?)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      quote,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: widget.outgoing ? GlowColors.onAccent : GlowColors.text,
+                        fontSize: 13,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                  Icon(Icons.format_quote_rounded, size: 16, color: accent),
+                ],
+              )
+            else
+              Text(
+                m == null ? '…' : Display.preview(cache, m),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: widget.outgoing ? GlowColors.onAccent : GlowColors.textMuted,
+                  fontSize: 13,
+                ),
               ),
-            ),
           ],
         ),
       ),

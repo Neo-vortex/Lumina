@@ -78,8 +78,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
   @override
   void initState() {
     super.initState();
-    final draft = _cubit.state.chat?.draftMessage?.inputMessageText;
-    if (draft case td.InputMessageText(:final text)) _text.setFormatted(text);
+    final draft = _cubit.state.chat?.draftMessage;
+    if (draft?.inputMessageText case td.InputMessageText(:final text)) _text.setFormatted(text);
+    _cubit.restoreDraftReply(draft?.replyTo).ignore();
     _scroll.addListener(_onScroll);
   }
 
@@ -195,7 +196,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
         case MessageAction.copy:
           await copyMessageText(context, m);
         case MessageAction.selectText:
-          await showSelectText(context, m);
+          final quote = await showSelectText(context, m, canQuote: properties?.canBeReplied ?? true);
+          if (quote != null) _cubit.startReply(m, quote: quote);
         case MessageAction.edit:
           _cubit.startEdit(m);
           _text.setFormatted(messageText(m) ?? const td.FormattedText(text: '', entities: []));
@@ -403,6 +405,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       builder: (context, _) => Composer(
                         controller: _text,
                         replyTo: state.replyTo,
+                        replyQuote: state.replyQuote,
                         editing: state.editing,
                         onSend: _send,
                         onCancelMode: () {

@@ -14,6 +14,7 @@ class ConversationState {
     this.anchor,
     this.highlightId,
     this.replyTo,
+    this.replyQuote,
     this.editing,
     this.pinned,
     this.selected = const {},
@@ -47,6 +48,9 @@ class ConversationState {
   final int? highlightId;
 
   final td.Message? replyTo;
+
+  /// The passage of [replyTo] being quoted, if the user picked one.
+  final td.InputTextQuote? replyQuote;
   final td.Message? editing;
   final td.Message? pinned;
 
@@ -76,6 +80,7 @@ class ConversationState {
     ({int messageId, int serial})? Function()? anchor,
     int? Function()? highlightId,
     td.Message? Function()? replyTo,
+    td.InputTextQuote? Function()? replyQuote,
     td.Message? Function()? editing,
     td.Message? Function()? pinned,
     Set<int>? selected,
@@ -95,6 +100,8 @@ class ConversationState {
     anchor: anchor != null ? anchor() : this.anchor,
     highlightId: highlightId != null ? highlightId() : this.highlightId,
     replyTo: replyTo != null ? replyTo() : this.replyTo,
+    // A new reply target drops the old quote unless one is given.
+    replyQuote: replyQuote != null ? replyQuote() : (replyTo != null ? null : this.replyQuote),
     editing: editing != null ? editing() : this.editing,
     pinned: pinned != null ? pinned() : this.pinned,
     selected: selected ?? this.selected,
