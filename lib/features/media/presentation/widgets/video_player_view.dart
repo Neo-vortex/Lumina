@@ -28,6 +28,8 @@ class VideoPlayerView extends StatefulWidget {
     this.muted = false,
     this.showControls = true,
     this.prefs,
+    this.paused = false,
+    this.onProgress,
   });
 
   final String source;
@@ -37,6 +39,12 @@ class VideoPlayerView extends StatefulWidget {
   final bool muted;
   final bool showControls;
   final AppPreferences? prefs;
+
+  /// Externally held pause (story viewer long-press).
+  final bool paused;
+
+  /// Playback position reports, for callers drawing their own progress.
+  final void Function(Duration position, Duration duration, bool ended)? onProgress;
 
   @override
   State<VideoPlayerView> createState() => _VideoPlayerViewState();
@@ -91,7 +99,18 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
       final speed = widget.prefs?.playbackSpeed;
       if (speed != null && speed != 1 && !widget.loop) _vlc.setPlaybackSpeed(speed.clamp(0.5, 2.0));
     }
+    if (v.isInitialized) {
+      widget.onProgress?.call(v.position, v.duration, v.isEnded);
+    }
     if (mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(VideoPlayerView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.paused != widget.paused && _vlc.value.isInitialized) {
+      widget.paused ? _vlc.pause() : _vlc.play();
+    }
   }
 
   @override

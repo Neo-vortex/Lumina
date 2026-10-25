@@ -16,7 +16,10 @@ void main() {
 
   test('createGroup creates the basic group, then loads its chat', () async {
     client.respond = (f) => switch (f) {
-      td.CreateNewBasicGroupChat() => const td.CreatedBasicGroupChat(chatId: -42, failedToAddMembers: td.FailedToAddMembers(failedToAddMembers: [])),
+      td.CreateNewBasicGroupChat() => const td.CreatedBasicGroupChat(
+        chatId: -42,
+        failedToAddMembers: td.FailedToAddMembers(failedToAddMembers: []),
+      ),
       td.GetChat(:final chatId) => fakeChat(chatId, title: 'Team'),
       _ => const td.Ok(),
     };

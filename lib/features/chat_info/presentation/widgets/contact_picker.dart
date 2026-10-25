@@ -11,7 +11,12 @@ import '../../data/chat_info_repository.dart';
 
 /// Picks one or many users from contacts, search, or an @username.
 class ContactPickerScreen extends StatefulWidget {
-  const ContactPickerScreen({super.key, required this.title, this.multiple = false, this.actionLabel = 'Done'});
+  const ContactPickerScreen({
+    super.key,
+    required this.title,
+    this.multiple = false,
+    this.actionLabel = 'Done',
+  });
 
   final String title;
   final bool multiple;
@@ -86,7 +91,10 @@ class _ContactPickerScreenState extends State<ContactPickerScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: TextField(
-              decoration: const InputDecoration(prefixIcon: Icon(Icons.search_rounded), hintText: 'Name or @username'),
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search_rounded),
+                hintText: 'Name or @username',
+              ),
               onChanged: (q) {
                 _debounce?.cancel();
                 _debounce = Timer(const Duration(milliseconds: 250), () => _load(q.trim()));

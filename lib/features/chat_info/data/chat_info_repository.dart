@@ -45,7 +45,9 @@ class ChatInfoRepository {
   Future<ChatDetails> details(td.Chat chat) async {
     switch (chat.type) {
       case td.ChatTypeSupergroup(:final supergroupId):
-        final f = await _client.invoke<td.SupergroupFullInfo>(td.GetSupergroupFullInfo(supergroupId: supergroupId));
+        final f = await _client.invoke<td.SupergroupFullInfo>(
+          td.GetSupergroupFullInfo(supergroupId: supergroupId),
+        );
         return ChatDetails(
           description: f.description,
           memberCount: f.memberCount,
@@ -56,7 +58,9 @@ class ChatInfoRepository {
           isAllHistoryAvailable: f.isAllHistoryAvailable,
         );
       case td.ChatTypeBasicGroup(:final basicGroupId):
-        final f = await _client.invoke<td.BasicGroupFullInfo>(td.GetBasicGroupFullInfo(basicGroupId: basicGroupId));
+        final f = await _client.invoke<td.BasicGroupFullInfo>(
+          td.GetBasicGroupFullInfo(basicGroupId: basicGroupId),
+        );
         return ChatDetails(
           description: f.description,
           memberCount: f.members.length,
@@ -95,7 +99,9 @@ class ChatInfoRepository {
         final d = await details(chat);
         final q = query.toLowerCase();
         return d.basicMembers.where((m) {
-          if (adminsOnly && m.status is! td.ChatMemberStatusAdministrator && m.status is! td.ChatMemberStatusCreator) {
+          if (adminsOnly &&
+              m.status is! td.ChatMemberStatusAdministrator &&
+              m.status is! td.ChatMemberStatusCreator) {
             return false;
           }
           if (q.isEmpty) return true;
@@ -178,7 +184,9 @@ class ChatInfoRepository {
   /// A user by @username (for new chats / adding members not in contacts).
   Future<int?> findUser(String username) async {
     try {
-      final chat = await _client.invoke<td.Chat>(td.SearchPublicChat(username: username.replaceFirst('@', '')));
+      final chat = await _client.invoke<td.Chat>(
+        td.SearchPublicChat(username: username.replaceFirst('@', '')),
+      );
       return switch (chat.type) {
         td.ChatTypePrivate(:final userId) => userId,
         _ => null,
@@ -207,7 +215,8 @@ class ChatInfoRepository {
   );
 
   /// End-to-end encrypted chat (users only; forbidden for bots, spec §6.1).
-  Future<td.Chat> createSecretChat(int userId) => _client.invoke<td.Chat>(td.CreateNewSecretChat(userId: userId));
+  Future<td.Chat> createSecretChat(int userId) =>
+      _client.invoke<td.Chat>(td.CreateNewSecretChat(userId: userId));
 
   Future<td.Chat> privateChat(int userId) =>
       _client.invoke<td.Chat>(td.CreatePrivateChat(userId: userId, force: false));

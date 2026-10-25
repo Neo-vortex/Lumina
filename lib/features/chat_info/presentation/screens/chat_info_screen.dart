@@ -23,9 +23,10 @@ class ChatInfoScreen extends StatefulWidget {
   /// Opens another chat (discussion group, private chat with a member).
   final void Function(BuildContext context, int chatId) openChat;
 
-  static Route<void> route(int chatId, {required void Function(BuildContext, int) openChat}) => MaterialPageRoute(
-    builder: (_) => ChatInfoScreen(chatId: chatId, openChat: openChat),
-  );
+  static Route<void> route(int chatId, {required void Function(BuildContext, int) openChat}) =>
+      MaterialPageRoute(
+        builder: (_) => ChatInfoScreen(chatId: chatId, openChat: openChat),
+      );
 
   @override
   State<ChatInfoScreen> createState() => _ChatInfoScreenState();
@@ -190,8 +191,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     final isAdmin = _cache.isAdmin(chat);
     final rights = _cache.adminRights(chat);
     final isCreator = _cache.myStatus(chat) is td.ChatMemberStatusCreator;
-    final canEditInfo = isCreator || (rights?.canChangeInfo ?? false) || (isGroup && chat.permissions.canChangeInfo);
-    final canInvite = isCreator || (rights?.canInviteUsers ?? false) || (isGroup && chat.permissions.canInviteUsers);
+    final canEditInfo =
+        isCreator || (rights?.canChangeInfo ?? false) || (isGroup && chat.permissions.canChangeInfo);
+    final canInvite =
+        isCreator || (rights?.canInviteUsers ?? false) || (isGroup && chat.permissions.canInviteUsers);
     final peer = _cache.peerUser(chat);
 
     return Scaffold(
@@ -243,8 +246,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
                             : Icons.notifications_rounded,
                         label: chat.notificationSettings.muteFor > 0 ? 'Unmute' : 'Mute',
                         onTap: () => _run(
-                          () =>
-                              context.read<ChatsRepository>().setMuted(chat.id, chat.notificationSettings.muteFor == 0),
+                          () => context.read<ChatsRepository>().setMuted(
+                            chat.id,
+                            chat.notificationSettings.muteFor == 0,
+                          ),
                         ),
                       ),
                       if (chat.type is td.ChatTypeSupergroup && !_cache.isMember(chat))
@@ -283,7 +288,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
                             if (r == null) return;
                             await _run(() async {
                               await _repo.setPermissions(chat, r.permissions);
-                              if (chat.type is td.ChatTypeSupergroup && r.slowMode != (d?.slowModeDelay ?? 0)) {
+                              if (chat.type is td.ChatTypeSupergroup &&
+                                  r.slowMode != (d?.slowModeDelay ?? 0)) {
                                 await _repo.setSlowMode(chat, r.slowMode);
                               }
                             }, done: 'Saved');
@@ -316,7 +322,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
                           (d?.description ?? '').isEmpty ? 'Add a description' : d!.description,
                           style: const TextStyle(color: GlowColors.text, fontSize: 15),
                         ),
-                        trailing: canEditInfo && peer == null ? const Icon(Icons.edit_rounded, size: 18) : null,
+                        trailing: canEditInfo && peer == null
+                            ? const Icon(Icons.edit_rounded, size: 18)
+                            : null,
                         onTap: canEditInfo && peer == null
                             ? () => _editText(
                                 title: 'Description',
@@ -359,7 +367,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
                                   TextButton(
                                     onPressed: () =>
                                         _run(() => _repo.replacePrimaryLink(chat), done: 'Old link revoked'),
-                                    child: const Text('Revoke & replace', style: TextStyle(color: GlowColors.coral)),
+                                    child: const Text(
+                                      'Revoke & replace',
+                                      style: TextStyle(color: GlowColors.coral),
+                                    ),
                                   ),
                               ],
                             ),
@@ -431,7 +442,9 @@ class _MemberTile extends StatelessWidget {
       leading: ChatAvatar.user(u, size: 40),
       title: Text(Display.userName(u)),
       subtitle: Text(Display.status(u), style: const TextStyle(color: GlowColors.textMuted, fontSize: 12)),
-      trailing: badge == null ? null : Text(badge, style: const TextStyle(color: GlowColors.cyan, fontSize: 12)),
+      trailing: badge == null
+          ? null
+          : Text(badge, style: const TextStyle(color: GlowColors.cyan, fontSize: 12)),
       onTap: onTap,
     );
   }

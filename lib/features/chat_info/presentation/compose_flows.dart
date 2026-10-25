@@ -30,7 +30,12 @@ class ComposeFlows {
   }
 
   Future<void> newGroup(BuildContext context) async {
-    final ids = await ContactPickerScreen.pick(context, title: 'New group', multiple: true, actionLabel: 'Next');
+    final ids = await ContactPickerScreen.pick(
+      context,
+      title: 'New group',
+      multiple: true,
+      actionLabel: 'Next',
+    );
     if (ids == null || !context.mounted) return;
     final fields = await _askFields(context, 'Group name', const ['Name']);
     if (fields == null || fields[0].isEmpty || !context.mounted) return;
