@@ -257,6 +257,34 @@ class MessagesRepository {
     return result.messages;
   }
 
+  /// Sends a scheduled message right away.
+  Future<void> sendScheduledNow(int chatId, int messageId) => _client.invoke<td.Ok>(
+    td.EditMessageSchedulingState(chatId: chatId, messageId: messageId, schedulingState: null),
+  );
+
+  Future<void> reschedule(int chatId, int messageId, {DateTime? at, bool whenOnline = false}) =>
+      _client.invoke<td.Ok>(
+        td.EditMessageSchedulingState(
+          chatId: chatId,
+          messageId: messageId,
+          schedulingState: whenOnline
+              ? const td.MessageSchedulingStateSendWhenOnline()
+              : td.MessageSchedulingStateSendAtDate(sendDate: at!.millisecondsSinceEpoch ~/ 1000),
+        ),
+      );
+
+  /// Live updates relevant to [chatId]'s scheduled list.
+  Stream<void> scheduledChanges(int chatId) => _client.updates.where(
+    (u) => switch (u) {
+      td.UpdateNewMessage(:final message) => message.chatId == chatId && message.schedulingState != null,
+      td.UpdateDeleteMessages(chatId: final c) ||
+      td.UpdateMessageContent(chatId: final c) ||
+      td.UpdateMessageEdited(chatId: final c) => c == chatId,
+      td.UpdateChatHasScheduledMessages(chatId: final c) => c == chatId,
+      _ => false,
+    },
+  );
+
   Future<void> saveDraft(
     int chatId,
     String text, {

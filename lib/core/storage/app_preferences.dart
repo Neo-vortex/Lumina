@@ -126,6 +126,16 @@ class AppPreferences {
 
   // ---- Misc ------------------------------------------------------------------
 
+  // ---- Attach hub ------------------------------------------------------------
+
+  /// Last "Original quality" choice in the attach hub.
+  bool get attachAsFiles => _bool('attach.asFiles', false);
+  set attachAsFiles(bool v) => _set('attach.asFiles', v);
+
+  /// JSON {tile: count}, for ordering tiles by use.
+  String get attachUsage => _string('attach.usage') ?? '{}';
+  set attachUsage(String v) => _set('attach.usage', v);
+
   // ---- Links -----------------------------------------------------------------
 
   /// Attach a link preview when sending a message with a link.

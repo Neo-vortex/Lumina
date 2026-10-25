@@ -8,6 +8,7 @@ import 'audio_content.dart';
 import 'document_content.dart';
 import 'generic_content.dart';
 import 'media_content.dart';
+import 'rich_cards_content.dart';
 import 'sticker_content.dart';
 import 'video_note_content.dart';
 import 'text_content.dart';
@@ -67,6 +68,26 @@ class MessageContentView extends StatelessWidget {
         footer: footer,
       ),
       td.MessageSticker(:final sticker) => StickerContent(sticker: sticker, footer: overlayFooter),
+      td.MessageLocation() || td.MessageVenue() => LocationContent(
+        message: m,
+        textColor: textColor,
+        mutedColor: mutedColor,
+        footer: footer,
+      ),
+      td.MessageContact(:final contact) => ContactContent(
+        contact: contact,
+        textColor: textColor,
+        mutedColor: mutedColor,
+        footer: footer,
+      ),
+      td.MessagePoll(:final poll) => PollContent(
+        key: ValueKey(poll.id),
+        message: m,
+        poll: poll,
+        textColor: textColor,
+        mutedColor: mutedColor,
+        footer: footer,
+      ),
       td.MessageVoiceNote(:final voiceNote, :final isListened) => VoiceNoteContent(
         message: m,
         voice: voiceNote,

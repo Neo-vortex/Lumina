@@ -401,6 +401,8 @@ class ConversationCubit extends Cubit<ConversationState> {
   void _onUpdate(td.Update u) {
     switch (u) {
       case td.UpdateNewMessage(:final message) when message.chatId == chatId:
+        // Scheduled messages live in their own list until they're sent.
+        if (message.schedulingState != null) return;
         if (state.hasNewer || state.messages.any((m) => m.id == message.id)) return;
         emit(state.copyWith(messages: [message, ...state.messages]));
       case td.UpdateMessageSendSucceeded(:final message, :final oldMessageId) when message.chatId == chatId:
