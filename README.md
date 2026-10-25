@@ -15,6 +15,15 @@ flutter run \
 # optional: --dart-define=TG_TEST_DC=true
 ```
 
+Or put the api_id and api_hash in `credential.txt` at the repository root
+(git-ignored; the layout copied from my.telegram.org works) and use the
+wrapper, which adds the two defines to `run`, `build`, `test` and `drive`:
+
+```sh
+tool/flutter.sh run
+tool/flutter.sh build apk --release --split-per-abi
+```
+
 Requirements: Flutter ≥ 3.47 (Dart 3.13), Android SDK, an arm64 device or an
 x86_64 emulator. minSdk 24.
 

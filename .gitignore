@@ -46,3 +46,6 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Local Telegram API credentials (read by tool/flutter.sh)
+credential.txt
