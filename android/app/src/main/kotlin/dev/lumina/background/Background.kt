@@ -15,7 +15,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
@@ -57,7 +57,7 @@ object Background {
                 work.enqueueUniquePeriodicWork(
                     WORK,
                     ExistingPeriodicWorkPolicy.UPDATE,
-                    PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES).build(),
+                    PeriodicWorkRequest.Builder(SyncWorker::class.java, 15, TimeUnit.MINUTES).build(),
                 )
             }
             else -> {

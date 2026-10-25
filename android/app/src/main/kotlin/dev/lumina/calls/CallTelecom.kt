@@ -1,4 +1,12 @@
+// Telecom self-managed calls need Android 8 (API 26). Every entry point is
+// guarded: CallChannel checks the version before calling in, the public
+// functions below return early, and the services are only bound by Telecom
+// for accounts registered on API 26+.
+@file:SuppressLint("NewApi")
+
 package dev.lumina.calls
+
+import android.annotation.SuppressLint
 
 import android.content.ComponentName
 import android.content.Context
@@ -16,7 +24,6 @@ import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
 import android.telecom.VideoProfile
 import android.util.Log
-import androidx.annotation.RequiresApi
 import dev.lumina.lumina.R
 
 /**
@@ -34,7 +41,6 @@ import dev.lumina.lumina.R
  * Telecom asks for decisions through [Listener] (CallChannel forwards them to
  * Dart); Dart reports progress back with [setState].
  */
-@RequiresApi(Build.VERSION_CODES.O)
 object CallTelecom {
     private const val TAG = "CallTelecom"
     const val SCHEME = "lumina"
@@ -71,8 +77,11 @@ object CallTelecom {
     fun providerHandle(context: Context) =
         PhoneAccountHandle(ComponentName(context, CallProviderService::class.java), "lumina-provider")
 
+    private val supported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+
     /** Registers the self-managed account, and the calling account when [provider] is on. */
     fun register(context: Context, provider: Boolean) {
+        if (!supported) return
         val tm = telecom(context)
         val icon = Icon.createWithResource(context, R.mipmap.ic_launcher)
         val selfManaged = PhoneAccount.builder(selfManagedHandle(context), "Lumina")
@@ -108,7 +117,7 @@ object CallTelecom {
     }
 
     /** True when the user turned Lumina's calling account on in the Phone app. */
-    fun providerEnabled(context: Context): Boolean = try {
+    fun providerEnabled(context: Context): Boolean = supported && try {
         telecom(context).getPhoneAccount(providerHandle(context))?.isEnabled == true
     } catch (e: SecurityException) {
         false
@@ -123,7 +132,7 @@ object CallTelecom {
     }
 
     /** Hands an incoming call to Telecom. False when it refused (use the notification path). */
-    fun reportIncoming(context: Context, callId: Long, name: String, video: Boolean, useProvider: Boolean): Boolean = try {
+    fun reportIncoming(context: Context, callId: Long, name: String, video: Boolean, useProvider: Boolean): Boolean = supported && try {
         val handle = handleFor(context, useProvider)
         val tm = telecom(context)
         if (handle == selfManagedHandle(context) && !tm.isIncomingCallPermitted(handle)) {
@@ -142,7 +151,7 @@ object CallTelecom {
     }
 
     /** Tells Telecom about an outgoing call Lumina is making. */
-    fun reportOutgoing(context: Context, callId: Long, name: String, video: Boolean, useProvider: Boolean): Boolean = try {
+    fun reportOutgoing(context: Context, callId: Long, name: String, video: Boolean, useProvider: Boolean): Boolean = supported && try {
         val handle = handleFor(context, useProvider)
         val tm = telecom(context)
         if (handle == selfManagedHandle(context) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
@@ -295,7 +304,7 @@ object CallTelecom {
             c.setDialing()
             attach(c)
             // A number dialed in the Phone app with Lumina's calling account.
-            if (address?.scheme == PhoneAccount.SCHEME_TEL) {
+            if (address != null && address.scheme == PhoneAccount.SCHEME_TEL) {
                 val number = address.schemeSpecificPart
                 val l = listener
                 if (l != null) {
@@ -318,9 +327,7 @@ object CallTelecom {
 }
 
 /** The always-on self-managed account. */
-@RequiresApi(Build.VERSION_CODES.O)
 class SelfManagedCallService : CallTelecom.Base(selfManaged = true)
 
 /** The opt-in calling account shown in the Phone app. */
-@RequiresApi(Build.VERSION_CODES.O)
 class CallProviderService : CallTelecom.Base(selfManaged = false)
