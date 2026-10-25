@@ -13,8 +13,8 @@ sources from pub.dev on 2026-10-25).
 | `ffmpeg_kit_flutter` for conversion | **Discontinued** on pub.dev | Use `ffmpeg_kit_flutter_new` 4.6.7 (D7) |
 | whisper can't decode m4a/mp3 | On Android it decodes **WAV only** (no NDK MediaCodec path yet). Telegram voice notes are **OGG/Opus** | Conversion is mandatory for every voice note (D7) |
 | Whisper downloader "handles Range resume" | `WhisperModelDownloader` has no resume | Own resumable downloader in phase 6 |
-| `setProxy` might exist | 2.3.16 exposes only `addProxy / editProxy / enableProxy / disableProxy / removeProxy / getProxies / pingProxy / testProxy` | Phase 7 uses those |
-| Communities | No `communit*` symbol in the generated TDLib 1.8.36 API | Omitted (D5) |
+| `setProxy` might exist | 2.3.16 exposed only `addProxy / editProxy / enableProxy / disableProxy / removeProxy / getProxies / pingProxy / testProxy`. Since 1.8.69 (D15): `addProxy(proxy, enable, comment) → addedProxy`, `getProxies → addedProxies`, `pingProxy(proxy)`, `testProxy(proxy, dc_id, timeout)`, share links via `getInternalLink(internalLinkTypeProxy)` | Phase 7 uses those |
+| Communities | No `communit*` symbol in the generated TDLib 1.8.36 API (1.8.69 has communities; see D15) | Omitted (D5) |
 | `LogOut → Close → destroy client` | `logOut` itself ends in `authorizationStateClosed`; a following `close` is redundant | `LogOut`, with `Close` only as a fallback if `LogOut` fails (D11) |
 | "Client ID created exactly once per process" | TDLib can't reuse a closed client, so logout needs a new one | "Exactly one *live* client" (D9) |
 
@@ -123,3 +123,15 @@ native libraries must ship in the app (Settings → About → Licenses; to do
 with calls phase 1). The earlier rule "keep ffmpeg LGPL, never the GPL
 variant" no longer protects anything, but stay on the LGPL build anyway:
 the GPL codecs (x264/x265) add nothing because encoding uses MediaCodec.
+
+## D15. Own TDLib bindings: `packages/lumina_tdlib`, pinned to TDLib 1.8.69
+`handy_tdlib_next` 2.3.16 shipped a 1.8.52 binary with Dart classes generated
+from the 1.8.36 schema, and its generator isn't published. We now build
+`libtdjson.so` in CI (`tdlib.yml`, `tool/build_tdlib.sh`) from the commit in
+`packages/lumina_tdlib/schema/VERSION` and generate the Dart API from the
+`td_api.tl` of the same commit (`dart run tool/generate.dart`). TDLib only tags
+major versions, so the pin is the "Update version to 1.8.N." commit.
+Upgrading = new `td_api.tl` + `VERSION`, regenerate, fix the analyzer, push.
+The public shape matches handy's (class names, `TdPlugin`, `convertMapToObject`).
+Differences: int64 is sent as a string, and `Messages.messages` is `List<Message?>`.
+Communities are now in the API; D5 can be revisited.
