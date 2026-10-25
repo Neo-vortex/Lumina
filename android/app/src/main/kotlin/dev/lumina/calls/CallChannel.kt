@@ -26,7 +26,9 @@ import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
-import org.webrtc.VideoSink
+import io.flutter.view.TextureRegistry
+import org.telegram.messenger.voip.VideoCapturerDevice
+import org.telegram.messenger.voip.VoIPService
 import java.io.File
 
 /**
@@ -34,7 +36,11 @@ import java.io.File
  * call_engine.dart) over [NativeCall]. One call at a time. While a call
  * runs, audio is in communication mode with focus held.
  */
-class CallChannel(private val context: Context, messenger: BinaryMessenger) : NativeCall.Listener, CallTelecom.Listener {
+class CallChannel(
+    private val context: Context,
+    messenger: BinaryMessenger,
+    private val textures: TextureRegistry,
+) : NativeCall.Listener, CallTelecom.Listener {
     private val main = Handler(Looper.getMainLooper())
     private val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private var events: EventChannel.EventSink? = null
@@ -56,10 +62,50 @@ class CallChannel(private val context: Context, messenger: BinaryMessenger) : Na
         }
     }
 
-    // Video frames are dropped until the video phase adds renderers.
-    private val noVideo = VideoSink { }
+    // ---- Video ------------------------------------------------------------
+
+    /** The other side's video and our camera preview, as Flutter textures. */
+    private var remote: TextureRendererSink? = null
+    private var local: TextureRendererSink? = null
+
+    /** Camera capturer made before the call started (video calls), 0 if none. */
+    private var preCapturer = 0L
+
+    /** setupOutgoingVideo ran (the capturer exists; later on/off is a state change). */
+    private var cameraSetUp = false
+    private var front = true
+    private var screenSharing = false
+    private var cameraWasOn = false
+
+    private fun remoteRenderer() = remote ?: TextureRendererSink(textures, "remote") { w, h ->
+        emit(mapOf("type" to "videoSize", "which" to "remote", "width" to w, "height" to h))
+    }.also { remote = it }
+
+    private fun localRenderer() = local ?: TextureRendererSink(textures, "local") { w, h ->
+        emit(mapOf("type" to "videoSize", "which" to "local", "width" to w, "height" to h))
+    }.also { local = it }
+
+    private fun cameraAllowed() =
+        context.checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
     init {
+        ScreenPip.context = context
+        // Capture events from the vendored VideoCapturerDevice.
+        VoIPService.setSharedInstance(
+            VoIPService(object : VoIPService.Events {
+                override fun onScreenCaptureStopped() {
+                    main.post { if (screenSharing) stopScreenShare(byUser = false) }
+                }
+
+                override fun onCameraFirstFrame() {}
+
+                override fun onCameraSwitched(front: Boolean) {
+                    this@CallChannel.front = front
+                    local?.setMirror(front)
+                    emit(mapOf("type" to "cameraSwitched", "front" to front))
+                }
+            }),
+        )
         MethodChannel(messenger, "dev.lumina/calls").setMethodCallHandler { c, r -> handle(c, r) }
         EventChannel(messenger, "dev.lumina/calls/events").setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, sink: EventChannel.EventSink) {
@@ -199,6 +245,32 @@ class CallChannel(private val context: Context, messenger: BinaryMessenger) : Na
                 CallService.stop(context)
                 r.success(null)
             }
+            "videoTextures" -> r.success(
+                mapOf("remote" to remoteRenderer().textureId, "local" to localRenderer().textureId),
+            )
+            "startVideo" -> r.success(startVideo(c.argument<Boolean>("front") ?: true))
+            "stopVideo" -> {
+                stopVideo()
+                r.success(null)
+            }
+            "switchCamera" -> {
+                switchCamera(c.arguments as Boolean)
+                r.success(null)
+            }
+            // Dart asked for the MediaProjection permission first (system channel).
+            "startScreenShare" -> startScreenShare(
+                camera = c.argument<Boolean>("camera") ?: false,
+                corner = c.argument<Int>("corner") ?: ScreenPip.BOTTOM_RIGHT,
+                result = r,
+            )
+            "stopScreenShare" -> {
+                stopScreenShare(byUser = true)
+                r.success(null)
+            }
+            "setPipCorner" -> {
+                ScreenPip.corner = c.arguments as Int
+                r.success(null)
+            }
             "setSpeaker" -> {
                 setSpeaker(c.arguments as Boolean)
                 r.success(null)
@@ -257,6 +329,13 @@ class CallChannel(private val context: Context, messenger: BinaryMessenger) : Na
             customParameters = args["customParameters"] as String,
         )
         enterCallAudio()
+        // A video call starts with the front camera on, as in Telegram.
+        if (args["video"] == true && cameraAllowed() && preCapturer == 0L) {
+            front = true
+            localRenderer().setMirror(true)
+            preCapturer = NativeCall.createCapturer(localRenderer(), NativeCall.CAPTURE_FRONT)
+            cameraSetUp = preCapturer != 0L
+        }
         val native = NativeCall(this)
         try {
             native.begin(
@@ -267,16 +346,107 @@ class CallChannel(private val context: Context, messenger: BinaryMessenger) : Na
                 networkType = networkType(),
                 encryptionKey = args["encryptionKey"] as ByteArray,
                 outgoing = args["outgoing"] as Boolean,
-                remoteSink = noVideo,
-                capturer = 0,
+                remoteSink = remoteRenderer(),
+                capturer = preCapturer,
                 aspectRatio = 0f,
                 persistentStatePath = File(context.cacheDir, "calls_persistent_state.json").absolutePath,
             )
         } catch (e: Exception) {
             leaveCallAudio()
+            resetVideo()
             throw e
         }
         call = native
+    }
+
+    /** Camera on (or back on). False without the camera permission or a call. */
+    private fun startVideo(front: Boolean): Boolean {
+        val c = call ?: return false
+        if (!cameraAllowed()) return false
+        CallService.start(context, video = true)
+        this.front = front
+        localRenderer().setMirror(front)
+        if (!cameraSetUp) {
+            c.setupOutgoingVideo(localRenderer(), if (front) NativeCall.CAPTURE_FRONT else NativeCall.CAPTURE_BACK)
+            cameraSetUp = true
+        } else {
+            c.setVideoState(NativeCall.VIDEO_ACTIVE)
+        }
+        return true
+    }
+
+    private fun stopVideo() {
+        call?.setVideoState(NativeCall.VIDEO_INACTIVE)
+        local?.clear()
+    }
+
+    private fun switchCamera(front: Boolean) {
+        if (screenSharing) {
+            ScreenPip.switchCamera(front)
+            return
+        }
+        this.front = front
+        call?.switchCamera(front)
+        local?.setMirror(front)
+    }
+
+    /**
+     * Screen sharing, optionally with the camera bubble. Android 14 wants
+     * the service in the foreground as mediaProjection before capture
+     * starts, so this waits for it.
+     */
+    private fun startScreenShare(camera: Boolean, corner: Int, result: MethodChannel.Result) {
+        val c = call ?: return result.success(false)
+        if (VideoCapturerDevice.mediaProjectionPermissionResultData == null) return result.success(false)
+        ScreenPip.enabled = camera
+        ScreenPip.corner = corner
+        ScreenPip.front = front
+        cameraWasOn = cameraSetUp
+        // The camera can't feed the call and the bubble at once.
+        if (cameraSetUp) c.setVideoState(NativeCall.VIDEO_INACTIVE)
+        CallService.start(context, video = camera || cameraSetUp, screen = true)
+        val deadline = System.currentTimeMillis() + 3000
+        fun go() {
+            if (!CallService.screenReady && System.currentTimeMillis() < deadline) {
+                main.postDelayed(::go, 50)
+                return
+            }
+            if (!CallService.screenReady) return result.success(false)
+            screenSharing = true
+            localRenderer().setMirror(false)
+            c.setupOutgoingVideo(localRenderer(), NativeCall.CAPTURE_SCREEN)
+            result.success(true)
+        }
+        go()
+    }
+
+    private fun stopScreenShare(byUser: Boolean) {
+        val c = call
+        if (!screenSharing) return
+        screenSharing = false
+        // Stops the screen capturer (and the bubble's camera with it).
+        c?.setVideoState(NativeCall.VIDEO_INACTIVE)
+        VideoCapturerDevice.mediaProjectionPermissionResultData = null
+        if (c != null && cameraWasOn) {
+            localRenderer().setMirror(front)
+            c.setupOutgoingVideo(localRenderer(), if (front) NativeCall.CAPTURE_FRONT else NativeCall.CAPTURE_BACK)
+        } else {
+            local?.clear()
+        }
+        CallService.start(context, video = cameraWasOn, screen = false)
+        emit(mapOf("type" to "screenShareStopped", "byUser" to byUser))
+    }
+
+    private fun resetVideo() {
+        if (preCapturer != 0L) NativeCall.destroyCapturer(preCapturer)
+        preCapturer = 0
+        cameraSetUp = false
+        screenSharing = false
+        cameraWasOn = false
+        ScreenPip.enabled = false
+        VideoCapturerDevice.mediaProjectionPermissionResultData = null
+        remote?.clear()
+        local?.clear()
     }
 
     @Suppress("DEPRECATION")
@@ -393,6 +563,7 @@ class CallChannel(private val context: Context, messenger: BinaryMessenger) : Na
         main.post {
             call = null
             leaveCallAudio()
+            resetVideo()
             CallService.stop(context)
             events?.success(mapOf("type" to "stopped", "debugLog" to debugLog, "ratingSuggested" to ratingSuggested))
         }

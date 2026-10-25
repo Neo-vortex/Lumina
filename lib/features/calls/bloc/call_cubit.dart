@@ -6,6 +6,7 @@ import 'package:handy_tdlib_next/api.dart' as td;
 
 import '../../../core/tdlib/td_errors.dart';
 import '../data/call_engine.dart';
+export '../data/call_engine.dart' show PipCorner;
 import '../data/calls_repository.dart';
 import '../domain/engine_params.dart';
 
@@ -58,6 +59,8 @@ class CallCubit extends Cubit<CallState> {
 
   /// Whether this call goes through the Phone app's own call screen.
   Future<bool> _systemUi() async => _useCallingAccount() && (await _system?.callingAccountEnabled() ?? false);
+
+  Future<bool> _cameraGranted() async => (await _system?.requestPermissions(['camera']))?['camera'] ?? true;
 
   Future<bool> _permissions({required bool video}) async {
     final system = _system;
@@ -182,6 +185,53 @@ class CallCubit extends Cubit<CallState> {
     final on = !state.speaker;
     emit(state.copyWith(speaker: on));
     await _system?.setSpeaker(on);
+  }
+
+  /// Camera on / off.
+  Future<String?> toggleCamera() async {
+    if (!_engineRunning || state.screenSharing) return null;
+    if (state.camera) {
+      emit(state.copyWith(camera: false));
+      await _engine.stopVideo();
+      return null;
+    }
+    final granted = await _system?.requestPermissions(['camera']);
+    if (granted != null && granted['camera'] != true) return 'Lumina needs the camera for video';
+    final ok = await _engine.startVideo(front: state.frontCamera);
+    if (!ok) return 'Could not start the camera';
+    emit(state.copyWith(camera: true));
+    return null;
+  }
+
+  /// Front ↔ back (also the bubble's camera while sharing the screen).
+  Future<void> switchCamera() async {
+    final front = !state.frontCamera;
+    emit(state.copyWith(frontCamera: front));
+    await _engine.switchCamera(front: front);
+  }
+
+  /// Shares the screen, optionally with the camera in a corner.
+  Future<String?> startScreenShare({required bool withCamera}) async {
+    if (!_engineRunning || state.screenSharing) return null;
+    if (withCamera) {
+      final granted = await _system?.requestPermissions(['camera']);
+      if (granted != null && granted['camera'] != true) return 'Lumina needs the camera for the bubble';
+    }
+    if (!(await _system?.requestScreenCapture() ?? false)) return null; // Declined.
+    final ok = await _engine.startScreenShare(camera: withCamera, corner: state.pipCorner);
+    if (!ok) return 'Could not share the screen';
+    emit(state.copyWith(screenSharing: true, screenWithCamera: withCamera));
+    return null;
+  }
+
+  Future<void> stopScreenShare() async {
+    if (!state.screenSharing) return;
+    await _engine.stopScreenShare();
+  }
+
+  Future<void> setPipCorner(PipCorner corner) async {
+    emit(state.copyWith(pipCorner: corner));
+    await _engine.setPipCorner(corner);
   }
 
   /// Stars 1–5 after a call TDLib asked to rate.
@@ -311,6 +361,10 @@ class CallCubit extends Cubit<CallState> {
     try {
       await _engine.start(params);
       _engineRunning = true;
+      final textures = await _engine.videoTextures();
+      // Video calls start with the front camera on (when allowed).
+      final camera = params.video && await _cameraGranted();
+      emit(state.copyWith(textures: textures, camera: camera, frontCamera: true));
       _system
           ?.showOngoing(
             title: _nameOf(call.userId),
@@ -377,6 +431,13 @@ class CallCubit extends Cubit<CallState> {
         _dialerCall(number).ignore();
       case EngineAudioRoute(:final route):
         emit(state.copyWith(speaker: route == 'speaker'));
+      case EngineVideoSize(:final remote, :final width, :final height):
+        final size = (width: width, height: height);
+        emit(remote ? state.copyWith(remoteSize: size) : state.copyWith(localSize: size));
+      case EngineCameraSwitched(:final front):
+        emit(state.copyWith(frontCamera: front));
+      case EngineScreenShareStopped():
+        emit(state.copyWith(screenSharing: false, screenWithCamera: false));
       case EngineStopped(:final debugLog):
         _engineRunning = false;
         _engineCallId = null;

@@ -270,8 +270,36 @@ does not copy Telegram's look.
   `MaterialApp.builder` (opens the screen when a call starts unless the
   Phone app shows it, "return to call" pill), Settings → Calls.
   Video button waits for phase 5.
-- Next: verify on a device (audio call end to end, Telecom both modes,
-  dialing from the Phone app with Lumina closed); then phase 5 (video).
+- Phases 5–6 (video, screen share + camera bubble), written, device test
+  pending:
+  - `TextureRendererSink.kt`: WebRTC `EglRenderer` into a Flutter
+    `SurfaceProducer` (re-attaches on surface recreation, resizes to the
+    frame, reports sizes). One for the remote video, one for our preview.
+  - `CallChannel`: video calls create the front capturer before `start`
+    (as Telegram); `startVideo` / `stopVideo` (state change after the
+    first setup) / `switchCamera`; `CallService` adds the camera type only
+    with the permission.
+  - Screen share: `requestScreenCapture` (MainActivity, MediaProjection
+    prompt → `VideoCapturerDevice.mediaProjectionPermissionResultData`),
+    then `startScreenShare` waits for `CallService.screenReady`
+    (mediaProjection type, Android 14 rule) before
+    `setupOutgoingVideo(CAPTURE_SCREEN)`. Stopping (button, or the system's
+    cast tile via the VoIPService shim) restores the camera if it was on.
+  - Camera bubble: `ScreenPip.kt` compositor on the screen capturer's GL
+    thread: screen frame + latest camera frame (centre square, rounded by a
+    `gl_FragCoord` shader, ~22% of the short side, corner from the share
+    sheet), 3-framebuffer pool, one `TextureBufferImpl` to tgcalls. Hooked
+    in by `android/calls-engine/patches/0001-screen-pip.patch` (applied by
+    the fetch script).
+  - Dart: `CallEngine` video API, `CallCubit.toggleCamera / switchCamera /
+    startScreenShare / stopScreenShare / setPipCorner`, call screen with
+    full-screen remote video, draggable preview, Camera / Flip / Share
+    screen (sheet: screen, or screen + camera with corner), video call
+    button in the header.
+  - Verify on a device: texture orientation of the composited frame (the
+    FBO is sampled with an identity matrix), mirroring, CPU/GPU cost of
+    the compositor, camera + screen at once on low-end phones.
+- Next: device testing of all call phases.
 
 **G. Background notifications without Firebase (owner item 22), written, device test pending**
 - Native `android/app/src/main/kotlin/dev/lumina/background/`:
@@ -368,7 +396,7 @@ does not copy Telegram's look.
 | Rich text (code blocks, quotes, custom emoji, card numbers, media timestamps), composer formatting menu, link previews (receive + compose with size/position/remove), Instant View reader, Custom Tab links | ✅ | `core/telegram/entity_edit.dart`, `formatted_text_view.dart`, `conversation/.../formatting_controller.dart`, `link_preview_card.dart`, `instant_view_screen.dart` |
 | Hardening (cache/optimizeStorage, battery prompt, 16 KB check) | ✅ | `lib/features/maintenance/` (StorageRepository: usage by kind, clear, keep-media auto clean; Background settings + one-time battery prompt in `LifecycleWatcher`); memory pressure frees the LLM and Whisper; `tool/check_16kb.py <apk>` |
 
-Tests: `flutter test`, 182 tests covering routing, auth FSM (bloc_test),
+Tests: `flutter test`, 189 tests covering routing, auth FSM (bloc_test),
 error mapping, cache ordering, row grouping, video presets, search, assistant,
 chat info, stories, storage, the attach hub, polls, music, send options, live locations, the scheduled list, reply quotes, calls and notifications. Run
 `flutter analyze` too; it must stay at zero issues.
@@ -605,10 +633,8 @@ chat info, stories, storage, the attach hub, polls, music, send options, live lo
    incoming call full-screen notification, foreground service
    (`phoneCall|microphone`), self-managed `ConnectionService`, proximity
    wake lock, audio routing.
-5. **Video.** Camera capture (front default, switch), remote renderer as a
-   Flutter `Texture`, local self-view PiP.
-6. **Screen share + camera PiP compositor** (MediaProjection service,
-   GL compositor feeding one `VideoSource`).
+5. **Video**, written (see §2.3 B).
+6. **Screen share + camera PiP compositor**, written (see §2.3 B).
 7. **Proxy for calls**, done: Settings → Connection → "Use proxy for
    calls" (`calls.useProxy`). `ProxyRepository.callProxy()` returns the
    active proxy only when it is SOCKS5; `callProxyFor` (feature_wiring)

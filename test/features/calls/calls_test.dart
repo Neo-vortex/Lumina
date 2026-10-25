@@ -43,6 +43,39 @@ class FakeEngine implements CallEngine {
     emit(const EngineStopped(debugLog: '{"log":1}', ratingSuggested: false));
   }
 
+  final video = <String>[];
+  var screenCorner = PipCorner.bottomRight;
+
+  @override
+  Future<({int remote, int local})?> videoTextures() async => (remote: 11, local: 12);
+
+  @override
+  Future<bool> startVideo({required bool front}) async {
+    video.add('start front=$front');
+    return true;
+  }
+
+  @override
+  Future<void> stopVideo() async => video.add('stop');
+
+  @override
+  Future<void> switchCamera({required bool front}) async => video.add('switch front=$front');
+
+  @override
+  Future<bool> startScreenShare({required bool camera, required PipCorner corner}) async {
+    video.add('screen camera=$camera ${corner.name}');
+    return true;
+  }
+
+  @override
+  Future<void> stopScreenShare() async {
+    video.add('stop screen');
+    emit(const EngineScreenShareStopped(byUser: true));
+  }
+
+  @override
+  Future<void> setPipCorner(PipCorner corner) async => screenCorner = corner;
+
   @override
   Stream<EngineEvent> get events => _events.stream;
 }
@@ -365,10 +398,21 @@ class FakeSystem implements CallSystem {
     return d;
   }
 
+  var cameraGranted = true;
+  var screenAllowed = true;
+
   @override
   Future<Map<String, bool>> requestPermissions(List<String> names) async => {
-    for (final n in names) n: n != 'microphone' || micGranted,
+    for (final n in names)
+      n: switch (n) {
+        'microphone' => micGranted,
+        'camera' => cameraGranted,
+        _ => true,
+      },
   };
+
+  @override
+  Future<bool> requestScreenCapture() async => screenAllowed;
 }
 
 void systemTests() {
@@ -533,6 +577,65 @@ void systemTests() {
       engine.emit(const EngineSystemAction('unhold'));
       await settle();
       expect(engine.mutes.last, isFalse);
+    });
+
+    Future<void> activeCall({bool video = false}) async {
+      make();
+      await cubit!.startCall(42, video: video);
+      client.emitUpdate(td.UpdateCall(call: call(5, ready(), video: video)));
+      await settle();
+    }
+
+    test('a video call starts with the front camera and gets the textures', () async {
+      await activeCall(video: true);
+      expect(engine.started.single.video, isTrue);
+      expect(cubit!.state.camera, isTrue);
+      expect(cubit!.state.textures, (remote: 11, local: 12));
+    });
+
+    test('camera on/off and flip during a voice call', () async {
+      await activeCall();
+      expect(cubit!.state.camera, isFalse);
+      expect(await cubit!.toggleCamera(), isNull);
+      expect(cubit!.state.camera, isTrue);
+      await cubit!.switchCamera();
+      expect(cubit!.state.frontCamera, isFalse);
+      await cubit!.toggleCamera();
+      expect(engine.video, ['start front=true', 'switch front=false', 'stop']);
+    });
+
+    test('no camera permission, no video', () async {
+      system.cameraGranted = false;
+      await activeCall();
+      expect(await cubit!.toggleCamera(), contains('camera'));
+      expect(engine.video, isEmpty);
+    });
+
+    test('screen sharing with the camera bubble in the chosen corner', () async {
+      await activeCall();
+      await cubit!.setPipCorner(PipCorner.topLeft);
+      expect(await cubit!.startScreenShare(withCamera: true), isNull);
+      expect(engine.video.last, 'screen camera=true topLeft');
+      expect((cubit!.state.screenSharing, cubit!.state.screenWithCamera), (true, true));
+      await cubit!.stopScreenShare();
+      await settle();
+      expect(cubit!.state.screenSharing, isFalse);
+    });
+
+    test('declining the screen recording prompt shares nothing', () async {
+      system.screenAllowed = false;
+      await activeCall();
+      expect(await cubit!.startScreenShare(withCamera: false), isNull);
+      expect(engine.video, isEmpty);
+      expect(cubit!.state.screenSharing, isFalse);
+    });
+
+    test('sharing stopped from outside Lumina updates the state', () async {
+      await activeCall();
+      await cubit!.startScreenShare(withCamera: false);
+      engine.emit(const EngineScreenShareStopped(byUser: false));
+      await settle();
+      expect(cubit!.state.screenSharing, isFalse);
     });
 
     test('no microphone, no call', () async {

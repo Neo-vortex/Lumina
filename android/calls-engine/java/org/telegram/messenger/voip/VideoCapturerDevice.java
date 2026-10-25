@@ -166,7 +166,9 @@ public class VideoCapturerDevice {
                             return;
                         }
                         nativeCapturerObserver = nativeGetJavaVideoCapturerObserver(nativePtr);
-                        videoCapturer.initialize(videoCapturerSurfaceTextureHelper, ApplicationLoader.applicationContext, nativeCapturerObserver);
+                        // Lumina: optionally composite the camera onto the screen (ScreenPip).
+                        videoCapturer.initialize(videoCapturerSurfaceTextureHelper, ApplicationLoader.applicationContext,
+                                dev.lumina.calls.ScreenPip.wrap(nativeCapturerObserver, videoCapturerSurfaceTextureHelper));
                         FileLog.d("VideoCapturerDevice init(" + ptr + "): videoCapturer.startCapture SCREEN");
                         videoCapturer.startCapture(size.x, size.y, CAPTURE_FPS);
                         WebRtcAudioRecord audioRecord = WebRtcAudioRecord.Instance;

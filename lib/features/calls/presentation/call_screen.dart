@@ -81,27 +81,89 @@ class _CallScreenState extends State<CallScreen> {
         final name = Display.userName(cache.users[userId]);
         final chat = cache.chats[userId];
         final live = state.phase == CallPhase.active;
+        final textures = state.textures;
+        final remoteVideo = textures != null && state.remoteVideo && state.remoteSize != null;
+        final preview = textures != null && (state.camera || state.screenSharing) && state.localSize != null;
         return Scaffold(
           backgroundColor: GlowColors.backgroundDeep,
-          body: GlowBackground(
-            child: SafeArea(
-              child: Column(
-                children: [
-                  Align(
-                    alignment: Alignment.topLeft,
-                    child: IconButton(
-                      tooltip: 'Minimize',
-                      onPressed: () => Navigator.of(context).maybePop(),
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 32),
+          body: Stack(
+            children: [
+              if (remoteVideo)
+                Positioned.fill(
+                  child: _VideoView(textureId: textures.remote, size: state.remoteSize!, cover: true),
+                )
+              else
+                const Positioned.fill(child: GlowBackground(child: SizedBox.expand())),
+              if (remoteVideo)
+                // Keeps the controls readable over bright video.
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          GlowColors.backgroundDeep.withValues(alpha: 0.6),
+                          GlowColors.backgroundDeep.withValues(alpha: 0),
+                          GlowColors.backgroundDeep.withValues(alpha: 0),
+                          GlowColors.backgroundDeep.withValues(alpha: 0.8),
+                        ],
+                        stops: const [0, 0.25, 0.6, 1],
+                      ),
                     ),
                   ),
-                  const Spacer(),
-                  _Halo(
-                    active: live || state.phase == CallPhase.incoming || state.ringing,
-                    color: state.phase == CallPhase.incoming ? GlowColors.cyan : GlowColors.violet,
-                    child: ChatAvatar(id: userId, title: name, photo: chat?.photo, size: 132),
-                  ),
-                  const SizedBox(height: 28),
+                ),
+              Positioned.fill(child: _content(context, state, cubit, name, chat, userId, live, remoteVideo)),
+              if (preview)
+                _LocalPreview(
+                  textureId: textures.local,
+                  size: state.localSize!,
+                  label: state.screenSharing ? 'Your screen' : 'Your camera',
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _content(
+    BuildContext context,
+    CallState state,
+    CallCubit cubit,
+    String name,
+    td.Chat? chat,
+    int userId,
+    bool live,
+    bool remoteVideo,
+  ) => SafeArea(
+    child: Column(
+      children: [
+        Align(
+          alignment: Alignment.topLeft,
+          child: IconButton(
+            tooltip: 'Minimize',
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 32),
+          ),
+        ),
+        // Who and how: shrinks to fit so the controls always stay whole
+        // (short screens, landscape). Over video it moves to the top.
+        Expanded(
+          child: Align(
+            alignment: remoteVideo ? Alignment.topCenter : Alignment.center,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!remoteVideo)
+                    _Halo(
+                      active: live || state.phase == CallPhase.incoming || state.ringing,
+                      color: state.phase == CallPhase.incoming ? GlowColors.cyan : GlowColors.violet,
+                      child: ChatAvatar(id: userId, title: name, photo: chat?.photo, size: 132),
+                    ),
+                  SizedBox(height: remoteVideo ? 4 : 28),
                   Text(
                     name,
                     textAlign: TextAlign.center,
@@ -127,38 +189,51 @@ class _CallScreenState extends State<CallScreen> {
                     const SizedBox(height: 12),
                     const Text('On hold', style: TextStyle(color: GlowColors.amber)),
                   ],
-                  const Spacer(),
-                  if (state.phase == CallPhase.ended)
-                    _Ended(
-                      state: state,
-                      onRate: (stars) => cubit.rate(stars),
-                      onClose: () {
-                        cubit.dismiss();
-                        Navigator.of(context).maybePop();
-                      },
-                    )
-                  else if (state.phase == CallPhase.incoming)
-                    _IncomingControls(
-                      video: state.video,
-                      onDecline: cubit.hangUp,
-                      onAccept: () => _run(cubit.accept),
-                    )
-                  else
-                    _Controls(
-                      muted: state.muted,
-                      speaker: state.speaker,
-                      onMute: cubit.toggleMute,
-                      onSpeaker: cubit.toggleSpeaker,
-                      onHangUp: cubit.hangUp,
-                    ),
-                  const SizedBox(height: 36),
                 ],
               ),
             ),
           ),
-        );
-      },
+        ),
+        if (state.phase == CallPhase.ended)
+          _Ended(
+            state: state,
+            onRate: (stars) => cubit.rate(stars),
+            onClose: () {
+              cubit.dismiss();
+              Navigator.of(context).maybePop();
+            },
+          )
+        else if (state.phase == CallPhase.incoming)
+          _IncomingControls(video: state.video, onDecline: cubit.hangUp, onAccept: () => _run(cubit.accept))
+        else
+          _Controls(
+            state: state,
+            onMute: cubit.toggleMute,
+            onSpeaker: cubit.toggleSpeaker,
+            onHangUp: cubit.hangUp,
+            onCamera: () => _run(cubit.toggleCamera),
+            onFlip: cubit.switchCamera,
+            onShare: () => _share(cubit),
+          ),
+        const SizedBox(height: 24),
+      ],
+    ),
+  );
+
+  /// Share screen: alone, or with the camera bubble in a chosen corner.
+  Future<void> _share(CallCubit cubit) async {
+    if (cubit.state.screenSharing) {
+      await cubit.stopScreenShare();
+      return;
+    }
+    final withCamera = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: GlowColors.surfaceHigh,
+      showDragHandle: true,
+      builder: (context) => _ShareSheet(cubit: cubit),
     );
+    if (withCamera == null) return;
+    await _run(() => cubit.startScreenShare(withCamera: withCamera));
   }
 
   String _status(CallState s) {
@@ -319,83 +394,266 @@ class _RoundButton extends StatelessWidget {
 
   final IconData icon;
   final String label;
-  final VoidCallback onPressed;
+
+  /// Null: shown dimmed and announced as disabled.
+  final VoidCallback? onPressed;
   final Color color;
   final Color foreground;
   final bool selected;
   final double size;
 
   @override
-  Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Semantics(
-        button: true,
-        toggled: selected,
-        label: label,
-        excludeSemantics: true,
-        child: Material(
-          color: selected ? GlowColors.text : color,
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onPressed,
-            child: SizedBox.square(
-              dimension: size,
-              child: Icon(icon, color: selected ? GlowColors.onAccent : foreground, size: size * 0.42),
+  Widget build(BuildContext context) => Opacity(
+    opacity: onPressed == null ? 0.4 : 1,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Semantics(
+          button: true,
+          enabled: onPressed != null,
+          toggled: selected,
+          label: label,
+          excludeSemantics: true,
+          child: Material(
+            color: selected ? GlowColors.text : color,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onPressed,
+              child: SizedBox.square(
+                dimension: size,
+                child: Icon(icon, color: selected ? GlowColors.onAccent : foreground, size: size * 0.42),
+              ),
             ),
           ),
         ),
-      ),
-      const SizedBox(height: 8),
-      // The button already carries the label for screen readers.
-      ExcludeSemantics(
-        child: Text(label, style: const TextStyle(color: GlowColors.textMuted, fontSize: 13)),
-      ),
-    ],
+        const SizedBox(height: 8),
+        // The button already carries the label for screen readers.
+        ExcludeSemantics(
+          child: Text(label, style: const TextStyle(color: GlowColors.textMuted, fontSize: 13)),
+        ),
+      ],
+    ),
   );
 }
 
 class _Controls extends StatelessWidget {
   const _Controls({
-    required this.muted,
-    required this.speaker,
+    required this.state,
     required this.onMute,
     required this.onSpeaker,
     required this.onHangUp,
+    required this.onCamera,
+    required this.onFlip,
+    required this.onShare,
   });
 
-  final bool muted;
-  final bool speaker;
+  final CallState state;
   final VoidCallback onMute;
   final VoidCallback onSpeaker;
   final VoidCallback onHangUp;
+  final VoidCallback onCamera;
+  final VoidCallback onFlip;
+  final VoidCallback onShare;
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-    children: [
-      _RoundButton(
-        icon: speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded,
-        label: 'Speaker',
-        selected: speaker,
-        onPressed: onSpeaker,
+  Widget build(BuildContext context) {
+    // Video controls once the engine runs (connecting or active).
+    final media = state.textures != null;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (media) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _RoundButton(
+                icon: state.camera ? Icons.videocam_rounded : Icons.videocam_off_rounded,
+                label: 'Camera',
+                selected: state.camera,
+                size: 56,
+                onPressed: state.screenSharing ? null : onCamera,
+              ),
+              _RoundButton(
+                icon: Icons.cameraswitch_rounded,
+                label: 'Flip',
+                size: 56,
+                onPressed: state.camera || state.screenWithCamera ? onFlip : null,
+              ),
+              _RoundButton(
+                icon: state.screenSharing ? Icons.stop_screen_share_rounded : Icons.screen_share_rounded,
+                label: state.screenSharing ? 'Stop sharing' : 'Share screen',
+                selected: state.screenSharing,
+                size: 56,
+                onPressed: onShare,
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+        ],
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _RoundButton(
+              icon: state.speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded,
+              label: 'Speaker',
+              selected: state.speaker,
+              onPressed: onSpeaker,
+            ),
+            _RoundButton(
+              icon: Icons.call_end_rounded,
+              label: 'End',
+              color: GlowColors.coral,
+              foreground: GlowColors.onAccent,
+              size: 76,
+              onPressed: onHangUp,
+            ),
+            _RoundButton(
+              icon: state.muted ? Icons.mic_off_rounded : Icons.mic_rounded,
+              label: state.muted ? 'Unmute' : 'Mute',
+              selected: state.muted,
+              onPressed: onMute,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// A video texture at its frame's aspect ratio; [cover] fills the box.
+class _VideoView extends StatelessWidget {
+  const _VideoView({required this.textureId, required this.size, this.cover = false});
+  final int textureId;
+  final ({int width, int height}) size;
+  final bool cover;
+
+  @override
+  Widget build(BuildContext context) {
+    final video = SizedBox(
+      width: size.width.toDouble(),
+      height: size.height.toDouble(),
+      child: Texture(textureId: textureId),
+    );
+    return ClipRect(
+      child: FittedBox(fit: cover ? BoxFit.cover : BoxFit.contain, child: video),
+    );
+  }
+}
+
+/// Our camera (or shared screen) in a corner; drag it to another corner.
+class _LocalPreview extends StatefulWidget {
+  const _LocalPreview({required this.textureId, required this.size, required this.label});
+  final int textureId;
+  final ({int width, int height}) size;
+  final String label;
+
+  @override
+  State<_LocalPreview> createState() => _LocalPreviewState();
+}
+
+class _LocalPreviewState extends State<_LocalPreview> {
+  var _corner = Alignment.topRight;
+  Offset _drag = Offset.zero;
+
+  @override
+  Widget build(BuildContext context) {
+    final aspect = widget.size.width / widget.size.height;
+    const width = 112.0;
+    final padding = MediaQuery.paddingOf(context) + const EdgeInsets.fromLTRB(16, 56, 16, 220);
+    return Positioned.fill(
+      child: Padding(
+        padding: padding,
+        child: AnimatedAlign(
+          alignment: _corner,
+          duration: _drag == Offset.zero ? Motion.standard : Duration.zero,
+          curve: Motion.move,
+          child: Transform.translate(
+            offset: _drag,
+            child: GestureDetector(
+              onPanUpdate: (d) => setState(() => _drag += d.delta),
+              onPanEnd: (_) {
+                final box = context.size ?? Size.zero;
+                // Snap to the nearest corner.
+                final here = Offset(
+                  (_corner.x + 1) / 2 * box.width + _drag.dx,
+                  (_corner.y + 1) / 2 * box.height + _drag.dy,
+                );
+                setState(() {
+                  _corner = Alignment(here.dx < box.width / 2 ? -1 : 1, here.dy < box.height / 2 ? -1 : 1);
+                  _drag = Offset.zero;
+                });
+              },
+              child: Semantics(
+                label: '${widget.label}. Drag to move',
+                child: Container(
+                  width: width,
+                  height: width / aspect,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: GlowColors.outlineStrong),
+                    boxShadow: glow(GlowColors.violet, intensity: 0.5),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: _VideoView(textureId: widget.textureId, size: widget.size, cover: true),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
-      _RoundButton(
-        icon: Icons.call_end_rounded,
-        label: 'End',
-        color: GlowColors.coral,
-        foreground: GlowColors.onAccent,
-        size: 76,
-        onPressed: onHangUp,
+    );
+  }
+}
+
+/// Screen sharing options: with or without the camera, and its corner.
+class _ShareSheet extends StatelessWidget {
+  const _ShareSheet({required this.cubit});
+  final CallCubit cubit;
+
+  static const _corners = [
+    (PipCorner.topLeft, 'Top left'),
+    (PipCorner.topRight, 'Top right'),
+    (PipCorner.bottomLeft, 'Bottom left'),
+    (PipCorner.bottomRight, 'Bottom right'),
+  ];
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: BlocBuilder<CallCubit, CallState>(
+      bloc: cubit,
+      builder: (context, state) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.screen_share_rounded, color: GlowColors.cyan),
+            title: const Text('Share screen'),
+            onTap: () => Navigator.pop(context, false),
+          ),
+          ListTile(
+            leading: const Icon(Icons.picture_in_picture_alt_rounded, color: GlowColors.violet),
+            title: const Text('Share screen with camera'),
+            subtitle: const Text('Your camera shows in a corner of the screen'),
+            onTap: () => Navigator.pop(context, true),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            child: Wrap(
+              spacing: 8,
+              children: [
+                for (final (corner, label) in _corners)
+                  ChoiceChip(
+                    label: Text(label),
+                    selected: state.pipCorner == corner,
+                    onSelected: (_) => cubit.setPipCorner(corner),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
-      _RoundButton(
-        icon: muted ? Icons.mic_off_rounded : Icons.mic_rounded,
-        label: muted ? 'Unmute' : 'Mute',
-        selected: muted,
-        onPressed: onMute,
-      ),
-    ],
+    ),
   );
 }
 

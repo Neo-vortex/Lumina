@@ -36,6 +36,14 @@ class CallState {
     this.speaker = false,
     this.held = false,
     this.systemUi = false,
+    this.camera = false,
+    this.frontCamera = true,
+    this.screenSharing = false,
+    this.screenWithCamera = false,
+    this.pipCorner = PipCorner.bottomRight,
+    this.textures,
+    this.remoteSize,
+    this.localSize,
     this.signalBars,
     this.remoteMuted = false,
     this.remoteVideo = false,
@@ -65,6 +73,20 @@ class CallState {
   /// The Phone app's in-call screen shows this call (calling account), so
   /// Lumina doesn't open its own.
   final bool systemUi;
+
+  /// Our camera is sending (not while the screen is shared).
+  final bool camera;
+  final bool frontCamera;
+  final bool screenSharing;
+
+  /// The shared screen carries the camera bubble.
+  final bool screenWithCamera;
+  final PipCorner pipCorner;
+
+  /// Flutter textures of the remote video and our preview.
+  final ({int remote, int local})? textures;
+  final ({int width, int height})? remoteSize;
+  final ({int width, int height})? localSize;
   final int? signalBars;
   final bool remoteMuted;
   final bool remoteVideo;
@@ -87,6 +109,14 @@ class CallState {
     bool? speaker,
     bool? held,
     bool? systemUi,
+    bool? camera,
+    bool? frontCamera,
+    bool? screenSharing,
+    bool? screenWithCamera,
+    PipCorner? pipCorner,
+    ({int remote, int local})? textures,
+    ({int width, int height})? remoteSize,
+    ({int width, int height})? localSize,
     int? signalBars,
     bool? remoteMuted,
     bool? remoteVideo,
@@ -106,6 +136,14 @@ class CallState {
     speaker: speaker ?? this.speaker,
     held: held ?? this.held,
     systemUi: systemUi ?? this.systemUi,
+    camera: camera ?? this.camera,
+    frontCamera: frontCamera ?? this.frontCamera,
+    screenSharing: screenSharing ?? this.screenSharing,
+    screenWithCamera: screenWithCamera ?? this.screenWithCamera,
+    pipCorner: pipCorner ?? this.pipCorner,
+    textures: textures ?? this.textures,
+    remoteSize: remoteSize ?? this.remoteSize,
+    localSize: localSize ?? this.localSize,
     signalBars: signalBars ?? this.signalBars,
     remoteMuted: remoteMuted ?? this.remoteMuted,
     remoteVideo: remoteVideo ?? this.remoteVideo,

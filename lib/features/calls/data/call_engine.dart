@@ -69,6 +69,29 @@ final class EngineAudioRoute extends EngineEvent {
   final String route;
 }
 
+/// A video stream's frame size changed (remote / local), for layout.
+final class EngineVideoSize extends EngineEvent {
+  const EngineVideoSize({required this.remote, required this.width, required this.height});
+  final bool remote;
+  final int width;
+  final int height;
+}
+
+final class EngineCameraSwitched extends EngineEvent {
+  const EngineCameraSwitched({required this.front});
+  final bool front;
+}
+
+/// Screen sharing ended ([byUser] false: the system or the user stopped it
+/// from outside Lumina, e.g. the cast tile).
+final class EngineScreenShareStopped extends EngineEvent {
+  const EngineScreenShareStopped({required this.byUser});
+  final bool byUser;
+}
+
+/// Where the camera bubble sits on a shared screen.
+enum PipCorner { topLeft, topRight, bottomLeft, bottomRight }
+
 enum EngineConnection { waitInit, waitInitAck, established, failed, reconnecting }
 
 typedef EngineCapabilities = ({List<String> versions, int maxLayer, bool deviceAec, bool deviceNs});
@@ -88,6 +111,20 @@ abstract interface class CallEngine {
 
   /// Ends the call; [EngineStopped] follows.
   Future<void> stop();
+
+  /// Flutter texture ids for the other side's video and our preview.
+  Future<({int remote, int local})?> videoTextures();
+
+  /// Camera on; false without permission or a running call.
+  Future<bool> startVideo({required bool front});
+  Future<void> stopVideo();
+  Future<void> switchCamera({required bool front});
+
+  /// After [CallSystem.requestScreenCapture]: shares the screen, with the
+  /// camera bubble in [corner] when [camera].
+  Future<bool> startScreenShare({required bool camera, required PipCorner corner});
+  Future<void> stopScreenShare();
+  Future<void> setPipCorner(PipCorner corner);
 
   Stream<EngineEvent> get events;
 }
@@ -132,6 +169,9 @@ abstract interface class CallSystem {
 
   /// microphone, camera, notifications → granted.
   Future<Map<String, bool>> requestPermissions(List<String> names);
+
+  /// The system's screen recording prompt. True when the user allowed it.
+  Future<bool> requestScreenCapture();
 }
 
 /// [CallEngine] and [CallSystem] over the "dev.lumina/calls" channels
@@ -192,6 +232,46 @@ class ChannelCallEngine implements CallEngine, CallSystem {
       return await _methods.invokeMethod<T>(method, args);
     } on MissingPluginException {
       return null;
+    }
+  }
+
+  @override
+  Future<({int remote, int local})?> videoTextures() async {
+    try {
+      final r = await _methods.invokeMapMethod<String, Object?>('videoTextures');
+      if (r == null) return null;
+      return (remote: (r['remote']! as num).toInt(), local: (r['local']! as num).toInt());
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  @override
+  Future<bool> startVideo({required bool front}) async =>
+      await _call<bool>('startVideo', {'front': front}) ?? false;
+
+  @override
+  Future<void> stopVideo() => _call('stopVideo');
+
+  @override
+  Future<void> switchCamera({required bool front}) => _call('switchCamera', front);
+
+  @override
+  Future<bool> startScreenShare({required bool camera, required PipCorner corner}) async =>
+      await _call<bool>('startScreenShare', {'camera': camera, 'corner': corner.index}) ?? false;
+
+  @override
+  Future<void> stopScreenShare() => _call('stopScreenShare');
+
+  @override
+  Future<void> setPipCorner(PipCorner corner) => _call('setPipCorner', corner.index);
+
+  @override
+  Future<bool> requestScreenCapture() async {
+    try {
+      return await _system.invokeMethod<bool>('requestScreenCapture') ?? false;
+    } on MissingPluginException {
+      return false;
     }
   }
 
@@ -288,6 +368,13 @@ EngineEvent? parseEngineEvent(Map<Object?, Object?> e) => switch (e['type']) {
   'showIncomingUi' => const EngineShowIncomingUi(),
   'dialerCall' => EngineDialerCall(e['number'] as String),
   'audioRoute' => EngineAudioRoute(e['route'] as String),
+  'videoSize' => EngineVideoSize(
+    remote: e['which'] == 'remote',
+    width: (e['width'] as num).toInt(),
+    height: (e['height'] as num).toInt(),
+  ),
+  'cameraSwitched' => EngineCameraSwitched(front: e['front'] == true),
+  'screenShareStopped' => EngineScreenShareStopped(byUser: e['byUser'] == true),
   'stopped' => EngineStopped(
     debugLog: e['debugLog'] as String? ?? '',
     ratingSuggested: e['ratingSuggested'] == true,
