@@ -7,6 +7,15 @@ import '../../../../core/widgets/glow_sigil.dart';
 import '../../bloc/auth_bloc.dart';
 import 'notice_banner.dart';
 
+/// Optional actions the app adds to auth screens (provided by the
+/// composition root).
+class AuthExtras {
+  const AuthExtras({this.openProxy});
+
+  /// Proxy settings, needed before login where Telegram is blocked.
+  final void Function(BuildContext context)? openProxy;
+}
+
 /// Shared frame for every auth screen: drifting backdrop, sigil, title,
 /// subtitle, the pending notice (if any) and the screen's form.
 class AuthScaffold extends StatelessWidget {
@@ -19,6 +28,12 @@ class AuthScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final notice = context.select((AuthBloc b) => b.state.notice);
+    AuthExtras extras;
+    try {
+      extras = context.read<AuthExtras>();
+    } on ProviderNotFoundException {
+      extras = const AuthExtras();
+    }
     return Scaffold(
       body: GlowBackground(
         child: SafeArea(
@@ -30,6 +45,15 @@ class AuthScaffold extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (extras.openProxy != null)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: IconButton(
+                          tooltip: 'Proxy settings',
+                          icon: const Icon(Icons.vpn_lock_rounded, color: GlowColors.textMuted),
+                          onPressed: () => extras.openProxy!(context),
+                        ),
+                      ),
                     const Center(child: GlowSigil()),
                     const SizedBox(height: 28),
                     Semantics(

@@ -1,11 +1,18 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../core/media/audio_playback.dart';
 import '../core/media/ffmpeg_service.dart';
 import '../core/media/tdlib_stream_server.dart';
 import '../core/storage/app_preferences.dart';
+import '../core/storage/secure_store.dart';
+import '../core/tdlib/td_client.dart';
 import '../core/telegram/file_store.dart';
 import '../core/models/bundled_models.dart';
+import '../features/proxy/data/proxy_repository.dart';
+import '../features/auth/presentation/widgets/auth_scaffold.dart';
+import '../features/proxy/presentation/screens/proxy_screen.dart';
+import '../features/proxy/presentation/widgets/connection_settings.dart';
 import '../features/transcription/data/transcription_center.dart';
 import '../features/transcription/data/whisper_service.dart';
 import '../features/transcription/presentation/widgets/speech_settings.dart';
@@ -35,6 +42,18 @@ List<RepositoryProvider<Object>> featureProviders() => [
     create: (c) => VoiceRecorder(c.read<FfmpegService>()),
     dispose: (r) => r.dispose(),
   ),
+  RepositoryProvider<ProxyRepository>(
+    lazy: false,
+    create: (c) => ProxyRepository(
+      client: c.read<TdClient>(),
+      prefs: c.read<AppPreferences>(),
+      secure: c.read<SecureStore>(),
+    ),
+    dispose: (r) => r.dispose(),
+  ),
+  RepositoryProvider<AuthExtras>(
+    create: (_) => AuthExtras(openProxy: (context) => Navigator.of(context).push(ProxyScreen.route())),
+  ),
   RepositoryProvider<ModelInstaller>(create: (_) => ModelInstaller()),
   RepositoryProvider<WhisperService>(
     create: (c) => WhisperService(ffmpeg: c.read<FfmpegService>(), models: c.read<ModelInstaller>()),
@@ -55,5 +74,7 @@ List<RepositoryProvider<Object>> featureProviders() => [
     ),
   ),
   RepositoryProvider<ComposeActions>(create: (_) => const ComposeActions([])),
-  RepositoryProvider<SettingsEntries>(create: (_) => SettingsEntries((_) => const [SpeechSettings()])),
+  RepositoryProvider<SettingsEntries>(
+    create: (_) => SettingsEntries((context) => [const ConnectionSettings(), const SpeechSettings()]),
+  ),
 ];
