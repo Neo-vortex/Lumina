@@ -126,6 +126,10 @@ class AppPreferences {
 
   // ---- Misc ------------------------------------------------------------------
 
+  /// Delete cached media not opened for this many days; 0 keeps forever.
+  int get keepMediaDays => _values['storage.keepMediaDays'] as int? ?? 0;
+  set keepMediaDays(int v) => _set('storage.keepMediaDays', v);
+
   bool get batteryPromptShown => _bool('system.batteryPromptShown', false);
   set batteryPromptShown(bool v) => _set('system.batteryPromptShown', v);
 }

@@ -120,6 +120,15 @@ class WhisperService {
 
   void cancel() => _transcriber?.cancel();
 
+  /// Frees the model once the current run (if any) finishes; used when
+  /// Android reports memory pressure.
+  void releaseMemory() {
+    _queue = _queue.then((_) {
+      _idle?.cancel();
+      _unload();
+    });
+  }
+
   void _unload() {
     _transcriber?.dispose();
     _transcriber = null;
