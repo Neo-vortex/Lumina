@@ -1,0 +1,13 @@
+--- a/org/telegram/messenger/voip/VideoCapturerDevice.java
++++ b/org/telegram/messenger/voip/VideoCapturerDevice.java
+@@ -166,7 +166,9 @@
+                             return;
+                         }
+                         nativeCapturerObserver = nativeGetJavaVideoCapturerObserver(nativePtr);
+-                        videoCapturer.initialize(videoCapturerSurfaceTextureHelper, ApplicationLoader.applicationContext, nativeCapturerObserver);
++                        // Lumina: optionally composite the camera onto the screen (ScreenPip).
++                        videoCapturer.initialize(videoCapturerSurfaceTextureHelper, ApplicationLoader.applicationContext,
++                                dev.lumina.calls.ScreenPip.wrap(nativeCapturerObserver, videoCapturerSurfaceTextureHelper));
+                         FileLog.d("VideoCapturerDevice init(" + ptr + "): videoCapturer.startCapture SCREEN");
+                         videoCapturer.startCapture(size.x, size.y, CAPTURE_FPS);
+                         WebRtcAudioRecord audioRecord = WebRtcAudioRecord.Instance;

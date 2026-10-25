@@ -109,6 +109,11 @@ sed -i -E 's/LivePlayer\.recording != null/false/; /import org\.telegram\.ui\.St
 rm "$java/org/webrtc/TextureViewRenderer.java"
 # The Telegram helpers the remaining code calls are small stand-ins in
 # android/calls-engine/java-shims.
+# Lumina's own changes to the vendored Java (e.g. the screen-share camera
+# bubble hook), kept as patches so they survive a pin bump.
+for p in "$root"/android/calls-engine/patches/*.patch; do
+  [[ -e "$p" ]] && patch -s -p1 -d "$java" < "$p"
+done
 
 # Third-party notices shown in Settings → About → Licenses. Components
 # whose vendored copy has no license file get it from upstream.

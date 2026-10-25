@@ -119,6 +119,13 @@ class MainActivity : FlutterActivity() {
                 if (hasLocation() || call.argument<Boolean>("ask") != true) begin(hasLocation())
                 else requestLive(begin)
             }
+            // Screen sharing in a call: the system's "start recording?" prompt.
+            "requestScreenCapture" -> {
+                pendingScreenCapture?.success(false)
+                pendingScreenCapture = result
+                val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+                startActivityForResult(mpm.createScreenCaptureIntent(), SCREEN_CAPTURE_REQUEST)
+            }
             // names: microphone, camera, notifications. Returns name -> granted.
             "requestPermissions" -> {
                 val wanted = (call.arguments as List<*>).mapNotNull { name ->
@@ -230,6 +237,17 @@ class MainActivity : FlutterActivity() {
 
     private var pendingLive: ((Boolean) -> Unit)? = null
     private var pendingPermissions: (() -> Unit)? = null
+    private var pendingScreenCapture: MethodChannel.Result? = null
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != SCREEN_CAPTURE_REQUEST) return
+        val ok = resultCode == RESULT_OK && data != null
+        // The vendored capturer reads the permission from here.
+        org.telegram.messenger.voip.VideoCapturerDevice.mediaProjectionPermissionResultData = if (ok) data else null
+        pendingScreenCapture?.success(ok)
+        pendingScreenCapture = null
+    }
 
     private fun hasLocation() = listOf(
         android.Manifest.permission.ACCESS_FINE_LOCATION,
@@ -342,5 +360,6 @@ class MainActivity : FlutterActivity() {
         private const val LOCATION_REQUEST = 4107
         private const val LIVE_REQUEST = 4109
         private const val PERMISSIONS_REQUEST = 4110
+        private const val SCREEN_CAPTURE_REQUEST = 4111
     }
 }

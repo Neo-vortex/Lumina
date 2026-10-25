@@ -23,6 +23,11 @@ class CallButtons extends StatelessWidget {
         icon: const Icon(Icons.call_rounded),
         onPressed: () => _call(context, video: false),
       ),
+      IconButton(
+        tooltip: 'Video call',
+        icon: const Icon(Icons.videocam_rounded),
+        onPressed: () => _call(context, video: true),
+      ),
     ],
   );
 }

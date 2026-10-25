@@ -28,7 +28,7 @@ object LuminaEngine {
         FlutterEngineCache.getInstance().get(ID)?.let { return it }
         val app = context.applicationContext
         val engine = FlutterEngine(app)
-        calls = CallChannel(app, engine.dartExecutor.binaryMessenger)
+        calls = CallChannel(app, engine.dartExecutor.binaryMessenger, engine.renderer)
         MessageNotifications(app, engine.dartExecutor.binaryMessenger)
         val loader = FlutterInjector.instance().flutterLoader()
         loader.startInitialization(app)

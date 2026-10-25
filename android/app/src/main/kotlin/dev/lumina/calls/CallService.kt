@@ -25,20 +25,33 @@ class CallService : Service() {
         val title = intent?.getStringExtra(EXTRA_TITLE) ?: "Call"
         val text = intent?.getStringExtra(EXTRA_TEXT) ?: "Ongoing call"
         val video = intent?.getBooleanExtra(EXTRA_VIDEO, false) ?: false
+        val screen = intent?.getBooleanExtra(EXTRA_SCREEN, false) ?: false
         try {
             val notification = ongoing(this, title, text)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-                if (video) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+                // A type whose permission is missing would throw and end the call's service.
+                if (video && checkSelfPermission(android.Manifest.permission.CAMERA) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+                ) {
+                    type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+                }
+                if (screen) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
                 startForeground(ONGOING_ID, notification, type)
             } else {
                 startForeground(ONGOING_ID, notification)
             }
+            screenReady = screen
         } catch (e: Exception) {
             Log.w(TAG, "Could not start the call service", e)
             stopSelf()
         }
         return START_NOT_STICKY
+    }
+
+    override fun onDestroy() {
+        screenReady = false
+        super.onDestroy()
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -51,6 +64,14 @@ class CallService : Service() {
         private const val EXTRA_TITLE = "title"
         private const val EXTRA_TEXT = "text"
         private const val EXTRA_VIDEO = "video"
+        private const val EXTRA_SCREEN = "screen"
+
+        /** The service runs with the mediaProjection type (screen sharing may start). */
+        @Volatile var screenReady = false
+            private set
+
+        private var lastTitle = "Call"
+        private var lastText = "Ongoing call"
         const val ONGOING_CHANNEL = "calls_ongoing"
         const val INCOMING_CHANNEL = "calls_incoming"
         const val ONGOING_ID = 4201
@@ -60,11 +81,21 @@ class CallService : Service() {
         const val ACTION_HANG_UP = "dev.lumina.calls.HANG_UP"
         const val ACTION_DECLINE = "dev.lumina.calls.DECLINE"
 
-        fun start(context: Context, title: String, text: String, video: Boolean): Boolean = try {
+        /** Starts the service, or updates its types / text while it runs. */
+        fun start(
+            context: Context,
+            title: String = lastTitle,
+            text: String = lastText,
+            video: Boolean,
+            screen: Boolean = false,
+        ): Boolean = try {
+            lastTitle = title
+            lastText = text
             val intent = Intent(context, CallService::class.java)
                 .putExtra(EXTRA_TITLE, title)
                 .putExtra(EXTRA_TEXT, text)
                 .putExtra(EXTRA_VIDEO, video)
+                .putExtra(EXTRA_SCREEN, screen)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
             else context.startService(intent)
             true
