@@ -120,12 +120,12 @@ does not copy Telegram's look.
 | Ghost mode, ads toggle, sponsored messages | ✅ | prefs + settings + conversation |
 | Home shell (nav bar, compose orb radial menu) | ✅ (menu has no actions yet) | `lib/features/home/` |
 | Settings (privacy, stories, media, channels) | ✅ partial | `lib/features/settings/` |
-| Media: photos, videos, GIFs, albums (cluster), documents, stickers, viewer, VLC player, attach + review, converter | 🟡 in progress, compiles | `lib/features/media/`, `conversation/.../content/` |
-| Voice notes (record, Opus, waveform, playback 0.5–4×), video notes, music | ⬜ | planned `lib/features/voice/` |
-| Whisper (bundled model, transcribe, translate, dictation, chunking) | ⬜ | planned `lib/features/transcription/` |
+| Media: photos, videos, GIFs, albums (cluster), documents, stickers, viewer, VLC player, attach + review, converter | ✅ (APK builds; verify on device) | `lib/features/media/`, `conversation/.../content/` |
+| Voice notes (record, Opus, waveform, playback 0.5–4×), video notes (play + record), music | ✅ | `lib/features/voice/`, `core/media/audio_playback.dart` |
+| Whisper (bundled model, transcribe, translate, dictation, chunking) | ✅ | `lib/features/transcription/`, `core/models/` |
 | Local FTS search | ⬜ | planned `lib/features/search/` |
 | Tiny LLM actions | ⬜ | planned `lib/features/assistant/` |
-| Proxy | ⬜ | planned `lib/features/proxy/` |
+| Proxy (list, toggle, add/edit, paste link, test, share, login-screen access, encrypted restore after wipe) | ✅ | `lib/features/proxy/` |
 | Groups/channels admin, chat info, secret chats, contacts, new chat/group/channel | ⬜ | planned `lib/features/chat_info/`, `lib/features/compose/` |
 | Stories | ⬜ | planned `lib/features/stories/` |
 | Hardening (cache/optimizeStorage, battery prompt, 16 KB check) | ⬜ | settings + app |
@@ -135,6 +135,15 @@ error mapping, cache ordering, row grouping and video presets. Run
 `flutter analyze` too; it must stay at zero issues.
 
 ## 4. Environment & build
+
+- **Build machine note:** Maven Central rate-limited this environment
+  (HTTP 429). `~/.gradle/init.d/maven-central-mirror.gradle` redirects to
+  Google's official mirror (`maven-central.storage-download.googleapis.com`).
+  It's an environment tweak, not committed. Recreate it if builds fail with 429.
+- Native libraries: libVLC and ffmpeg-kit both ship `libc++_shared.so`;
+  `packaging.jniLibs.pickFirsts` keeps one copy.
+- The debug APK is about 870 MB (every ABI, Vulkan validation layers, 300 MB
+  of models). Release builds should use `--split-per-abi` / an AAB.
 
 - Flutter 3.47.8 stable (Dart 3.13.7), Android SDK with the NDK fetched by
   Gradle, Java 21, minSdk 24.

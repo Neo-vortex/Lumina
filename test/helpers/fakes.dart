@@ -13,6 +13,13 @@ class FakeTdClient implements TdClient {
   final _updates = StreamController<td.Update>.broadcast();
   final sent = <td.TdFunction>[];
   FutureOr<td.TdObject> Function(td.TdFunction function) respond = (_) => const td.Ok();
+
+  /// Answers for background requests made by app services (proxy restore),
+  /// applied before [respond].
+  td.TdObject? _builtIn(td.TdFunction f) => switch (f) {
+    td.GetProxies() => const td.Proxies(proxies: []),
+    _ => null,
+  };
   var starts = 0;
   var recreations = 0;
 
@@ -33,7 +40,7 @@ class FakeTdClient implements TdClient {
   @override
   Future<T> invoke<T extends td.TdObject>(td.TdFunction function, {Duration? timeout}) async {
     sent.add(function);
-    final result = await respond(function);
+    final result = _builtIn(function) ?? await respond(function);
     if (result is td.TdError) throw TdException(result.code, result.message);
     return result as T;
   }
