@@ -19,6 +19,7 @@ import '../../../auth/domain/auth_step.dart';
 import '../../bloc/conversation_cubit.dart';
 import '../../data/messages_repository.dart';
 import '../widgets/composer.dart';
+import 'scheduled_messages_screen.dart';
 import '../widgets/formatting_controller.dart';
 import '../widgets/conversation_extensions.dart';
 import '../widgets/conversation_header.dart';
@@ -149,7 +150,18 @@ class _ConversationScreenState extends State<ConversationScreen> {
       _text.clear();
       _cubit.saveDraft('');
       if (options.scheduleAt != null || options.whenOnline) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Message scheduled')));
+        final chat = _cubit.state.chat;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Message scheduled'),
+            action: chat == null
+                ? null
+                : SnackBarAction(
+                    label: 'View',
+                    onPressed: () => Navigator.of(context).push(ScheduledMessagesScreen.route(chat)),
+                  ),
+          ),
+        );
       }
     }
   }
@@ -304,6 +316,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     showPresence: !isBot,
                     onTitleTap: () => extensions.openChatInfo(context, chat),
                     actions: [
+                      if (chat.hasScheduledMessages)
+                        IconButton(
+                          tooltip: 'Scheduled messages',
+                          icon: const Icon(Icons.schedule_send_rounded, color: GlowColors.cyan),
+                          onPressed: () => Navigator.of(context).push(ScheduledMessagesScreen.route(chat)),
+                        ),
                       IconButton(
                         tooltip: 'Search in chat',
                         icon: const Icon(Icons.search_rounded),

@@ -119,6 +119,8 @@ class TelegramCache {
         _patchChat(chatId, (c) => c.copyWith(notificationSettings: notificationSettings));
       case td.UpdateChatAvailableReactions(:final chatId, :final availableReactions):
         _patchChat(chatId, (c) => c.copyWith(availableReactions: availableReactions));
+      case td.UpdateChatHasScheduledMessages(:final chatId, :final hasScheduledMessages):
+        _patchChat(chatId, (c) => c.copyWith(hasScheduledMessages: hasScheduledMessages));
       case td.UpdateUser(:final user):
         users[user.id] = user;
         _emit(UserChanged(user.id));

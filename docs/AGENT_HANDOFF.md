@@ -106,6 +106,109 @@ does not copy Telegram's look.
     `toggleHasSponsoredMessagesEnabled`. Others get a local hide with an
     explicit API-terms warning.
 13. **This handoff document**, which must not be the main README.
+14. **Stories, fully:** who viewed your stories, posting as a channel,
+    stickers and tags. Done (§5.4).
+15. **Story history:** save another user's story on this device; each
+    person gets a dedicated tab listing every story saved from them, so it
+    can be revisited weeks later. Done (§5.4), with per-person auto-save.
+16. **Rich text:** bold, italic, code, quotes, articles (Instant View);
+    render all of them and allow composing them. Done (see status table).
+17. **Web previews toggle:** link previews when sending. Open pages in
+    Chromium (a Custom Tab), not an embedded/internal WebView. Done.
+18. **CI:** a GitHub Action that builds the APK on every push and creates a
+    release package signed with the debug key. Done (§4), green run still
+    to be confirmed.
+19. **Scheduled messages**, as in Telegram, and **sending images/videos as
+    files**. Partly done, see §2.3.
+20. **Modern attachment picker:** the same features as Telegram (location,
+    documents, video, images, files…) but more intuitive and modern.
+    Research first. Partly done, see §2.3.
+21. **Calls, full support:**
+    - Voice and video calls.
+    - **"Use proxy for calls"** option, as in official Telegram.
+    - Video: **front camera, back camera (switch while in the call), and
+      screen sharing**.
+    - **Custom renderer:** when the user shares their screen and also
+      chooses to share the front camera, the outgoing video is the screen
+      with a small **picture-in-picture camera bubble** composited on it.
+    Not started, see §2.3 and §5.7.
+- **Declined:** "keep disposable (view-once / self-destructing) pictures
+  and mark them as kept." The sender chose for them to disappear, so this
+  must not be built (§5.4).
+
+### 2.3 Not done yet (complete list, start here)
+
+**A. Attachment picker and sending (owner items 19 and 20)**
+- Done and pushed:
+  - New hub `media/presentation/widgets/attach_sheet.dart`. It has Gallery
+    (system Photo Picker) and Camera hero cards (tap for photo, hold for
+    video), adaptive tiles ordered by usage (File, Location, Contact, Poll,
+    Music, Round video), and an "Original quality" switch.
+  - `location_sheet.dart`, `poll_composer.dart`.
+  - Bubbles for location / live location / venue, contact and poll (with
+    voting, quiz, retract and stop) in
+    `conversation/.../content/rich_cards_content.dart`.
+  - Contact sharing is wired in `app_conversation_extensions.dart`.
+- TODO:
+  1. **Live location updater**: write `media/data/live_location_service.dart`.
+     - Every ~60 s while sharing, get `SystemChannel.currentLocation()`
+       and call `editMessageLiveLocation`.
+     - Swap the temporary id on `updateMessageSendSucceeded`. Stop at
+       expiry, or when the message shows `expiresIn == 0`.
+     - Needs a foreground service to keep going in the background, plus
+       `ACCESS_FINE_LOCATION` if wanted.
+     - Today the live message is only sent once.
+  2. **`MediaPick.asFiles` and `.music` are ignored**: in `_attach`, pass
+     them into `SendMediaScreen.open`. That needs a new `initialAsFile`
+     parameter. Music (audio paths) should become `InputMessageAudio`
+     with duration, title and performer from `FfmpegService.probe`.
+     Today audio goes out as a document.
+  3. **Send options for media**: on `SendMediaScreen`, long-pressing send
+     should offer silent / schedule / when-online, like the composer. Use
+     `pickScheduleTime`. Return `SendOptions` in `MediaSendRequest` and
+     thread them through `ConversationCubit.sendAlbum` / `sendContent`.
+  4. Record the picker research as UX-34…37 in `docs/UX_RESEARCH.md`:
+     - Compact sheet with big primary actions.
+     - Adaptive tile order.
+     - The system Photo Picker (Play policy limits `READ_MEDIA_*`).
+     - Google's embedded photo picker is still alpha, so not used.
+  5. Tests for the hub's usage ordering and for poll building.
+- Scheduled messages are done (`scheduled_messages_screen.dart`,
+  `schedule_picker.dart`, header button, snackbar "View") but have no
+  tests yet. Scheduled updates no longer leak into the timeline.
+
+**B. Calls (owner item 21), not started**
+- See §5.7 for the design. Nothing is implemented: no call UI, no
+  `createCall` / `acceptCall`, no media engine.
+
+**C. CI / release**
+- Confirm a green run of `.github/workflows/android.yml`:
+  - The first run failed on `abiFilters` vs `--split-per-abi`; that is
+    fixed in `android/app/build.gradle.kts`.
+  - Later runs were cancelled by newer pushes; `main` now never cancels.
+- Owner action: add the repository secrets `TG_API_ID`, `TG_API_HASH` and
+  (recommended) `DEBUG_KEYSTORE_B64` (§4).
+- The local release build in the dev container failed only for lack of
+  disk space. CI has ~20 GB after the cleanup step.
+
+**D. Rich text leftovers**
+- Animated custom emoji (TGS/WebM) show their static thumbnail. TGS needs
+  a Lottie renderer.
+- Drafts keep formatting, but reply-quote (`InputTextQuote`) is not
+  supported.
+- Instant View: `PageBlockEmbedded` HTML is not executed (it shows the
+  poster and links out). Collages are a simple PageView.
+
+**E. Stories leftovers**
+- The weather area is rendered but can't be created (no weather source).
+- The story *message* area (`StoryAreaTypeMessage`) is not tappable.
+- Saved-story history is a JSON index in app-private storage, not
+  encrypted.
+
+**F. Older open items**
+- Everything in §8 ("Must verify on a real device").
+- Battery prompt, 16 KB check and storage are done, but none of them has
+  been checked on a device yet.
 
 ## 3. Status
 
@@ -312,6 +415,78 @@ chat info, stories and storage. Run
 - **Done.** `ComposeFlows` (chat_info feature) gets an injected `OpenChat`
   callback so the feature does not import the conversation feature. The
   "Post story" orb entry is still to be added with Stories (§5.4).
+
+### 5.7 Calls (owner item 21), design, not implemented
+
+**What TDLib gives and what it doesn't**
+- TDLib does **signaling only**:
+  - `createCall(userId, protocol, isVideo)`, `acceptCall`, `discardCall`.
+  - `updateCall` with `CallStatePending / ExchangingKeys / Ready /
+    HangingUp / Discarded / Error`, plus `sendCallSignalingData` and
+    `updateNewCallSignalingData`.
+  - `sendCallRating`, `sendCallDebugInformation`.
+- `CallStateReady` carries `servers` (WebRTC STUN/TURN and Telegram
+  reflectors), `config` JSON, `encryptionKey`, `emojis`
+  (verification), `allowP2p` and `customParameters`.
+- The **media layer is not in TDLib**. Official apps use **tgcalls**
+  (github.com/TelegramMessenger/tgcalls), a C++ library on top of WebRTC.
+  Lumina must build it for arm64-v8a and x86_64, wrap it in JNI/FFI, and
+  feed it TDLib's signaling. This is the bulk of the work.
+- Options:
+  1. **Recommended:** reuse the prebuilt tgcalls + WebRTC from the
+     Telegram-Android source tree (GPLv2). Lumina would then have to be
+     GPL-compatible. Record this license decision in DECISIONS.md before
+     starting.
+  2. Build tgcalls + WebRTC from source in CI. WebRTC builds take hours,
+     so cache the artifacts.
+- `CallProtocol`: `udpP2p`, `udpReflector`, `minLayer 65`, `maxLayer 92`,
+  and `libraryVersions` must list the tgcalls versions actually bundled
+  (for example "4.0.0", "5.0.0", "7.0.0", "8.0.0", "9.0.0", "11.0.0").
+
+**Proxy for calls**
+- Settings → Connection → "Use proxy for calls" (pref
+  `calls.useProxy`, default off, as in official Telegram).
+- When on and the active proxy is **SOCKS5**, pass its host, port, user
+  and password into tgcalls' proxy config. tgcalls tunnels the reflector
+  connection through SOCKS5 UDP ASSOCIATE.
+- With MTProto or HTTP proxies, calls can't be proxied. Show a note, and
+  keep `allowP2p` off when the toggle is on.
+- `ProxyRepository` already knows the active proxy (secrets are in
+  `SecureStore`).
+
+**Video sources and the custom renderer**
+- Camera: Camera2 via WebRTC's `Camera2Capturer`.
+  - Front by default.
+  - "Switch camera" button: `CameraVideoCapturer.switchCamera`.
+- Screen share:
+  - `MediaProjection` permission plus a foreground service of type
+    `mediaProjection`, required on Android 14+.
+  - WebRTC's `ScreenCapturerAndroid`.
+- **Screen + camera PiP:** a custom `VideoSource` fed by a compositor.
+  - Take the latest screen frame and draw the front-camera frame on top
+    as a rounded square, about 22% of the width, in a corner; the user
+    can drag it to a different corner.
+  - Use an OpenGL ES shader on a `SurfaceTextureHelper` and output a
+    single `VideoFrame` stream, so the peer receives one composited
+    track (tgcalls sends one video track for 1:1 calls).
+  - The PiP corner and size are settings in the call UI.
+  - The camera inside the PiP can also be switched front/back.
+- Remote video renders through WebRTC's `SurfaceViewRenderer`.
+  - Expose it to Flutter as a `PlatformView` or `Texture` widget, with a
+    local self-view PiP in the Flutter UI.
+
+**UI (Glowing Relaxation)**
+- Incoming call: a full-screen notification (`USE_FULL_SCREEN_INTENT`,
+  `ConnectionService` / self-managed calls) plus an in-app ringing screen.
+- In call:
+  - Avatar halo pulses with audio level.
+  - Encryption emojis, shown to compare.
+  - Mute, speaker, video, switch camera, share screen (with "Include
+    camera" toggle), hang up.
+  - Duration and network quality.
+- Call buttons in the conversation header and chat info for private
+  chats. Call history comes from `MessageCall` messages, which already
+  arrive as messages.
 
 ## 6. Conventions (keep them)
 

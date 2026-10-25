@@ -16,6 +16,7 @@ import '../features/auth/bloc/auth_bloc.dart';
 import '../features/chat_info/presentation/compose_flows.dart';
 import '../features/chat_info/presentation/screens/chat_info_screen.dart';
 import '../features/auth/domain/auth_step.dart';
+import '../features/chat_info/presentation/widgets/contact_picker.dart';
 import '../features/conversation/bloc/conversation_cubit.dart';
 import '../features/conversation/data/messages_repository.dart';
 import '../features/conversation/presentation/widgets/conversation_extensions.dart';
@@ -235,18 +236,49 @@ class AppConversationExtensions extends ConversationExtensions {
   Future<void> _attach(BuildContext context, td.Chat chat) async {
     final cubit = context.read<ConversationCubit>();
     final messages = context.read<MessagesRepository>();
-    final paths = await pickAttachments(context, context.read<FfmpegService>());
-    if (paths.isEmpty || !context.mounted) return;
-    if (paths.length == 1 && paths.first == videoNoteChoice) {
-      final note = await VideoNoteRecorderScreen.open(context);
-      if (note != null) {
-        final error = await cubit.sendContent(note);
-        if (error != null && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
-        }
+    final pick = await pickAttachments(context, context.read<FfmpegService>(), prefs: prefs);
+    if (pick == null || !context.mounted) return;
+    Future<void> sendOne(td.InputMessageContent content) async {
+      final error = await cubit.sendContent(content);
+      if (error != null && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
       }
-      return;
     }
+
+    final List<String> paths;
+    switch (pick) {
+      case VideoNotePick():
+        final note = await VideoNoteRecorderScreen.open(context);
+        if (note != null) await sendOne(note);
+        return;
+      case ContentPick(:final content):
+        // TODO(handoff §2.3): live locations are sent but not yet kept
+        // updated (LiveLocationService not written).
+        await sendOne(content);
+        return;
+      case ContactPick():
+        final cache = context.read<TelegramCache>();
+        final ids = await ContactPickerScreen.pick(context, title: 'Share contact');
+        final user = ids == null || ids.isEmpty ? null : cache.users[ids.first];
+        if (user == null) return;
+        await sendOne(
+          td.InputMessageContact(
+            contact: td.Contact(
+              phoneNumber: user.phoneNumber,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              vcard: '',
+              userId: user.id,
+            ),
+          ),
+        );
+        return;
+      case MediaPick(paths: final p):
+        // TODO(handoff §2.3): MediaPick.asFiles / .music are not yet passed
+        // to SendMediaScreen; the user toggles "Send as file" there.
+        paths = p;
+    }
+    if (!context.mounted) return;
     final isBot = switch (context.read<AuthBloc>().state.step) {
       AuthReady(:final capabilities) => capabilities.isBot,
       _ => false,

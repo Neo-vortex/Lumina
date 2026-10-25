@@ -11,6 +11,7 @@ import '../../../../core/theme/motion.dart';
 import '../../data/messages_repository.dart';
 import 'formatting_controller.dart';
 import 'link_preview_card.dart';
+import 'schedule_picker.dart';
 import 'send_orb.dart';
 
 /// Message composer: reply/edit strip, attach button, multiline field and
@@ -199,27 +200,8 @@ class _ComposerState extends State<Composer> {
       case 'online':
         await _send(const SendOptions(whenOnline: true));
       case 'schedule':
-        final now = DateTime.now();
-        final date = await showDatePicker(
-          context: context,
-          firstDate: now,
-          lastDate: now.add(const Duration(days: 365)),
-          initialDate: now,
-        );
-        if (date == null || !mounted) return;
-        final time = await showTimePicker(
-          context: context,
-          initialTime: TimeOfDay.fromDateTime(now.add(const Duration(hours: 1))),
-        );
-        if (time == null) return;
-        final at = DateTime(date.year, date.month, date.day, time.hour, time.minute);
-        if (at.isBefore(DateTime.now())) {
-          if (mounted) {
-            ScaffoldMessenger.of(context)
-                .showSnackBar(const SnackBar(content: Text('Pick a time in the future')));
-          }
-          return;
-        }
+        final at = await pickScheduleTime(context);
+        if (at == null || !mounted) return;
         await _send(SendOptions(scheduleAt: at));
     }
   }
