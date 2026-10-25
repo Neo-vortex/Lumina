@@ -13,6 +13,8 @@ import '../core/theme/glow_colors.dart';
 import '../features/assistant/data/action_extractor.dart';
 import '../features/assistant/presentation/action_sheet.dart';
 import '../features/auth/bloc/auth_bloc.dart';
+import '../features/chat_info/presentation/compose_flows.dart';
+import '../features/chat_info/presentation/screens/chat_info_screen.dart';
 import '../features/auth/domain/auth_step.dart';
 import '../features/conversation/bloc/conversation_cubit.dart';
 import '../features/conversation/data/messages_repository.dart';
@@ -32,11 +34,21 @@ import '../features/voice/presentation/widgets/recording_bar.dart';
 /// The app's implementation of the conversation hooks: wires media,
 /// voice, dictation, AI actions and chat info into the conversation screen.
 class AppConversationExtensions extends ConversationExtensions {
-  AppConversationExtensions({required this.recorder, required this.transcripts, required this.prefs});
+  AppConversationExtensions({
+    required this.recorder,
+    required this.transcripts,
+    required this.prefs,
+    required this.flows,
+  });
 
   final VoiceRecorder recorder;
   final TranscriptionCenter transcripts;
   final AppPreferences prefs;
+  final ComposeFlows flows;
+
+  @override
+  void openChatInfo(BuildContext context, td.Chat chat) =>
+      Navigator.of(context).push(ChatInfoScreen.route(chat.id, openChat: flows.openChat));
 
   /// Dictation progress (Whisper running on the recorded speech).
   final _dictation = ValueNotifier<double?>(null);
@@ -49,11 +61,7 @@ class AppConversationExtensions extends ConversationExtensions {
   @override
   List<ExtraMenuEntry> menuEntries(td.Message message) => [
     if (messageText(message) != null)
-      const ExtraMenuEntry(
-        MessageAction.aiAction,
-        Icons.auto_awesome_rounded,
-        'AI action: event, alarm, note',
-      ),
+      const ExtraMenuEntry(MessageAction.aiAction, Icons.auto_awesome_rounded, 'AI action: event, alarm, note'),
   ];
 
   @override
@@ -92,8 +100,7 @@ class AppConversationExtensions extends ConversationExtensions {
   }
 
   @override
-  void onDictate(BuildContext context, td.Chat chat, TextEditingController text) =>
-      _dictate(context, chat, text);
+  void onDictate(BuildContext context, td.Chat chat, TextEditingController text) => _dictate(context, chat, text);
 
   Future<void> _dictate(BuildContext context, td.Chat chat, TextEditingController text) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -246,9 +253,7 @@ class AppConversationExtensions extends ConversationExtensions {
       parseCaption: messages.parseMarkdown,
     );
     if (request == null) return;
-    final error = request.asAlbum
-        ? await cubit.sendAlbum(request.contents)
-        : await _sendEach(cubit, request.contents);
+    final error = request.asAlbum ? await cubit.sendAlbum(request.contents) : await _sendEach(cubit, request.contents);
     if (error != null && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
     }

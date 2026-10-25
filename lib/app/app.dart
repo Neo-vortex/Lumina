@@ -49,8 +49,7 @@ class LuminaApp extends StatelessWidget {
         RepositoryProvider(create: (_) => FileStore(client), dispose: (f) => f.dispose()),
         RepositoryProvider(create: (c) => TdStreamServer(c.read<FileStore>()), dispose: (s) => s.stop()),
         RepositoryProvider(
-          create: (_) =>
-              AuthRepository(client: client, secureStore: secure, paths: paths, settings: settings),
+          create: (_) => AuthRepository(client: client, secureStore: secure, paths: paths, settings: settings),
         ),
         RepositoryProvider(
           create: (c) => ChatsRepository(client: client, cache: c.read<TelegramCache>()),
