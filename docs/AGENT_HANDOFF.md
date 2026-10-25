@@ -268,7 +268,7 @@ does not copy Telegram's look.
   (pulsing halo, status/duration, key emojis with explanation, signal
   bars, mute/speaker/end, answer/decline, rating), `CallHost` in
   `MaterialApp.builder` (opens the screen when a call starts unless the
-  Phone app shows it, "return to call" pill), Settings → Calls.
+  Phone app shows it, "return to call" pill), Settings → Connection & calls.
   Video button waits for phase 5.
 - Phases 5–6 (video, screen share + camera bubble), written, device test
   pending:
@@ -384,7 +384,7 @@ does not copy Telegram's look.
 | Conversation (bubbles, reply/edit/forward/pin/react/select, search, drafts, typing, schedule) | ✅ | `lib/features/conversation/` |
 | Ghost mode, ads toggle, sponsored messages | ✅ | prefs + settings + conversation |
 | Home shell (nav bar, compose orb radial menu) | ✅ (new message/group/channel/secret chat, Glimpses, post story) | `lib/features/home/` |
-| Settings (privacy, stories, media, channels, connection, storage, search, speech, background) | ✅ | `lib/features/settings/` |
+| Settings: top page lists categories (Privacy, Chats, Media & voice, Notifications, Data & storage, Connection & calls), each its own page; features file their section under a `SettingsCategory` via `SettingsEntry` in `feature_wiring.dart` | ✅ | `lib/features/settings/` |
 | Media: photos, videos, GIFs, albums (cluster), documents, stickers, viewer, VLC player, attach + review, converter | ✅ (APK builds; verify on device) | `lib/features/media/`, `conversation/.../content/` |
 | Voice notes (record, Opus, waveform, playback 0.5–4×), video notes (play + record), music | ✅ | `lib/features/voice/`, `core/media/audio_playback.dart` |
 | Whisper (bundled model, transcribe, translate, dictation, chunking) | ✅ | `lib/features/transcription/`, `core/models/` |
@@ -635,7 +635,7 @@ chat info, stories, storage, the attach hub, polls, music, send options, live lo
    wake lock, audio routing.
 5. **Video**, written (see §2.3 B).
 6. **Screen share + camera PiP compositor**, written (see §2.3 B).
-7. **Proxy for calls**, done: Settings → Connection → "Use proxy for
+7. **Proxy for calls**, done: Settings → Connection & calls → "Use proxy for
    calls" (`calls.useProxy`). `ProxyRepository.callProxy()` returns the
    active proxy only when it is SOCKS5; `callProxyFor` (feature_wiring)
    turns it into `EngineProxy`, which turns P2P off. The switch explains
@@ -646,7 +646,7 @@ chat info, stories, storage, the attach hub, polls, music, send options, live lo
   (for example "4.0.0", "5.0.0", "7.0.0", "8.0.0", "9.0.0", "11.0.0").
 
 **Proxy for calls**
-- Settings → Connection → "Use proxy for calls" (pref
+- Settings → Connection & calls → "Use proxy for calls" (pref
   `calls.useProxy`, default off, as in official Telegram).
 - When on and the active proxy is **SOCKS5**, pass its host, port, user
   and password into tgcalls' proxy config. tgcalls tunnels the reflector

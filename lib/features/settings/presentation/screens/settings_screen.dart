@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:handy_tdlib_next/api.dart' as td;
 
 import '../../../../core/config/native_licenses.dart';
 import '../../../../core/storage/app_preferences.dart';
@@ -8,16 +9,19 @@ import '../../../../core/telegram/widgets/chat_avatar.dart';
 import '../../../../core/theme/glow_colors.dart';
 import '../../../../core/widgets/glow_button.dart';
 import '../../../auth/bloc/auth_bloc.dart';
+import '../../../auth/domain/account_capabilities.dart';
 import '../../../auth/domain/auth_step.dart';
-import '../../../conversation/data/messages_repository.dart';
 import '../../../home/presentation/widgets/bot_limitations_card.dart';
+import '../settings_category.dart';
+import '../widgets/general_settings.dart';
 import '../widgets/settings_section.dart';
+import 'settings_category_screen.dart';
 
-/// Extra settings entries contributed by other features (proxy, storage,
+/// Settings sections contributed by other features (proxy, storage,
 /// Whisper, search index…), provided by the composition root.
 class SettingsEntries {
   const SettingsEntries(this.build);
-  final List<Widget> Function(BuildContext context) build;
+  final List<SettingsEntry> Function(BuildContext context) build;
 }
 
 class SettingsScreen extends StatelessWidget {
@@ -27,164 +31,137 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final step = context.select((AuthBloc b) => b.state.step);
     if (step is! AuthReady) return const SizedBox.shrink();
-    final me = step.me;
-    final caps = step.capabilities;
-    final prefs = context.read<AppPreferences>();
-    List<Widget> extras;
-    try {
-      extras = context.read<SettingsEntries>().build(context);
-    } on ProviderNotFoundException {
-      extras = const [];
-    }
-
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: ListenableBuilder(
-          listenable: prefs.changes,
-          builder: (context, _) => ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
+        child: SettingsHub(me: step.me, caps: step.capabilities),
+      ),
+    );
+  }
+}
+
+/// The top Settings page: the account, one row per category, About, Log out.
+class SettingsHub extends StatelessWidget {
+  const SettingsHub({super.key, required this.me, required this.caps});
+
+  final td.User me;
+  final AccountCapabilities caps;
+
+  List<SettingsEntry> _entries(BuildContext context) {
+    List<SettingsEntry> features;
+    try {
+      features = context.read<SettingsEntries>().build(context);
+    } on ProviderNotFoundException {
+      features = const [];
+    }
+    return [
+      SettingsEntry(SettingsCategory.privacy, (_) => const PrivacySettings(), forBots: false),
+      SettingsEntry(SettingsCategory.chats, (_) => const LinkSettings()),
+      SettingsEntry(SettingsCategory.chats, (_) => const StorySettings(), forBots: false),
+      SettingsEntry(
+        SettingsCategory.chats,
+        (_) => ChannelAdsSettings(isPremium: me.isPremium),
+        forBots: false,
+      ),
+      SettingsEntry(SettingsCategory.media, (_) => const MediaPlaybackSettings()),
+      ...features,
+    ].where((e) => e.forBots || !caps.isBot).toList();
+  }
+
+  String _summary(SettingsCategory c, AppPreferences prefs) => switch (c) {
+    SettingsCategory.privacy => _privacySummary(prefs),
+    SettingsCategory.chats => caps.isBot ? 'Link previews' : 'Links, stories and channel ads',
+    SettingsCategory.media => 'Playback ${prefs.playbackSpeed.toStringAsFixed(2)}× · offline speech',
+    SettingsCategory.notifications => 'Staying connected without Google push',
+    SettingsCategory.data => 'Media cache and local message search',
+    SettingsCategory.connection => 'Proxy and phone calls',
+  };
+
+  static String _privacySummary(AppPreferences prefs) {
+    if (prefs.ghostMode) return 'Ghost mode on';
+    final hidden = [
+      prefs.hideReadReceipts,
+      prefs.hideTyping,
+      prefs.appearOffline,
+      prefs.hideStoryViews,
+    ].where((v) => v).length;
+    return hidden == 0 ? 'Read receipts, typing, online status' : '$hidden of 4 hidden';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final prefs = context.read<AppPreferences>();
+    final entries = _entries(context);
+    final categories = [
+      for (final c in SettingsCategory.values)
+        if (entries.any((e) => e.category == c)) c,
+    ];
+    return ListenableBuilder(
+      listenable: prefs.changes,
+      builder: (context, _) => ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  ChatAvatar.user(me, size: 64),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          Display.userName(me),
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
-                        ),
-                        Text(
-                          [
-                            if (caps.isBot) 'Bot account',
-                            if (me.usernames?.activeUsernames.firstOrNull case final u?) '@$u',
-                            if (me.phoneNumber.isNotEmpty) '+${me.phoneNumber}',
-                          ].join(' · '),
-                          style: const TextStyle(color: GlowColors.textMuted),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              if (caps.isBot) ...[const SizedBox(height: 20), BotLimitationsCard(caps.limitations)],
-              if (!caps.isBot)
-                SettingsSection(
-                  title: 'Privacy',
+              ChatAvatar.user(me, size: 64),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SwitchListTile(
-                      value: prefs.ghostMode,
-                      onChanged: (v) => prefs.ghostMode = v,
-                      secondary: Icon(
-                        Icons.blur_on_rounded,
-                        color: prefs.ghostMode ? GlowColors.cyan : GlowColors.textMuted,
-                      ),
-                      title: const Text('Ghost mode'),
-                      subtitle: const Text('No read receipts, typing, online status or story views'),
+                    Text(
+                      Display.userName(me),
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
                     ),
-                    const Divider(height: 1, color: GlowColors.outline),
-                    SwitchListTile(
-                      value: prefs.hideReadReceipts,
-                      onChanged: (v) => prefs.hideReadReceipts = v,
-                      title: const Text('Read without read receipts'),
-                      subtitle: const Text('Messages are marked read only when you choose "Mark as read"'),
-                    ),
-                    SwitchListTile(
-                      value: prefs.hideTyping,
-                      onChanged: (v) => prefs.hideTyping = v,
-                      title: const Text('Hide typing indicator'),
-                    ),
-                    SwitchListTile(
-                      value: prefs.appearOffline,
-                      onChanged: (v) => prefs.appearOffline = v,
-                      title: const Text('Appear offline'),
-                      subtitle: const Text('Don’t show you as online while the app is open'),
-                    ),
-                    SwitchListTile(
-                      value: prefs.hideStoryViews,
-                      onChanged: (v) => prefs.hideStoryViews = v,
-                      title: const Text('View stories anonymously'),
-                      subtitle: const Text('Opening a story doesn’t mark it as viewed'),
+                    Text(
+                      [
+                        if (caps.isBot) 'Bot account',
+                        if (me.usernames?.activeUsernames.firstOrNull case final u?) '@$u',
+                        if (me.phoneNumber.isNotEmpty) '+${me.phoneNumber}',
+                      ].join(' · '),
+                      style: const TextStyle(color: GlowColors.textMuted),
                     ),
                   ],
                 ),
-              if (!caps.isBot) _AdsSection(isPremium: me.isPremium, prefs: prefs),
-              if (!caps.isBot)
-                SettingsSection(
-                  title: 'Stories',
-                  children: [
-                    SwitchListTile(
-                      value: prefs.hideStories,
-                      onChanged: (v) => prefs.hideStories = v,
-                      title: const Text('Hide stories'),
-                      subtitle: const Text('No story halos or story prompts anywhere'),
-                    ),
-                  ],
+              ),
+            ],
+          ),
+          if (caps.isBot) ...[const SizedBox(height: 20), BotLimitationsCard(caps.limitations)],
+          SettingsSection(
+            title: 'Settings',
+            children: [
+              for (final c in categories)
+                _CategoryRow(
+                  category: c,
+                  summary: _summary(c, prefs),
+                  onTap: () => Navigator.of(context).push(
+                    SettingsCategoryScreen.route(c, [
+                      for (final e in entries)
+                        if (e.category == c) e,
+                    ]),
+                  ),
                 ),
-              SettingsSection(
-                title: 'Media',
-                children: [
-                  ListTile(
-                    title: const Text('Voice & audio speed'),
-                    subtitle: Slider(
-                      value: prefs.playbackSpeed,
-                      min: 0.5,
-                      max: 4,
-                      divisions: 14,
-                      label: '${prefs.playbackSpeed.toStringAsFixed(2)}×',
-                      onChanged: (v) => prefs.playbackSpeed = v,
-                    ),
-                    trailing: Text('${prefs.playbackSpeed.toStringAsFixed(2)}×'),
-                  ),
-                  SwitchListTile(
-                    value: prefs.autoplayVideos,
-                    onChanged: (v) => prefs.autoplayVideos = v,
-                    title: const Text('Autoplay videos and GIFs'),
-                  ),
-                ],
-              ),
-              SettingsSection(
-                title: 'Links',
-                children: [
-                  SwitchListTile(
-                    value: prefs.linkPreviewsOnSend,
-                    onChanged: (v) => prefs.linkPreviewsOnSend = v,
-                    title: const Text('Link previews when sending'),
-                    subtitle: const Text('Shows the preview above the composer; tap ✕ to send one message without it'),
-                  ),
-                  SwitchListTile(
-                    value: prefs.showLinkPreviews,
-                    onChanged: (v) => prefs.showLinkPreviews = v,
-                    title: const Text('Show link previews in chats'),
-                    subtitle: const Text('Including Instant View for articles'),
-                  ),
-                  SwitchListTile(
-                    value: prefs.openLinksExternally,
-                    onChanged: (v) => prefs.openLinksExternally = v,
-                    title: const Text('Open links in browser app'),
-                    subtitle: const Text('Off: a Chromium Custom Tab over Lumina (no embedded WebView)'),
-                  ),
-                ],
-              ),
-              ...extras,
+            ],
+          ),
+          SettingsSection(
+            title: 'Lumina',
+            children: [
               ListTile(
-                leading: const Icon(Icons.info_outline_rounded),
+                leading: const Icon(Icons.info_outline_rounded, color: GlowColors.violet),
                 title: const Text('About & licenses'),
                 subtitle: const Text('Free software under the GNU GPL v3'),
+                trailing: const Icon(Icons.chevron_right_rounded, color: GlowColors.textMuted),
                 onTap: () => showLicensePage(
                   context: context,
                   applicationName: 'Lumina',
                   applicationLegalese: luminaLegalese,
                 ),
               ),
-              const SizedBox(height: 28),
-              GlowButton.warm(label: 'Log out', onPressed: () => _confirmLogout(context)),
             ],
           ),
-        ),
+          const SizedBox(height: 28),
+          GlowButton.warm(label: 'Log out', onPressed: () => _confirmLogout(context)),
+        ],
       ),
     );
   }
@@ -209,35 +186,19 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-class _AdsSection extends StatelessWidget {
-  const _AdsSection({required this.isPremium, required this.prefs});
+class _CategoryRow extends StatelessWidget {
+  const _CategoryRow({required this.category, required this.summary, required this.onTap});
 
-  final bool isPremium;
-  final AppPreferences prefs;
+  final SettingsCategory category;
+  final String summary;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    return SettingsSection(
-      title: 'Channels',
-      children: [
-        SwitchListTile(
-          value: prefs.hideSponsored,
-          onChanged: (v) async {
-            prefs.hideSponsored = v;
-            if (isPremium) {
-              // Telegram's own ad-free switch for Premium accounts.
-              await context.read<MessagesRepository>().setSponsoredEnabled(!v).catchError((_) {});
-            }
-          },
-          title: const Text('Hide channel ads'),
-          subtitle: Text(
-            isPremium
-                ? 'Uses Telegram Premium’s ad-free setting.'
-                : 'Hidden on this device only. Telegram’s API terms ask apps to show sponsored '
-                      'messages, so Telegram may restrict apps whose users hide them.',
-          ),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => ListTile(
+    leading: Icon(category.icon, color: GlowColors.cyan),
+    title: Text(category.title),
+    subtitle: Text(summary, maxLines: 1, overflow: TextOverflow.ellipsis),
+    trailing: const Icon(Icons.chevron_right_rounded, color: GlowColors.textMuted),
+    onTap: onTap,
+  );
 }
