@@ -12,19 +12,57 @@ import '../domain/engine_params.dart';
 part 'call_state.dart';
 
 /// The one private call at a time: TDLib signaling (CallsRepository) on one
-/// side, the native engine on the other. App-wide, so a call survives
-/// leaving the chat.
+/// side, the native engine on the other, and the phone around it
+/// ([CallSystem]: Telecom, ringing, the in-call service). App-wide, so a
+/// call survives leaving the chat.
 class CallCubit extends Cubit<CallState> {
-  CallCubit({required this._repository, required this._engine, this._callProxy, DateTime Function()? now})
-    : _now = now ?? DateTime.now,
-      super(const CallState()) {
+  CallCubit({
+    required this._repository,
+    required this._engine,
+    this._system,
+    this._callProxy,
+    String Function(int userId)? nameOf,
+    bool Function()? useCallingAccount,
+    DateTime Function()? now,
+  }) : _nameOf = nameOf ?? ((id) => 'Call'),
+       _useCallingAccount = useCallingAccount ?? (() => false),
+       _now = now ?? DateTime.now,
+       super(const CallState()) {
     _subs = [_repository.calls.listen(_onCall), _repository.signaling.listen(_onSignaling)];
+    _init().ignore();
   }
 
   final CallsRepository _repository;
   final CallEngine _engine;
+  final CallSystem? _system;
   final Future<EngineProxy?> Function()? _callProxy;
+  final String Function(int userId) _nameOf;
+  final bool Function() _useCallingAccount;
   final DateTime Function() _now;
+
+  /// This side ended the call (for Telecom's disconnect cause).
+  var _endedHere = false;
+
+  /// Registers with Telecom and picks up a call the Phone app dialed while
+  /// Lumina was starting.
+  Future<void> _init() async {
+    final system = _system;
+    if (system == null || await _capabilities() == null) return;
+    await system.registerTelecom(provider: _useCallingAccount());
+    final number = await system.takeDialerCall();
+    if (number != null) await _dialerCall(number);
+  }
+
+  /// Re-registers after the "calling account" setting changed.
+  Future<void> refreshTelecom() async => _system?.registerTelecom(provider: _useCallingAccount());
+
+  Future<bool> _permissions({required bool video}) async {
+    final system = _system;
+    if (system == null) return true;
+    final granted = await system.requestPermissions(['microphone', 'notifications', if (video) 'camera']);
+    return granted['microphone'] ?? false;
+  }
+
   late final List<StreamSubscription<Object?>> _subs;
 
   /// Engine events, subscribed once the engine is known to exist.
@@ -49,23 +87,45 @@ class CallCubit extends Cubit<CallState> {
   }
 
   /// Calls [userId]. Returns an error to show, or null.
-  Future<String?> startCall(int userId, {bool video = false}) async {
+  Future<String?> startCall(int userId, {bool video = false, bool fromDialer = false}) async {
     if (state.inCall) return 'You are already in a call';
     final protocol = await _protocol();
     if (protocol == null) return 'Calls are not available in this build';
+    if (!await _permissions(video: video)) return 'Lumina needs the microphone for calls';
+    _endedHere = false;
     emit(CallState(phase: CallPhase.requesting, userId: userId, outgoing: true, video: video));
     try {
-      await _repository.create(userId, protocol, video: video);
+      final id = await _repository.create(userId, protocol, video: video);
+      if (!fromDialer) {
+        _system
+            ?.reportOutgoing(callId: id, name: _nameOf(userId), video: video, provider: _useCallingAccount())
+            .ignore();
+      }
       return null;
     } on TdException catch (e) {
       emit(const CallState());
+      if (fromDialer) _system?.setTelecomState('ended', reason: 'error').ignore();
       return e.message;
     }
+  }
+
+  /// A number dialed in the Phone app with Lumina's calling account.
+  Future<void> _dialerCall(String number) async {
+    final userId = await _repository.userIdByPhone(number);
+    if (userId == null) {
+      await _system?.setTelecomState('ended', reason: 'error');
+      emit(const CallState(phase: CallPhase.ended, error: 'That number is not on Telegram'));
+      return;
+    }
+    final error = await startCall(userId, fromDialer: true);
+    if (error != null) await _system?.setTelecomState('ended', reason: 'error');
   }
 
   Future<String?> accept() async {
     final id = state.callId;
     if (id == null || state.phase != CallPhase.incoming) return null;
+    await _system?.stopRinging();
+    if (!await _permissions(video: state.video)) return 'Lumina needs the microphone for calls';
     final protocol = await _protocol();
     if (protocol == null) {
       await hangUp();
@@ -84,6 +144,8 @@ class CallCubit extends Cubit<CallState> {
   Future<void> hangUp({bool disconnected = false}) async {
     final id = state.callId;
     if (id == null || !state.inCall) return;
+    _endedHere = true;
+    _system?.stopRinging().ignore();
     final connected = state.connectedAt;
     try {
       await _repository.discard(
@@ -102,6 +164,13 @@ class CallCubit extends Cubit<CallState> {
     final muted = !state.muted;
     emit(state.copyWith(muted: muted));
     if (_engineRunning) await _engine.setMuted(muted);
+  }
+
+  Future<void> toggleSpeaker() async {
+    if (!state.inCall) return;
+    final on = !state.speaker;
+    emit(state.copyWith(speaker: on));
+    await _system?.setSpeaker(on);
   }
 
   /// Stars 1–5 after a call TDLib asked to rate.
@@ -137,14 +206,18 @@ class CallCubit extends Cubit<CallState> {
       outgoing: call.isOutgoing,
       video: call.isVideo,
     );
+    final wasPhase = state.phase;
     switch (call.state) {
       case td.CallStatePending(:final isReceived):
+        final incoming = !call.isOutgoing;
         emit(
           base.copyWith(
-            phase: call.isOutgoing ? CallPhase.outgoing : CallPhase.incoming,
+            phase: incoming ? CallPhase.incoming : CallPhase.outgoing,
             ringing: call.isOutgoing && isReceived,
           ),
         );
+        if (incoming && wasPhase != CallPhase.incoming) _announceIncoming(call).ignore();
+        if (!incoming && isReceived) _system?.setTelecomState('dialing').ignore();
       case td.CallStateExchangingKeys():
         emit(base.copyWith(phase: CallPhase.connecting));
       case final td.CallStateReady ready:
@@ -160,11 +233,48 @@ class CallCubit extends Cubit<CallState> {
       case td.CallStateDiscarded(:final reason, :final needRating, :final needDebugInformation):
         _sendDebugInfo = needDebugInformation;
         _stopEngine();
+        _endSystem(_telecomReason(reason, outgoing: call.isOutgoing));
         emit(base.copyWith(phase: CallPhase.ended, endReason: reason, needRating: needRating));
       case td.CallStateError(:final error):
         _stopEngine();
+        _endSystem('error');
         emit(base.copyWith(phase: CallPhase.ended, error: error.message));
     }
+  }
+
+  /// Rings: through Telecom when it takes the call (it then asks for our UI,
+  /// or the Phone app rings with the calling account), else our notification.
+  Future<void> _announceIncoming(td.Call call) async {
+    _endedHere = false;
+    final system = _system;
+    if (system == null) return;
+    await _capabilities(); // Subscribes to Telecom events.
+    final name = _nameOf(call.userId);
+    final viaTelecom = await system.reportIncoming(
+      callId: call.id,
+      name: name,
+      video: call.isVideo,
+      provider: _useCallingAccount(),
+    );
+    if (!viaTelecom) await system.ring(name: name, video: call.isVideo);
+  }
+
+  String _telecomReason(td.CallDiscardReason reason, {required bool outgoing}) {
+    if (_endedHere) return state.connectedAt == null && !outgoing ? 'rejected' : 'local';
+    return switch (reason) {
+      td.CallDiscardReasonMissed() => outgoing ? 'remote' : 'missed',
+      td.CallDiscardReasonDeclined() => outgoing ? 'busy' : 'rejected',
+      td.CallDiscardReasonDisconnected() => 'error',
+      _ => 'remote',
+    };
+  }
+
+  void _endSystem(String reason) {
+    final system = _system;
+    if (system == null) return;
+    system.stopRinging().ignore();
+    system.hideOngoing().ignore();
+    system.setTelecomState('ended', reason: reason).ignore();
   }
 
   Future<void> _startEngine(td.Call call, td.CallStateReady ready) async {
@@ -188,6 +298,13 @@ class CallCubit extends Cubit<CallState> {
     try {
       await _engine.start(params);
       _engineRunning = true;
+      _system
+          ?.showOngoing(
+            title: _nameOf(call.userId),
+            text: call.isVideo ? 'Video call' : 'Voice call',
+            video: call.isVideo,
+          )
+          .ignore();
       if (state.muted) await _engine.setMuted(true);
       for (final data in _earlySignaling) {
         await _engine.receiveSignaling(data);
@@ -224,6 +341,7 @@ class CallCubit extends Cubit<CallState> {
         if (id != null) _repository.sendSignaling(id, data).ignore();
       case EngineStateChanged(state: EngineConnection.established):
         emit(state.copyWith(phase: CallPhase.active, connectedAt: state.connectedAt ?? _now()));
+        _system?.setTelecomState(state.held ? 'held' : 'active').ignore();
       case EngineStateChanged(state: EngineConnection.reconnecting):
         emit(state.copyWith(phase: CallPhase.reconnecting));
       case EngineStateChanged(state: EngineConnection.failed):
@@ -236,6 +354,16 @@ class CallCubit extends Cubit<CallState> {
         emit(state.copyWith(remoteMuted: muted, remoteVideo: videoOn));
       case EngineAudioLevels():
         break;
+      case EngineSystemAction(:final action):
+        _onSystemAction(action);
+      case EngineShowIncomingUi():
+        if (state.phase == CallPhase.incoming) {
+          _system?.ring(name: _nameOf(state.userId ?? 0), video: state.video).ignore();
+        }
+      case EngineDialerCall(:final number):
+        _dialerCall(number).ignore();
+      case EngineAudioRoute(:final route):
+        emit(state.copyWith(speaker: route == 'speaker'));
       case EngineStopped(:final debugLog):
         _engineRunning = false;
         _engineCallId = null;
@@ -243,6 +371,22 @@ class CallCubit extends Cubit<CallState> {
           _repository.sendDebugInformation(id, debugLog).ignore();
         }
         _sendDebugInfo = false;
+    }
+  }
+
+  void _onSystemAction(String action) {
+    switch (action) {
+      case 'accept':
+        accept().ignore();
+      case 'decline' || 'hangup':
+        hangUp().ignore();
+      case 'hold':
+        // Another call took over: mute until resumed.
+        emit(state.copyWith(held: true));
+        if (_engineRunning) _engine.setMuted(true).ignore();
+      case 'unhold':
+        emit(state.copyWith(held: false));
+        if (_engineRunning) _engine.setMuted(state.muted).ignore();
     }
   }
 

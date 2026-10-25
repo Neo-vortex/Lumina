@@ -33,6 +33,8 @@ class CallState {
     this.emojis = const [],
     this.connectedAt,
     this.muted = false,
+    this.speaker = false,
+    this.held = false,
     this.signalBars,
     this.remoteMuted = false,
     this.remoteVideo = false,
@@ -54,6 +56,10 @@ class CallState {
   final List<String> emojis;
   final DateTime? connectedAt;
   final bool muted;
+  final bool speaker;
+
+  /// On hold for another (e.g. cellular) call.
+  final bool held;
   final int? signalBars;
   final bool remoteMuted;
   final bool remoteVideo;
@@ -73,6 +79,8 @@ class CallState {
     List<String>? emojis,
     DateTime? connectedAt,
     bool? muted,
+    bool? speaker,
+    bool? held,
     int? signalBars,
     bool? remoteMuted,
     bool? remoteVideo,
@@ -89,6 +97,8 @@ class CallState {
     emojis: emojis ?? this.emojis,
     connectedAt: connectedAt ?? this.connectedAt,
     muted: muted ?? this.muted,
+    speaker: speaker ?? this.speaker,
+    held: held ?? this.held,
     signalBars: signalBars ?? this.signalBars,
     remoteMuted: remoteMuted ?? this.remoteMuted,
     remoteVideo: remoteVideo ?? this.remoteVideo,

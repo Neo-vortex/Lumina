@@ -35,12 +35,43 @@ import java.util.concurrent.Executors
 class MainActivity : FlutterActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
+    private var calls: CallChannel? = null
+
+    // The engine lives in LuminaEngine so calls (and a call dialed from the
+    // Phone app) can run without this activity.
+    override fun provideFlutterEngine(context: Context): FlutterEngine = LuminaEngine.ensure(context)
+
+    override fun shouldDestroyEngineWithHost(): Boolean = false
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        super.cleanUpFlutterEngine(flutterEngine)
+        // The system channel's handler points at this activity.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.lumina/system").setMethodCallHandler(null)
+        calls = null
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleCallIntent(intent)
+    }
+
+    /** Opened from a call notification: show over the lock screen and pass on Accept / Decline. */
+    private fun handleCallIntent(intent: Intent?) {
+        val action = intent?.getStringExtra(CallChannel.EXTRA_CALL_ACTION) ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
+        intent.removeExtra(CallChannel.EXTRA_CALL_ACTION)
+        calls?.onNotificationAction(action)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.lumina/system")
             .setMethodCallHandler { call, result -> handle(call, result) }
-        CallChannel(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
+        calls = LuminaEngine.calls
+        handleCallIntent(intent)
     }
 
     private fun handle(call: MethodCall, result: MethodChannel.Result) {
@@ -79,6 +110,32 @@ class MainActivity : FlutterActivity() {
                 val begin = { granted: Boolean -> result.success(granted && LiveLocationService.start(this)) }
                 if (hasLocation() || call.argument<Boolean>("ask") != true) begin(hasLocation())
                 else requestLive(begin)
+            }
+            // names: microphone, camera, notifications. Returns name -> granted.
+            "requestPermissions" -> {
+                val wanted = (call.arguments as List<*>).mapNotNull { name ->
+                    when (name) {
+                        "microphone" -> android.Manifest.permission.RECORD_AUDIO
+                        "camera" -> android.Manifest.permission.CAMERA
+                        "notifications" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            android.Manifest.permission.POST_NOTIFICATIONS
+                        } else {
+                            null
+                        }
+                        else -> null
+                    }?.let { name as String to it }
+                }
+                fun report() = result.success(
+                    (call.arguments as List<*>).associate { name ->
+                        val perm = wanted.firstOrNull { it.first == name }?.second
+                        name to (perm == null || checkSelfPermission(perm) == PackageManager.PERMISSION_GRANTED)
+                    },
+                )
+                val missing = wanted.map { it.second }.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+                if (missing.isEmpty()) return report()
+                pendingPermissions?.invoke()
+                pendingPermissions = { report() }
+                requestPermissions(missing.toTypedArray(), PERMISSIONS_REQUEST)
             }
             "liveLocationStop" -> {
                 LiveLocationService.stop(this)
@@ -164,6 +221,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private var pendingLive: ((Boolean) -> Unit)? = null
+    private var pendingPermissions: (() -> Unit)? = null
 
     private fun hasLocation() = listOf(
         android.Manifest.permission.ACCESS_FINE_LOCATION,
@@ -184,6 +242,12 @@ class MainActivity : FlutterActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PERMISSIONS_REQUEST) {
+            val then = pendingPermissions
+            pendingPermissions = null
+            then?.invoke()
+            return
+        }
         if (requestCode == LIVE_REQUEST) {
             val then = pendingLive
             pendingLive = null
@@ -269,5 +333,6 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val LOCATION_REQUEST = 4107
         private const val LIVE_REQUEST = 4109
+        private const val PERMISSIONS_REQUEST = 4110
     }
 }
