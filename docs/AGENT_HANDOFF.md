@@ -127,7 +127,7 @@ does not copy Telegram's look.
 | Local FTS search (encrypted sqlite3mc, trigram + unicode61, worker isolate, live + backfill, global + in-chat, settings, wipe on close) | ✅ (tested on real SQLite) | `lib/features/search/` |
 | Tiny LLM actions (SmolLM2-360M bundled, llama.cpp on CPU, label + guardrails + date resolver, editable sheet, system intents) | ✅ (75% held-out; measured) | `lib/features/assistant/`, DECISIONS D13 |
 | Proxy (list, toggle, add/edit, paste link, test, share, login-screen access, encrypted restore after wipe) | ✅ | `lib/features/proxy/` |
-| Groups/channels admin, chat info, secret chats, contacts, new chat/group/channel | ⬜ | planned `lib/features/chat_info/`, `lib/features/compose/` |
+| Groups/channels admin, chat info, secret chats, contacts, new chat/group/channel | ✅ | `lib/features/chat_info/` (repository, ChatInfoScreen, contact picker, permissions sheet, `ComposeFlows`); wired in `app/feature_wiring.dart` |
 | Stories | ⬜ | planned `lib/features/stories/` |
 | Hardening (cache/optimizeStorage, battery prompt, 16 KB check) | ⬜ | settings + app |
 
@@ -260,6 +260,9 @@ error mapping, cache ordering, row grouping and video presets. Run
   only, `createNewSecretChat`), post story. Register them through
   `ComposeActions` in `app/feature_wiring.dart`.
 - `ConversationExtensions.openChatInfo` opens chat info.
+- **Done.** `ComposeFlows` (chat_info feature) gets an injected `OpenChat`
+  callback so the feature does not import the conversation feature. The
+  "Post story" orb entry is still to be added with Stories (§5.4).
 
 ## 6. Conventions (keep them)
 

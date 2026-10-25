@@ -24,6 +24,11 @@ import '../features/transcription/presentation/widgets/speech_settings.dart';
 import '../features/voice/data/voice_recorder.dart';
 import '../features/media/data/media_sender.dart';
 import 'app_conversation_extensions.dart';
+import '../features/chat_info/data/chat_info_repository.dart';
+import '../features/chat_info/presentation/compose_flows.dart';
+import '../features/conversation/presentation/screens/conversation_screen.dart';
+
+import 'package:flutter/material.dart' show Icons;
 
 import '../features/conversation/presentation/widgets/conversation_extensions.dart';
 import '../features/home/presentation/widgets/compose_orb.dart';
@@ -36,24 +41,15 @@ List<RepositoryProvider<Object>> featureProviders() => [
   RepositoryProvider<FfmpegService>(create: (_) => FfmpegService()..purgeTemp().ignore()),
   RepositoryProvider<MediaSender>(create: (c) => MediaSender(c.read<FfmpegService>())),
   RepositoryProvider<AudioPlayback>(
-    create: (c) => AudioPlayback(
-      files: c.read<FileStore>(),
-      stream: c.read<TdStreamServer>(),
-      prefs: c.read<AppPreferences>(),
-    ),
+    create: (c) =>
+        AudioPlayback(files: c.read<FileStore>(), stream: c.read<TdStreamServer>(), prefs: c.read<AppPreferences>()),
     dispose: (p) => p.dispose(),
   ),
-  RepositoryProvider<VoiceRecorder>(
-    create: (c) => VoiceRecorder(c.read<FfmpegService>()),
-    dispose: (r) => r.dispose(),
-  ),
+  RepositoryProvider<VoiceRecorder>(create: (c) => VoiceRecorder(c.read<FfmpegService>()), dispose: (r) => r.dispose()),
   RepositoryProvider<ProxyRepository>(
     lazy: false,
-    create: (c) => ProxyRepository(
-      client: c.read<TdClient>(),
-      prefs: c.read<AppPreferences>(),
-      secure: c.read<SecureStore>(),
-    ),
+    create: (c) =>
+        ProxyRepository(client: c.read<TdClient>(), prefs: c.read<AppPreferences>(), secure: c.read<SecureStore>()),
     dispose: (r) => r.dispose(),
   ),
   RepositoryProvider<AuthExtras>(
@@ -86,17 +82,30 @@ List<RepositoryProvider<Object>> featureProviders() => [
       prefs: c.read<AppPreferences>(),
     ),
   ),
+  RepositoryProvider<ComposeFlows>(
+    create: (_) => ComposeFlows((context, chatId) => Navigator.of(context).push(ConversationScreen.route(chatId))),
+  ),
   RepositoryProvider<ConversationExtensions>(
     create: (c) => AppConversationExtensions(
       recorder: c.read<VoiceRecorder>(),
       transcripts: c.read<TranscriptionCenter>(),
       prefs: c.read<AppPreferences>(),
+      flows: c.read<ComposeFlows>(),
     ),
   ),
-  RepositoryProvider<ComposeActions>(create: (_) => const ComposeActions([])),
+  RepositoryProvider<ChatInfoRepository>(
+    create: (c) => ChatInfoRepository(client: c.read<TdClient>(), cache: c.read<TelegramCache>()),
+  ),
+  RepositoryProvider<ComposeActions>(create: (c) => _composeActions(c.read<ComposeFlows>())),
   RepositoryProvider<SettingsEntries>(
-    create: (_) => SettingsEntries(
-      (context) => [const ConnectionSettings(), const SearchSettings(), const SpeechSettings()],
-    ),
+    create: (_) =>
+        SettingsEntries((context) => [const ConnectionSettings(), const SearchSettings(), const SpeechSettings()]),
   ),
 ];
+
+ComposeActions _composeActions(ComposeFlows flows) => ComposeActions([
+  ComposeAction(icon: Icons.edit_rounded, label: 'New message', onSelected: flows.newMessage),
+  ComposeAction(icon: Icons.group_add_rounded, label: 'New group', onSelected: flows.newGroup),
+  ComposeAction(icon: Icons.campaign_rounded, label: 'New channel', onSelected: flows.newChannel),
+  ComposeAction(icon: Icons.lock_rounded, label: 'Secret chat', onSelected: flows.newSecretChat),
+]);
