@@ -12,6 +12,7 @@ import '../core/telegram/telegram_cache.dart';
 import '../core/telegram/file_store.dart';
 import '../core/models/bundled_models.dart';
 import '../features/proxy/data/proxy_repository.dart';
+import '../features/assistant/data/action_extractor.dart';
 import '../features/auth/presentation/widgets/auth_scaffold.dart';
 import '../features/proxy/presentation/screens/proxy_screen.dart';
 import '../features/proxy/presentation/widgets/connection_settings.dart';
@@ -70,6 +71,10 @@ List<RepositoryProvider<Object>> featureProviders() => [
   ),
   RepositoryProvider<MessageSearch>(create: (c) => c.read<MessageIndexer>()),
   RepositoryProvider<ModelInstaller>(create: (_) => ModelInstaller()),
+  RepositoryProvider<ActionExtractor>(
+    create: (c) => ActionExtractor(c.read<ModelInstaller>()),
+    dispose: (e) => e.unload(),
+  ),
   RepositoryProvider<WhisperService>(
     create: (c) => WhisperService(ffmpeg: c.read<FfmpegService>(), models: c.read<ModelInstaller>()),
     dispose: (w) => w.dispose(),

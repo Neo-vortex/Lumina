@@ -87,12 +87,13 @@ does not copy Telegram's look.
 8. **Local full-text search for message text only.** No file-name search
    (the owner corrected this). Make it "blazingly fast" with a dedicated
    local DB. See §5.2.
-9. **Tiny on-device LLM.** An "AI" action on a message that detects a
+9. **Tiny on-device LLM** (model changed after measurement, see D13). An "AI" action on a message that detects a
    calendar event, alarm, reminder or note. The prompt includes the user's
    name/username and the current time. If the model finds an action it
    proposes it in a popup, then performs the system action. The model must
-   be very small. Model: **FunctionGemma 270M Q4_0 GGUF** (242 MB, Git LFS,
-   `assets/models/functiongemma-270m-it-Q4_0.gguf`). See §5.3.
+   be very small. Model: **SmolLM2-360M-Instruct Q4_0 GGUF** (230 MB, Git LFS,
+   `assets/models/SmolLM2-360M-Instruct-Q4_0.gguf`), chosen over FunctionGemma
+   by a held-out evaluation (DECISIONS D13). See §5.3.
 10. **Push every step to https://github.com/Neo-vortex/Lumina**, including
     models (Git LFS).
 11. **ffmpeg pre-send video conversion:**
@@ -124,7 +125,7 @@ does not copy Telegram's look.
 | Voice notes (record, Opus, waveform, playback 0.5–4×), video notes (play + record), music | ✅ | `lib/features/voice/`, `core/media/audio_playback.dart` |
 | Whisper (bundled model, transcribe, translate, dictation, chunking) | ✅ | `lib/features/transcription/`, `core/models/` |
 | Local FTS search (encrypted sqlite3mc, trigram + unicode61, worker isolate, live + backfill, global + in-chat, settings, wipe on close) | ✅ (tested on real SQLite) | `lib/features/search/` |
-| Tiny LLM actions | ⬜ | planned `lib/features/assistant/` |
+| Tiny LLM actions (SmolLM2-360M bundled, llama.cpp on CPU, label + guardrails + date resolver, editable sheet, system intents) | ✅ (75% held-out; measured) | `lib/features/assistant/`, DECISIONS D13 |
 | Proxy (list, toggle, add/edit, paste link, test, share, login-screen access, encrypted restore after wipe) | ✅ | `lib/features/proxy/` |
 | Groups/channels admin, chat info, secret chats, contacts, new chat/group/channel | ⬜ | planned `lib/features/chat_info/`, `lib/features/compose/` |
 | Stories | ⬜ | planned `lib/features/stories/` |
