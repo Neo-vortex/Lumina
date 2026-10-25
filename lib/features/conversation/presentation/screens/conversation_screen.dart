@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:handy_tdlib_next/api.dart' as td;
 import 'package:super_sliver_list/super_sliver_list.dart';
 
+import '../../../../core/storage/app_preferences.dart';
 import '../../../../core/tdlib/td_client.dart';
 import '../../../../core/telegram/display.dart';
 import '../../../../core/telegram/permissions.dart';
@@ -25,6 +26,7 @@ import '../widgets/message_bubble.dart';
 import '../widgets/message_menu.dart';
 import '../widgets/message_rows.dart';
 import '../widgets/pinned_banner.dart';
+import '../widgets/sponsored_card.dart';
 import 'chat_search_screen.dart';
 
 class ConversationScreen extends StatefulWidget {
@@ -37,10 +39,22 @@ class ConversationScreen extends StatefulWidget {
         repository: context.read<MessagesRepository>(),
         cache: context.read<TelegramCache>(),
         updates: context.read<TdClient>().updates,
+        showSponsored: _showSponsored(context, chatId),
       )..start(),
       child: const ConversationScreen(),
     ),
   );
+
+  /// Channels show sponsored messages unless the account turned them off:
+  /// officially (Premium) or with the local "Hide channel ads" preference.
+  static bool _showSponsored(BuildContext context, int chatId) {
+    final cache = context.read<TelegramCache>();
+    final chat = cache.chats[chatId];
+    if (chat == null || !cache.isChannel(chat)) return false;
+    final step = context.read<AuthBloc>().state.step;
+    if (step is AuthReady && step.capabilities.isBot) return false;
+    return !context.read<AppPreferences>().hideSponsored;
+  }
 
   @override
   State<ConversationScreen> createState() => _ConversationScreenState();
@@ -54,6 +68,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
   var _initialised = false;
   var _showJump = false;
   List<MessageRow> _rows = const [];
+
+  /// Sponsored cards occupy the first list indices (bottom of the screen).
+  var _adsOffset = 0;
   late final ConversationCubit _cubit = context.read<ConversationCubit>();
 
   @override
@@ -84,7 +101,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final range = _list.visibleRange;
     if (range == null) return;
     final ids = <int>[];
-    for (var i = range.$1; i <= range.$2 && i < _rows.length; i++) {
+    for (var i = range.$1 - _adsOffset; i <= range.$2 - _adsOffset && i < _rows.length; i++) {
+      if (i < 0) continue;
       final row = _rows[i];
       if (row is BubbleRow) {
         for (final m in row.messages) {
@@ -108,14 +126,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
       if (index < 0) return;
       if (Motion.ambientEnabled(context)) {
         _list.animateToItem(
-          index: index,
+          index: index + _adsOffset,
           scrollController: _scroll,
           alignment: 0.5,
           duration: (d) => Motion.screen,
           curve: (d) => Motion.move,
         );
       } else {
-        _list.jumpToItem(index: index, scrollController: _scroll, alignment: 0.5);
+        _list.jumpToItem(index: index + _adsOffset, scrollController: _scroll, alignment: 0.5);
       }
       Future.delayed(const Duration(milliseconds: 500), _reportVisible);
     });
@@ -255,6 +273,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
           WidgetsBinding.instance.addPostFrameCallback((_) => _reportVisible());
         }
         _rows = buildRows(state.messages, firstUnreadId: state.firstUnreadId);
+        _adsOffset = state.hasNewer ? 0 : state.sponsored.length;
         final isGroup =
             chat.type is td.ChatTypeBasicGroup ||
             (chat.type is td.ChatTypeSupergroup && !cache.isChannel(chat));
@@ -323,8 +342,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
                               controller: _scroll,
                               listController: _list,
                               padding: const EdgeInsets.only(top: 12, bottom: 8),
-                              itemCount: _rows.length + (state.hasOlder ? 1 : 0),
+                              itemCount: _rows.length + (state.hasOlder ? 1 : 0) + _adsOffset,
                               itemBuilder: (context, i) {
+                                final ads = _adsOffset;
+                                if (i < ads) {
+                                  final ad = state.sponsored[i];
+                                  _cubit.sponsoredVisible(ad);
+                                  return SponsoredCard(ad: ad, onOpen: () => _cubit.sponsoredClicked(ad));
+                                }
+                                i -= ads;
                                 if (i >= _rows.length) {
                                   return const Padding(
                                     padding: EdgeInsets.all(16),

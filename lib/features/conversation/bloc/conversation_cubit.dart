@@ -17,6 +17,7 @@ class ConversationCubit extends Cubit<ConversationState> {
     required this._repository,
     required this._cache,
     required Stream<td.Update> updates,
+    this.showSponsored = false,
   }) : super(ConversationState(chatId: chatId, chat: _cache.chats[chatId])) {
     _updates = updates.listen(_onUpdate);
     _cacheEvents = _cache.events.listen(_onCacheEvent);
@@ -24,6 +25,11 @@ class ConversationCubit extends Cubit<ConversationState> {
 
   final MessagesRepository _repository;
   final TelegramCache _cache;
+
+  /// Load channel sponsored messages (decided by the screen from account
+  /// type and the user's preference).
+  final bool showSponsored;
+  final _viewedSponsored = <int>{};
   late final StreamSubscription<td.Update> _updates;
   late final StreamSubscription<CacheEvent> _cacheEvents;
   final _pendingViews = <int>{};
@@ -50,7 +56,23 @@ class ConversationCubit extends Cubit<ConversationState> {
       await _loadLatest();
     }
     unawaited(_refreshPinned());
+    if (showSponsored) unawaited(_loadSponsored());
   }
+
+  Future<void> _loadSponsored() async {
+    try {
+      final ads = await _repository.sponsored(chatId);
+      if (!isClosed) emit(state.copyWith(sponsored: ads));
+    } on TdException {
+      // Not a channel with ads.
+    }
+  }
+
+  void sponsoredVisible(td.SponsoredMessage ad) {
+    if (_viewedSponsored.add(ad.messageId)) _repository.viewSponsored(chatId, ad.messageId).ignore();
+  }
+
+  Future<void> sponsoredClicked(td.SponsoredMessage ad) => _repository.clickSponsored(chatId, ad.messageId);
 
   // ---- Loading ---------------------------------------------------------------
 

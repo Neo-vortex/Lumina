@@ -63,6 +63,26 @@ class AppPreferences {
   bool get appearOffline => _bool('privacy.appearOffline', false);
   set appearOffline(bool v) => _set('privacy.appearOffline', v);
 
+  /// Don't mark stories as viewed when opening them.
+  bool get hideStoryViews => _bool('privacy.hideStoryViews', false);
+  set hideStoryViews(bool v) => _set('privacy.hideStoryViews', v);
+
+  /// Ghost mode: every privacy switch at once (user request).
+  bool get ghostMode => hideReadReceipts && hideTyping && appearOffline && hideStoryViews;
+  set ghostMode(bool v) {
+    hideReadReceipts = v;
+    hideTyping = v;
+    appearOffline = v;
+    hideStoryViews = v;
+  }
+
+  // ---- Channels --------------------------------------------------------------
+
+  /// Hide sponsored messages in channels for non-Premium accounts. Telegram's
+  /// API terms require clients to show them, so this is opt-in and labelled.
+  bool get hideSponsored => _bool('channels.hideSponsored', false);
+  set hideSponsored(bool v) => _set('channels.hideSponsored', v);
+
   // ---- Stories ---------------------------------------------------------------
 
   /// Hide stories everywhere (most-voted suggestion on bugs.telegram.org).
