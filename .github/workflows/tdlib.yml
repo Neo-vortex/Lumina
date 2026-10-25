@@ -1,0 +1,105 @@
+name: TDLib
+
+# Builds libtdjson.so (TDLib's JSON interface) at the commit pinned in
+# packages/lumina_tdlib/schema/VERSION, once per input hash, and publishes it
+# as the pre-release tdlib-<key>. The app workflow calls this first and
+# downloads the result, so app builds don't recompile TDLib.
+on:
+  workflow_call:
+    outputs:
+      key:
+        description: TDLib cache key (release tdlib-<key>)
+        value: ${{ jobs.key.outputs.key }}
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  key:
+    runs-on: ubuntu-latest
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+      exists: ${{ steps.key.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: key
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          key=$(tool/tdlib_key.sh)
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          if gh release view "tdlib-$key" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "TDLib $key already published"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: key
+    if: needs.key.outputs.exists != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      matrix:
+        abi: [arm64-v8a, x86_64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: NDK 28.2, CMake 3.22 and TDLib's build tools
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "ndk;28.2.13676358" "cmake;3.22.1" > /dev/null
+          sudo apt-get install -y gperf ninja-build ccache php-cli > /dev/null
+
+      - name: ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: tdlib-ccache-${{ matrix.abi }}-${{ needs.key.outputs.key }}
+          restore-keys: tdlib-ccache-${{ matrix.abi }}-
+
+      - name: Build
+        env:
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          CCACHE_MAXSIZE: 3G
+          CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
+          # TDLib's big translation units need ~2-3 GB each.
+          CMAKE_BUILD_PARALLEL_LEVEL: 3
+        run: |
+          tool/build_tdlib.sh ${{ matrix.abi }}
+          ccache -s | tail -n 5
+          mkdir -p dist
+          cp "build/tdlib/out/${{ matrix.abi }}/libtdjson.so" "dist/libtdjson-${{ matrix.abi }}.so"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tdlib-${{ matrix.abi }}
+          path: dist/*.so
+          retention-days: 3
+
+  publish:
+    needs: [key, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tdlib-*
+          merge-multiple: true
+          path: dist
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ needs.key.outputs.key }}
+        run: |
+          version=$(sed -n 's/^version=//p' packages/lumina_tdlib/schema/VERSION)
+          commit=$(sed -n 's/^commit=//p' packages/lumina_tdlib/schema/VERSION)
+          (cd dist && sha256sum *.so > SHA256SUMS.txt && ls -l)
+          gh release create "tdlib-$KEY" --repo "$GITHUB_REPOSITORY" \
+            --prerelease --target "$GITHUB_SHA" \
+            --title "TDLib $version ($KEY)" \
+            --notes "libtdjson.so for arm64-v8a and x86_64: TDLib $version at tdlib/td@${commit::9} (BSL-1.0), built by tool/build_tdlib.sh from ${GITHUB_SHA::7}. Used by the app builds; not an app release." \
+            dist/*.so dist/SHA256SUMS.txt \
+            || gh release view "tdlib-$KEY" --repo "$GITHUB_REPOSITORY" > /dev/null
