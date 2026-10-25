@@ -103,3 +103,23 @@ SmolLM2-360M labels the message (action and title only), deterministic
 dates and times, and the user confirms in an editable sheet. Re-run the
 eval before changing the model or the prompt:
 `LUMINA_LLM_SET=heldout LUMINA_LLM_MODE=label LUMINA_LLM_MODELS=assets/models/SmolLM2-360M-Instruct-Q4_0.gguf flutter test test/integration/llm_eval_test.dart`.
+
+## D14. License: GPL-3.0-or-later (calls engine from Telegram-Android)
+The owner accepted GPL compatibility so calls can reuse Telegram-Android's
+voice/video engine (2026-10-25). The version is forced by what Lumina
+already ships:
+- Telegram-Android's voip glue and build: GPL v2 **or later** (file
+  headers; the repo LICENSE is the GPLv2 text).
+- tgcalls: LGPL-3.0. ffmpeg-kit (`ffmpeg_kit_flutter_new_full`): LGPL-3.0.
+- SmolLM2 model: Apache-2.0. WebRTC, libyuv, abseil: BSD/Apache.
+  libVLC: LGPL-2.1+. TDLib: BSL-1.0. llama.cpp, whisper.cpp, sqlite3mc:
+  MIT.
+
+GPLv2-only can't combine with LGPLv3 or Apache-2.0, so Lumina is
+**GPL-3.0-or-later** (`LICENSE`). Consequences: anyone who gets an APK may
+ask for the complete corresponding source, so the repository stays public,
+and each release must match a tagged commit. Third-party notices for the
+native libraries must ship in the app (Settings → About → Licenses; to do
+with calls phase 1). The earlier rule "keep ffmpeg LGPL, never the GPL
+variant" no longer protects anything, but stay on the LGPL build anyway:
+the GPL codecs (x264/x265) add nothing because encoding uses MediaCodec.
