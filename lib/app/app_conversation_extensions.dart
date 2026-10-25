@@ -19,6 +19,7 @@ import '../features/auth/domain/auth_step.dart';
 import '../features/chat_info/presentation/widgets/contact_picker.dart';
 import '../features/conversation/bloc/conversation_cubit.dart';
 import '../features/conversation/data/messages_repository.dart';
+import '../features/conversation/presentation/screens/scheduled_messages_screen.dart';
 import '../features/conversation/presentation/widgets/conversation_extensions.dart';
 import '../features/conversation/presentation/widgets/message_menu.dart';
 import '../features/media/presentation/screens/send_media_screen.dart';
@@ -245,7 +246,7 @@ class AppConversationExtensions extends ConversationExtensions {
       }
     }
 
-    final List<String> paths;
+    final MediaPick media;
     switch (pick) {
       case VideoNotePick():
         final note = await VideoNoteRecorderScreen.open(context);
@@ -273,10 +274,8 @@ class AppConversationExtensions extends ConversationExtensions {
           ),
         );
         return;
-      case MediaPick(paths: final p):
-        // TODO(handoff §2.3): MediaPick.asFiles / .music are not yet passed
-        // to SendMediaScreen; the user toggles "Send as file" there.
-        paths = p;
+      case MediaPick():
+        media = pick;
     }
     if (!context.mounted) return;
     final isBot = switch (context.read<AuthBloc>().state.step) {
@@ -285,22 +284,40 @@ class AppConversationExtensions extends ConversationExtensions {
     };
     final request = await SendMediaScreen.open(
       context,
-      paths: paths,
+      paths: media.paths,
+      asFiles: media.asFiles,
+      music: media.music,
       allowViewOnce: !isBot && chat.type is td.ChatTypePrivate,
       parseCaption: messages.parseMarkdown,
     );
     if (request == null) return;
+    final options = request.options;
     final error = request.asAlbum
-        ? await cubit.sendAlbum(request.contents)
-        : await _sendEach(cubit, request.contents);
-    if (error != null && context.mounted) {
+        ? await cubit.sendAlbum(request.contents, options: options)
+        : await _sendEach(cubit, request.contents, options);
+    if (!context.mounted) return;
+    if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+    } else if (options.scheduleAt != null || options.whenOnline) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Scheduled'),
+          action: SnackBarAction(
+            label: 'View',
+            onPressed: () => Navigator.of(context).push(ScheduledMessagesScreen.route(chat)),
+          ),
+        ),
+      );
     }
   }
 
-  static Future<String?> _sendEach(ConversationCubit cubit, List<td.InputMessageContent> contents) async {
+  static Future<String?> _sendEach(
+    ConversationCubit cubit,
+    List<td.InputMessageContent> contents,
+    SendOptions options,
+  ) async {
     for (final c in contents) {
-      final error = await cubit.sendContent(c);
+      final error = await cubit.sendContent(c, options: options);
       if (error != null) return error;
     }
     return null;

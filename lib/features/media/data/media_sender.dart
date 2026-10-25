@@ -20,15 +20,28 @@ class PickedMedia {
   String get name => path.split('/').last;
 }
 
-enum MediaKind { photo, video, file }
+enum MediaKind { photo, video, audio, file }
 
-MediaKind kindForPath(String path) {
+/// [music] is set when the user picked from the Music tile: audio then goes
+/// out as a playable track. Audio picked as a plain file stays a document.
+MediaKind kindForPath(String path, {bool music = false}) {
   final ext = path.split('.').last.toLowerCase();
   const photos = {'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'bmp'};
   const videos = {'mp4', 'mov', 'mkv', 'webm', '3gp', 'm4v', 'avi', 'ts'};
+  const audio = {'mp3', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'flac', 'wav', 'wma', 'alac', 'aiff'};
   if (photos.contains(ext)) return MediaKind.photo;
   if (videos.contains(ext)) return MediaKind.video;
+  if (music && audio.contains(ext)) return MediaKind.audio;
   return MediaKind.file;
+}
+
+/// Title for a track without tags: the file name minus its extension.
+String trackTitle(PickedMedia media) {
+  final tagged = media.probe?.title;
+  if (tagged != null) return tagged;
+  final name = media.name;
+  final dot = name.lastIndexOf('.');
+  return dot > 0 ? name.substring(0, dot) : name;
 }
 
 /// Turns picked files into TDLib input content, converting videos first.
@@ -39,8 +52,8 @@ class MediaSender {
 
   FfmpegService get ffmpeg => _ffmpeg;
 
-  Future<PickedMedia> inspect(String path) async {
-    final kind = kindForPath(path);
+  Future<PickedMedia> inspect(String path, {bool music = false}) async {
+    final kind = kindForPath(path, music: music);
     final media = PickedMedia(path: path, kind: kind);
     if (kind != MediaKind.file) media.probe = await _ffmpeg.probe(path);
     return media;
@@ -103,6 +116,15 @@ class MediaSender {
         caption: caption,
       );
     }
+    if (media.kind == MediaKind.audio) {
+      return td.InputMessageAudio(
+        audio: td.InputFileLocal(path: path),
+        duration: media.probe?.duration.inSeconds ?? 0,
+        title: _clip(trackTitle(media)),
+        performer: _clip(media.probe?.performer ?? ''),
+        caption: caption,
+      );
+    }
     final probe = media.kind == MediaKind.video && path != media.path
         ? await _ffmpeg.probe(path)
         : media.probe;
@@ -140,4 +162,7 @@ class MediaSender {
       hasSpoiler: spoiler,
     );
   }
+
+  /// TDLib allows 0–64 characters for audio title and performer.
+  static String _clip(String s) => s.runes.length <= 64 ? s : String.fromCharCodes(s.runes.take(64));
 }

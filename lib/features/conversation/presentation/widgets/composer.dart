@@ -11,7 +11,7 @@ import '../../../../core/theme/motion.dart';
 import '../../data/messages_repository.dart';
 import 'formatting_controller.dart';
 import 'link_preview_card.dart';
-import 'schedule_picker.dart';
+import '../../../../core/widgets/send_options_sheet.dart';
 import 'send_orb.dart';
 
 /// Message composer: reply/edit strip, attach button, multiline field and
@@ -165,45 +165,8 @@ class _ComposerState extends State<Composer> {
   }
 
   Future<void> _sendOptions() async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: GlowColors.surfaceHigh,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.notifications_off_rounded),
-              title: const Text('Send without sound'),
-              onTap: () => Navigator.pop(context, 'silent'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.schedule_send_rounded),
-              title: const Text('Schedule message'),
-              onTap: () => Navigator.pop(context, 'schedule'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.wifi_tethering_rounded),
-              title: const Text('Send when online'),
-              subtitle: const Text('Delivered as soon as they come online'),
-              onTap: () => Navigator.pop(context, 'online'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (!mounted || choice == null) return;
-    switch (choice) {
-      case 'silent':
-        await _send(const SendOptions(silent: true));
-      case 'online':
-        await _send(const SendOptions(whenOnline: true));
-      case 'schedule':
-        final at = await pickScheduleTime(context);
-        if (at == null || !mounted) return;
-        await _send(SendOptions(scheduleAt: at));
-    }
+    final options = await showSendOptionsSheet(context);
+    if (options != null && mounted) await _send(options);
   }
 
   @override

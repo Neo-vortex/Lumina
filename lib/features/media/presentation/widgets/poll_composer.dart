@@ -9,6 +9,43 @@ Future<td.InputMessageContent?> composePoll(BuildContext context) => Navigator.o
   MaterialPageRoute<td.InputMessageContent>(fullscreenDialog: true, builder: (_) => const _PollComposer()),
 );
 
+/// The poll for the composer's rows, or null while it is incomplete.
+/// Empty rows are dropped, so [correctRow] (a row index) is mapped to the
+/// index among the remaining options, which is what TDLib expects.
+td.InputMessagePoll? buildPoll({
+  required String question,
+  required List<String> rows,
+  bool anonymous = true,
+  bool multiple = false,
+  bool quiz = false,
+  int? correctRow,
+  String explanation = '',
+}) {
+  td.FormattedText f(String s) => td.FormattedText(text: s, entities: const []);
+  final q = question.trim();
+  final options = [
+    for (final r in rows)
+      if (r.trim().isNotEmpty) r.trim(),
+  ];
+  if (q.isEmpty || options.length < 2) return null;
+  int? correct;
+  if (quiz) {
+    if (correctRow == null || correctRow >= rows.length || rows[correctRow].trim().isEmpty) return null;
+    correct = rows.take(correctRow).where((r) => r.trim().isNotEmpty).length;
+  }
+  return td.InputMessagePoll(
+    question: f(q),
+    options: [for (final o in options) f(o)],
+    isAnonymous: anonymous,
+    type: quiz
+        ? td.PollTypeQuiz(correctOptionId: correct!, explanation: f(explanation.trim()))
+        : td.PollTypeRegular(allowMultipleAnswers: multiple),
+    openPeriod: 0,
+    closeDate: 0,
+    isClosed: false,
+  );
+}
+
 class _PollComposer extends StatefulWidget {
   const _PollComposer();
 
@@ -36,15 +73,15 @@ class _PollComposerState extends State<_PollComposer> {
     super.dispose();
   }
 
-  List<String> get _filled => [
-    for (final c in _options)
-      if (c.text.trim().isNotEmpty) c.text.trim(),
-  ];
-
-  bool get _valid =>
-      _question.text.trim().isNotEmpty &&
-      _filled.length >= 2 &&
-      (!_quiz || (_correct != null && _correct! < _filled.length));
+  td.InputMessagePoll? get _poll => buildPoll(
+    question: _question.text,
+    rows: [for (final c in _options) c.text],
+    anonymous: _anonymous,
+    multiple: _multiple,
+    quiz: _quiz,
+    correctRow: _correct,
+    explanation: _explanation.text,
+  );
 
   void _onOptionChanged(int i) {
     // Keep one empty row at the end, like Telegram.
@@ -54,31 +91,16 @@ class _PollComposerState extends State<_PollComposer> {
     setState(() {});
   }
 
-  td.FormattedText _f(String s) => td.FormattedText(text: s, entities: const []);
-
-  void _create() {
-    final options = _filled;
-    Navigator.pop(
-      context,
-      td.InputMessagePoll(
-        question: _f(_question.text.trim()),
-        options: [for (final o in options) _f(o)],
-        isAnonymous: _anonymous,
-        type: _quiz
-            ? td.PollTypeQuiz(correctOptionId: _correct!, explanation: _f(_explanation.text.trim()))
-            : td.PollTypeRegular(allowMultipleAnswers: _multiple),
-        openPeriod: 0,
-        closeDate: 0,
-        isClosed: false,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: Text(_quiz ? 'New quiz' : 'New poll'),
-      actions: [TextButton(onPressed: _valid ? _create : null, child: const Text('Create'))],
+      actions: [
+        TextButton(
+          onPressed: _poll == null ? null : () => Navigator.pop(context, _poll),
+          child: const Text('Create'),
+        ),
+      ],
     ),
     body: ListView(
       padding: const EdgeInsets.all(16),
@@ -124,7 +146,11 @@ class _PollComposerState extends State<_PollComposer> {
                         tooltip: 'Remove option',
                         onPressed: () => setState(() {
                           _options.removeAt(i).dispose();
-                          if (_correct == i) _correct = null;
+                          if (_correct == i) {
+                            _correct = null;
+                          } else if (_correct != null && _correct! > i) {
+                            _correct = _correct! - 1;
+                          }
                         }),
                         icon: const Icon(Icons.remove_circle_outline_rounded),
                       ),
