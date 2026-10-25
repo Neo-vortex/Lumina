@@ -46,6 +46,23 @@ class ProxyRepository {
     ];
   }
 
+  /// The proxy TDLib uses right now, if any.
+  Future<SavedProxy?> active() async {
+    for (final p in await list()) {
+      if (p.config.enabled) return p;
+    }
+    return null;
+  }
+
+  /// The SOCKS5 proxy calls may use ("Use proxy for calls"), or null when
+  /// the setting is off or the active proxy can't carry calls (MTProto and
+  /// HTTP proxies only tunnel Telegram's own protocol).
+  Future<ProxyConfig?> callProxy() async {
+    if (!_prefs.callsUseProxy) return null;
+    final p = await active();
+    return p != null && p.config.kind == ProxyKind.socks5 ? p.config : null;
+  }
+
   Future<SavedProxy> add(ProxyConfig c, {bool enable = true}) async {
     final p = await _client.invoke<td.Proxy>(
       td.AddProxy(server: c.server, port: c.port, enable: enable, type: c.toTd()),

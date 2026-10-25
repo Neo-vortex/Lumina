@@ -142,6 +142,11 @@ class AppPreferences {
   bool get callsUseCallingAccount => _bool('calls.callingAccount', false);
   set callsUseCallingAccount(bool v) => _set('calls.callingAccount', v);
 
+  /// Route calls through the active proxy when it is SOCKS5 (as official
+  /// Telegram's "Use proxy for calls"). Off by default.
+  bool get callsUseProxy => _bool('calls.useProxy', false);
+  set callsUseProxy(bool v) => _set('calls.useProxy', v);
+
   /// Active outgoing live locations (JSON), resumed after process death.
   String get liveLocations => _string('live.shares') ?? '[]';
   set liveLocations(String v) => _set('live.shares', v);
