@@ -278,21 +278,25 @@ class MessagesRepository {
     List<td.TextEntity> entities = const [],
     int? replyToMessageId,
     td.InputTextQuote? quote,
-  }) => _client.invoke<td.Ok>(
-    td.SetChatDraftMessage(
-      chatId: chatId,
-      draftMessage: text.trim().isEmpty && replyToMessageId == null
-          ? null
-          : td.DraftMessage(
-              replyTo: _replyTo(replyToMessageId, quote),
-              date: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-              content: td.DraftMessageContentText(
-                text: td.FormattedText(text: text, entities: entities),
+  }) async {
+    // Awaited so the future is a real Future<void>; callers ignore failures
+    // with catchError((_) {}), which throws on a Future<Ok>.
+    await _client.invoke<td.Ok>(
+      td.SetChatDraftMessage(
+        chatId: chatId,
+        draftMessage: text.trim().isEmpty && replyToMessageId == null
+            ? null
+            : td.DraftMessage(
+                replyTo: _replyTo(replyToMessageId, quote),
+                date: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+                content: td.DraftMessageContentText(
+                  text: td.FormattedText(text: text, entities: entities),
+                ),
+                effectId: 0,
               ),
-              effectId: 0,
-            ),
-    ),
-  );
+      ),
+    );
+  }
 
   Future<List<td.ReactionType>> availableReactions(int chatId, int messageId) async {
     final result = await _client.invoke<td.AvailableReactions>(
@@ -355,18 +359,21 @@ class MessagesRepository {
   Future<void> viewSponsored(int chatId, int messageId) =>
       _client.invoke<td.Ok>(td.ViewMessages(chatId: chatId, messageIds: [messageId], forceRead: true));
 
-  Future<void> clickSponsored(int chatId, int messageId) => _client.invoke<td.Ok>(
-    td.ClickChatSponsoredMessage(
-      chatId: chatId,
-      messageId: messageId,
-      isMediaClick: false,
-      fromFullscreen: false,
-    ),
-  );
+  Future<void> clickSponsored(int chatId, int messageId) async {
+    await _client.invoke<td.Ok>(
+      td.ClickChatSponsoredMessage(
+        chatId: chatId,
+        messageId: messageId,
+        isMediaClick: false,
+        fromFullscreen: false,
+      ),
+    );
+  }
 
   /// Official ad toggle (Premium accounts).
-  Future<void> setSponsoredEnabled(bool enabled) =>
-      _client.invoke<td.Ok>(td.ToggleHasSponsoredMessagesEnabled(hasSponsoredMessagesEnabled: enabled));
+  Future<void> setSponsoredEnabled(bool enabled) async {
+    await _client.invoke<td.Ok>(td.ToggleHasSponsoredMessagesEnabled(hasSponsoredMessagesEnabled: enabled));
+  }
 
   /// Marks a self-destructing / view-once message as opened.
   Future<void> openContent(int chatId, int messageId) =>

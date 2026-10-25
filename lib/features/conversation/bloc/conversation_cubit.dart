@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
@@ -356,7 +357,7 @@ class ConversationCubit extends Cubit<ConversationState> {
         replyToMessageId: state.replyTo?.id,
         quote: state.replyQuote,
       )
-      .catchError((_) {});
+      .catchError((Object e) => debugPrint('Saving the draft failed: $e'));
 
   Future<td.LinkPreview?> linkPreview(td.FormattedText text) => _repository.linkPreview(text);
 
