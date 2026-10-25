@@ -200,6 +200,18 @@ class FfmpegService {
     return ok ? out : null;
   }
 
+  /// Deletes conversion outputs older than [age]. TDLib reads a local file
+  /// while uploading it, so outputs must outlive the send call; this runs
+  /// at startup instead.
+  Future<void> purgeTemp({Duration age = const Duration(days: 1)}) async {
+    final dir = Directory('${(await getTemporaryDirectory()).path}/media');
+    if (!await dir.exists()) return;
+    final cutoff = DateTime.now().subtract(age);
+    await for (final f in dir.list()) {
+      if (f is File && (await f.lastModified()).isBefore(cutoff)) await f.delete().catchError((_) => f);
+    }
+  }
+
   static Future<void> configure() async {
     // Keep FFmpeg's own log noise out of release builds.
     await FFmpegKitConfig.enableLogs();

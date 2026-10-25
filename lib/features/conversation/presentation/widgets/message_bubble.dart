@@ -205,6 +205,12 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
                 outgoing: m.isOutgoing && !widget.isChannel,
                 color: mutedColor,
               ),
+              overlayFooter: _Footer(
+                message: m,
+                delivery: delivery,
+                outgoing: m.isOutgoing && !widget.isChannel,
+                color: Colors.white,
+              ),
             ),
           ],
         ),

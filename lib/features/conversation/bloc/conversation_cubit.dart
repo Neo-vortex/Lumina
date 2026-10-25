@@ -274,6 +274,20 @@ class ConversationCubit extends Cubit<ConversationState> {
     }
   }
 
+  Future<String?> sendAlbum(
+    List<td.InputMessageContent> contents, {
+    SendOptions options = const SendOptions(),
+  }) async {
+    try {
+      if (state.hasNewer) await _loadLatest(scroll: true);
+      await _repository.sendAlbum(chatId, contents, replyToMessageId: state.replyTo?.id, options: options);
+      emit(state.copyWith(replyTo: () => null));
+      return null;
+    } on TdException catch (e) {
+      return e.message;
+    }
+  }
+
   /// Typing indicator, at most every 4 s while the user types.
   void composerChanged(String text) {
     if (text.isEmpty) return;
