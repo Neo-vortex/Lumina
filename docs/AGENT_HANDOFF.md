@@ -1,0 +1,306 @@
+# Lumina: Agent Handoff Spec
+
+This document is for an engineer or agent continuing the work. The main
+[README](../README.md) is for users. Keep this document current: update
+the status table and "Next steps" in the same commit as the work.
+
+Companion docs:
+- [ARCHITECTURE.md](ARCHITECTURE.md): layers, folder rules, TDLib threading
+- [DECISIONS.md](DECISIONS.md): resolved decisions and spec corrections
+- [UX_RESEARCH.md](UX_RESEARCH.md): UX requirements UX-01…UX-33 with sources
+
+---
+
+## 1. Product in one paragraph
+
+Android-only Flutter Telegram client on TDLib (`handy_tdlib_next` 2.3.16 /
+TDLib 1.8.36). It supports phone and bot-token login, VLC video with
+streaming, offline Whisper speech-to-text with translate-to-English
+(bundled model), a tiny on-device LLM that turns a message into a calendar
+event, alarm, reminder or note, a local encrypted full-text message
+search, Stories with a non-top-bar UI, and a "Glowing Relaxation" UI that
+does not copy Telegram's look.
+
+## 2. Requirements
+
+### 2.1 Original spec v3.0 (condensed, still binding)
+
+- **Bridge:** `handy_tdlib_next` pinned. No `td_send`/`td_receive`/JSON
+  conversion on the UI isolate. Invoke vs update by `@extra`. One live
+  client per process.
+- **Auth:** phone FSM (code, password, email, registration) and bot token
+  (only in `WaitPhoneNumber`). Error table:
+  - `PHONE_NUMBER_INVALID`: inline error
+  - `PHONE_CODE_INVALID`: inline error, stay on the code screen
+  - `PHONE_CODE_EXPIRED`: back to phone entry
+  - `PASSWORD_HASH_INVALID`: inline error
+  - `FLOOD_WAIT`: countdown, submit disabled
+  - Sessions persist under absolute dirs. Logout is complete.
+- **Bots:** after `getMe`, gate secret chats, presence, starting private
+  chats and full group management. Show the limitations right after login.
+- **Proxy:** TDLib native `addProxy`/`enableProxy`/`pingProxy`/… with a list
+  with toggles, an add/edit form, an active indicator and a test action.
+  Secrets go in Keystore storage.
+- **Feature parity:** spec §6 tables for private chats, groups and
+  channels: formatting, media, voice, video notes,
+  reply/forward/edit/delete (for me / everyone), pin, read receipts,
+  typing, presence, in-chat search, drafts, reactions, view-once, secret
+  chats (users only); groups: create, members, admin rights, slow mode,
+  pinned banner, member list, invite links; channels: posts, admin post,
+  edit/delete/pin, subscriber count, discussion link. Communities: omitted
+  (not in TDLib 1.8.36).
+- **Media:** VLC with gestures (double-tap ±10 s, horizontal scrub with
+  timestamp, vertical brightness/volume, pinch zoom). Use TDLib transfers
+  only (`updateFile`). Record 16 kHz mono WAV.
+- **Whisper:** transcribe voice messages (collapsible transcript, "Translate
+  to English"), and dictation (long-press the send orb, with opt-in
+  auto-send). Chunk audio over 5 minutes into 30 s pieces. On OOM, suggest
+  a smaller model.
+- **UI "Glowing Relaxation":** charcoal base; incoming cyan/teal, outgoing
+  amber/coral, active violet/magenta; soft glows. Bubbles with gradient,
+  asymmetric radii, entrance fade+slide, send bloom and swipe glow. A send
+  orb that fills with light and pulses when full, mic when empty. A
+  timeline-ribbon chat list. A media cluster (up to 4 plus "+N"). Bottom
+  bar with a center compose orb that opens a radial menu. Particle typing
+  indicator, read receipt as an edge-glow shift, luminous pull-to-refresh.
+- **Hardening:** lifecycle (resume the receive loop), process death, a
+  battery-optimisation prompt, a 16 KB page-size check, "Clear cache" via
+  `optimizeStorage`, and testing on a 4 GB device.
+
+### 2.2 Additions from the product owner (chronological, all binding)
+
+1. **State management: `flutter_bloc`**, not Riverpod.
+2. **UX research before UI.** Done; the results are in `UX_RESEARCH.md`.
+3. **Well-structured folders.** Feature-first layout, see ARCHITECTURE.md.
+4. **Bundle the Whisper model** in the app (no runtime download):
+   `assets/models/ggml-base-q5_1.bin` (60 MB, Git LFS).
+5. **Streaming media:** play while downloading. Done through a loopback
+   HTTP Range server over TDLib partial downloads (VLC and ExoPlayer).
+6. **Most-wanted user features (small ones):** forward without sender (and
+   without captions), audio speed up to 4×, hide Stories, read without
+   receipts, hide typing, appear offline, scheduled / silent /
+   send-when-online, multi-select bulk delete and forward, search filters,
+   select text (respecting protected content). Not doing: anti-revoke
+   (overrides the sender's deletion); Shadowsocks proxies (not in TDLib).
+7. **Stories:** view and post, with an intuitive UI that is **not a top bar**
+   like Telegram or Instagram. See §5.4 for the agreed concept.
+8. **Local full-text search for message text only.** No file-name search
+   (the owner corrected this). Make it "blazingly fast" with a dedicated
+   local DB. See §5.2.
+9. **Tiny on-device LLM.** An "AI" action on a message that detects a
+   calendar event, alarm, reminder or note. The prompt includes the user's
+   name/username and the current time. If the model finds an action it
+   proposes it in a popup, then performs the system action. The model must
+   be very small. Model: **FunctionGemma 270M Q4_0 GGUF** (242 MB, Git LFS,
+   `assets/models/functiongemma-270m-it-Q4_0.gguf`). See §5.3.
+10. **Push every step to https://github.com/Neo-vortex/Lumina**, including
+    models (Git LFS).
+11. **ffmpeg pre-send video conversion:**
+    - Simple: two smaller variants, plus a "compatible" H.264 version when
+      the source is HEVC, VP9, AV1 or 10-bit.
+    - Advanced: codec, size, bitrate, fps and audio.
+    - Done.
+12. **Ghost mode** master toggle, and a **toggle to stop showing ads in
+    channels**. Done. Premium uses the official
+    `toggleHasSponsoredMessagesEnabled`. Others get a local hide with an
+    explicit API-terms warning.
+13. **This handoff document**, which must not be the main README.
+
+## 3. Status
+
+| Area | Status | Where |
+|---|---|---|
+| TDLib bridge (2 isolates, routing, respawn) | ✅ | `lib/core/tdlib/` |
+| Auth (phone, bot, errors, logout/reset) | ✅ | `lib/features/auth/` |
+| Theme, motion, shared widgets | ✅ | `lib/core/theme/`, `lib/core/widgets/` |
+| Telegram cache + file store | ✅ | `lib/core/telegram/` |
+| Stream server (Range over TDLib) | ✅ (untested on device) | `lib/core/media/tdlib_stream_server.dart` |
+| Chat list (timeline ribbon, search, actions) | ✅ | `lib/features/chats/` |
+| Conversation (bubbles, reply/edit/forward/pin/react/select, search, drafts, typing, schedule) | ✅ | `lib/features/conversation/` |
+| Ghost mode, ads toggle, sponsored messages | ✅ | prefs + settings + conversation |
+| Home shell (nav bar, compose orb radial menu) | ✅ (menu has no actions yet) | `lib/features/home/` |
+| Settings (privacy, stories, media, channels) | ✅ partial | `lib/features/settings/` |
+| Media: photos, videos, GIFs, albums (cluster), documents, stickers, viewer, VLC player, attach + review, converter | 🟡 in progress, compiles | `lib/features/media/`, `conversation/.../content/` |
+| Voice notes (record, Opus, waveform, playback 0.5–4×), video notes, music | ⬜ | planned `lib/features/voice/` |
+| Whisper (bundled model, transcribe, translate, dictation, chunking) | ⬜ | planned `lib/features/transcription/` |
+| Local FTS search | ⬜ | planned `lib/features/search/` |
+| Tiny LLM actions | ⬜ | planned `lib/features/assistant/` |
+| Proxy | ⬜ | planned `lib/features/proxy/` |
+| Groups/channels admin, chat info, secret chats, contacts, new chat/group/channel | ⬜ | planned `lib/features/chat_info/`, `lib/features/compose/` |
+| Stories | ⬜ | planned `lib/features/stories/` |
+| Hardening (cache/optimizeStorage, battery prompt, 16 KB check) | ⬜ | settings + app |
+
+Tests: `flutter test`, 52+ tests covering routing, auth FSM (bloc_test),
+error mapping, cache ordering, row grouping and video presets. Run
+`flutter analyze` too; it must stay at zero issues.
+
+## 4. Environment & build
+
+- Flutter 3.47.8 stable (Dart 3.13.7), Android SDK with the NDK fetched by
+  Gradle, Java 21, minSdk 24.
+- `git lfs install` before cloning (the models are LFS).
+- Run: `flutter run --dart-define=TG_API_ID=… --dart-define=TG_API_HASH=…`
+  (get them at my.telegram.org). Optionally add `--dart-define=TG_TEST_DC=true`.
+- ABI filter: arm64-v8a and x86_64.
+- **Licensing:** ffmpeg is the LGPL `ffmpeg_kit_flutter_new_full` build.
+  Do not switch to the GPL variant, which would make the app GPL. H.264 and
+  H.265 encoding use the hardware encoders `h264_mediacodec` /
+  `hevc_mediacodec`, with an `mpeg4` fallback.
+- **APK size:** models ≈ 300 MB. For Play distribution, move the models to
+  Play Asset Delivery install-time packs (base module limit ≈ 200 MB).
+
+## 5. Agreed designs for the remaining work
+
+### 5.1 Voice (phase 5)
+- Orb gestures, decided: on an **empty orb, tap = start/stop voice
+  recording** (a persistent recorder, Google Messages style), and
+  **long-press = dictation**. With text, long-press opens the send options.
+  This resolves the conflict between spec §8.2 (long-press = dictation) and
+  hold-to-record.
+- Record with `record` as 16 kHz mono WAV. On send, `FfmpegService.toVoiceNote`
+  converts to OGG/Opus. The waveform is 100 five-bit samples packed as TDLib
+  expects (`InputMessageVoiceNote.waveform`), from PCM peaks.
+- While recording, `ConversationExtensions.recordingOverlay` shows a live
+  waveform and timer, and `orbMode` returns `stop`. After stopping: preview,
+  play, discard, send.
+- Playback uses `just_audio` with streaming from the loopback URL. The speed
+  comes from `AppPreferences.playbackSpeed` (0.5–4×).
+- Video notes: circular VLC playback, muted autoplay is optional.
+  Recording uses the `camera` package (front camera, square, ≤ 60 s).
+
+### 5.2 Local full-text search (task #10)
+- `sqlite3` 3.x with `hooks.user_defines.sqlite3.source: sqlite3mc` in
+  pubspec (SQLite3MultipleCiphers, encrypted; the key comes from
+  `SecureStore`, the same pattern as the TDLib DB key).
+- Tables:
+  - `msg_tri`: FTS5 `tokenize='trigram'`, for substring search in any
+    script, CJK included.
+  - `msg_words`: FTS5 `unicode61 remove_diacritics 2`, with prefix search
+    for queries of 1–2 characters.
+  - Columns: chat_id, message_id, date, sender_id, text. Index text and
+    captions only.
+- The worker isolate owns the DB. The UI isolate sends small records from
+  `updateNewMessage` / `updateMessageContent` / `updateDeleteMessages`, and
+  a throttled backfill walks `getChatHistory` per chat (with the progress
+  stored).
+- Implement `core/search/message_search.dart` `MessageSearch`; the in-chat
+  search already uses it when provided. Add a global search tab in the
+  chats screen. The snippet uses `[[`/`]]` markers, which the UI
+  highlights. Wipe on logout. Settings: on/off, progress, clear.
+
+### 5.3 Tiny LLM actions (task #11)
+- Runtime: `llamadart` 0.16.x (llama.cpp over FFI; native libs come from
+  its build hook). Load the GGUF from assets, copying it to app support
+  once.
+- Use **grammar-constrained** generation (`GenerationParams.grammar`) to
+  force this JSON:
+  `{"action":"none|calendar|alarm|reminder|note","title":str,"date":"YYYY-MM-DD"|null,"time":"HH:MM"|null,"duration_min":int|null,"notes":str|null}`.
+- Prompt: the user's display name and username, the current local
+  date/time/weekday and timezone, then the message text and sender.
+- Resolve relative dates in Dart ("tomorrow", weekday names, "in 2
+  hours"). Treat the model's date as a hint and validate it.
+- UX: an "AI action" entry in the message long-press menu
+  (`ExtraMenuEntry` with `MessageAction.aiAction`). It shows a thinking
+  shimmer, then an **editable confirmation sheet**. Nothing executes
+  without confirmation.
+- Intents (the manifest `<queries>` are already added):
+  - Calendar: `ACTION_INSERT` on `CalendarContract.Events`.
+  - Alarm: `AlarmClock.ACTION_SET_ALARM` (hour, minutes, message).
+  - Reminder: a calendar event with an alert, or `ACTION_SET_TIMER` for
+    relative reminders under 24 h.
+  - Note: `com.google.android.gms.actions.CREATE_NOTE`, falling back to
+    `ACTION_SEND` text.
+  - Use `android_intent_plus` or a small MethodChannel.
+
+### 5.4 Stories (task #9). The UI must not be a top bar
+- Concept: **"Halos on the timeline."** Chats whose users have active
+  stories get an animated halo around the avatar in the timeline ribbon;
+  unseen stories pulse. Tapping the avatar opens the stories, and tapping
+  the row opens the chat.
+- An entry in the compose-orb radial menu: "Glimpses" (a vertical story
+  stream) and "Post story".
+- Viewer: full screen. Progress is a ring around the poster's avatar at the
+  **bottom left**, not segmented bars at the top. Tap right/left to go
+  next/previous; swipe down closes; swipe up replies (a message to the
+  poster); long-press pauses; quick reactions.
+- Honour `prefs.hideStories` (hide everything) and `prefs.hideStoryViews`
+  (do not call `openStory`, so nothing is marked viewed).
+- APIs: `loadActiveStories`, `getChatActiveStories`,
+  `updateChatActiveStories`, `openStory`/`closeStory`, `setStoryReaction`,
+  and `sendStory` (photo/video plus privacy: everyone, contacts, close
+  friends).
+
+### 5.5 Proxy (phase 7)
+- `lib/features/proxy/`: a list from `getProxies` with enable switches, an
+  add/edit form for socks5 (user/pass), http (user/pass, httpOnly) and
+  mtproto (secret), and a test via `pingProxy` showing the latency. The
+  active proxy is shown in `ConnectionAwareTitle`.
+- It must be reachable from the **login screen** too, for censored regions.
+- Persist non-secrets in shared_preferences and secrets in `SecureStore`.
+  Re-add them after logout (the DB wipe drops TDLib's copy).
+
+### 5.6 Groups, channels, chat info (phase 8)
+- Chat info: avatar, title, description, member/subscriber count, invite
+  link (create/copy/revoke), members list (`getSupergroupMembers` /
+  basic group full info), admin rights editor (`setChatMemberStatus`),
+  permissions and slow mode (`setChatPermissions`, `setChatSlowModeDelay`),
+  discussion link (`linkedChatId`), and leave.
+- Compose radial menu actions: new message (contacts search,
+  `createPrivateChat`), new group, new channel, new secret chat (users
+  only, `createNewSecretChat`), post story. Register them through
+  `ComposeActions` in `app/feature_wiring.dart`.
+- `ConversationExtensions.openChatInfo` opens chat info.
+
+## 6. Conventions (keep them)
+
+- Feature-first. Presentation never calls `TdClient` directly.
+  Cross-feature hooks go only through `app/feature_wiring.dart` and
+  `ConversationExtensions`, `ComposeActions` and `SettingsEntries`.
+- No static mutable hooks. Provide interfaces via `RepositoryProvider`.
+- Colors from `GlowColors` only. White text only on the `*Deep` gradients;
+  bright accents carry near-black text (`onAccent`). Glow is decoration.
+- Durations and curves come from `Motion` (M3 tokens). Ambient animation
+  checks `Motion.ambientEnabled(context)`.
+- Interactive custom widgets get semantics labels and touch targets of at
+  least 48 dp.
+- Every step ends with `flutter analyze` at zero issues and `flutter test`
+  green, then commit and push to `main`. Commit messages end with the
+  attribution lines the session provides. No model identifiers in commits
+  or docs.
+
+## 7. Verified API facts and gotchas
+
+- The TDLib error class is `td.TdError` (code, message). `convertMapToObject`
+  returns null for unknown types; a parse failure with `@extra` must fail
+  the waiting invoke (it already does).
+- `td_receive` blocks (0.5 s timeout here) and must never run on two
+  threads. Restart the receiver only after the old isolate's exit
+  (`onExit`).
+- Bot tokens work only in `authorizationStateWaitPhoneNumber`.
+  `setAuthenticationPhoneNumber` also works in the code, password, email
+  and registration states (used for "back to phone entry").
+- The generated `copyWith` cannot set a field to null; see
+  `TelegramCache._rebuild`.
+- `getChatHistory` often returns only the local cache first; call it again.
+- `whisper_edge` on Android decodes WAV only. Telegram voice notes are
+  OGG/Opus, so always run `FfmpegService.toWhisperWav` first.
+  `whisper_edge` has minSdk 24 and its downloader can't resume (we bundle
+  the model anyway).
+- `file_picker` 13 may return `content://` URIs; copy them through `XFile`.
+- `RadioListTile.groupValue` is deprecated; use `RadioGroup`.
+- `provider` rejects a `ChangeNotifier` through a plain `RepositoryProvider`.
+  That's why `AppPreferences` exposes a `changes` listenable instead.
+- Sponsored messages: report impressions with `viewMessages` (always, even
+  in ghost mode) and clicks with `clickChatSponsoredMessage`.
+
+## 8. Must verify on a real device
+
+- The real `libtdjson.so`: batching, isolate respawn, and process death
+  going straight to `Ready`.
+- Streaming: VLC and ExoPlayer seeking through the loopback server, and
+  two concurrent range requests on one file.
+- `h264_mediacodec` encoding on several SoCs (the fallback is `mpeg4`).
+- Bots and `loadChats`: confirm the error code (currently 400, treated as
+  silent).
+- A TalkBack pass, and a 16 KB page-size emulator image (VLC, ffmpeg,
+  sqlite3mc, llama.cpp).

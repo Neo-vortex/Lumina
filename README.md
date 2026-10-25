@@ -30,3 +30,4 @@ flutter test
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): folder structure, layers, threading
 - [docs/DECISIONS.md](docs/DECISIONS.md): spec open decisions and corrections
 - [docs/UX_RESEARCH.md](docs/UX_RESEARCH.md): UI/UX requirements (UX-01…33) with sources
+- [docs/AGENT_HANDOFF.md](docs/AGENT_HANDOFF.md): full spec, status and next steps for contributors/agents

@@ -4,7 +4,10 @@ import 'package:handy_tdlib_next/api.dart' as td;
 
 import '../../../../../core/telegram/display.dart';
 import '../../../../../core/telegram/telegram_cache.dart';
+import 'document_content.dart';
 import 'generic_content.dart';
+import 'media_content.dart';
+import 'sticker_content.dart';
 import 'text_content.dart';
 
 /// Content types rendered edge-to-edge (no text padding around them).
@@ -24,6 +27,7 @@ class MessageContentView extends StatelessWidget {
     required this.mutedColor,
     required this.outgoing,
     required this.footer,
+    required this.overlayFooter,
   });
 
   final List<td.Message> messages;
@@ -32,11 +36,30 @@ class MessageContentView extends StatelessWidget {
   final bool outgoing;
   final Widget footer;
 
+  /// Footer variant for drawing over media (light text).
+  final Widget overlayFooter;
+
   @override
   Widget build(BuildContext context) {
     final m = messages.last;
+    if (messages.length > 1 && messages.every((x) => visualOf(x.content) != null)) {
+      return MediaCluster(messages: messages, textColor: textColor, footer: overlayFooter);
+    }
     return switch (m.content) {
       td.MessageText(:final text) => TextContent(text: text, color: textColor, footer: footer),
+      td.MessagePhoto() || td.MessageVideo() || td.MessageAnimation() => VisualContent(
+        message: m,
+        textColor: textColor,
+        footer: captionOf(m.content) == null ? overlayFooter : footer,
+      ),
+      td.MessageDocument(:final document, :final caption) => DocumentContent(
+        document: document,
+        caption: caption,
+        textColor: textColor,
+        mutedColor: mutedColor,
+        footer: footer,
+      ),
+      td.MessageSticker(:final sticker) => StickerContent(sticker: sticker, footer: overlayFooter),
       td.MessageAnimatedEmoji(:final emoji) => BigEmojiContent(emoji: emoji, footer: footer),
       _ => GenericContent(
         icon: genericIcon(m.content),
