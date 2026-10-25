@@ -108,6 +108,12 @@ class AppPreferences {
   String get whisperLanguage => _string('dictation.language') ?? 'auto';
   set whisperLanguage(String v) => _set('dictation.language', v);
 
+  // ---- Proxy -----------------------------------------------------------------
+
+  /// Saved proxies (JSON, secrets excluded; they live in SecureStore).
+  String get proxiesJson => _string('proxy.list') ?? '[]';
+  set proxiesJson(String v) => _set('proxy.list', v);
+
   // ---- Misc ------------------------------------------------------------------
 
   bool get batteryPromptShown => _bool('system.batteryPromptShown', false);

@@ -48,6 +48,9 @@ dependencies:
   open_filex: ^5.0.0
   just_audio: ^0.10.6
   screen_brightness: ^2.1.11
+  record: ^7.1.2
+  camera: ^0.12.1
+  whisper_edge: ^0.2.0
 
 dev_dependencies:
   flutter_test:
@@ -66,11 +69,12 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
   uses-material-design: true
+
+  assets:
+    # Git LFS. Whisper base (speech-to-text) and FunctionGemma 270M (AI actions).
+    - assets/models/ggml-base-q5_1.bin
+    - assets/models/functiongemma-270m-it-Q4_0.gguf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

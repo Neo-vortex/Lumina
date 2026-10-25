@@ -37,6 +37,9 @@ class ConversationExtensions {
   Widget? recordingOverlay(BuildContext context, td.Chat chat) => null;
 
   OrbMode? orbMode(BuildContext context, td.Chat chat) => null;
+
+  /// Extra UI under a voice message (e.g. "Transcribe" and the transcript).
+  Widget? voiceAccessory(BuildContext context, td.Message message) => null;
 }
 
 class _NeverChanges implements Listenable {

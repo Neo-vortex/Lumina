@@ -5,8 +5,17 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/media/ffmpeg_service.dart';
 import '../../../../core/theme/glow_colors.dart';
 
-/// Where the user wants to pick media from; returns local file paths.
-Future<List<String>> pickAttachments(BuildContext context, FfmpegService ffmpeg) async {
+/// Sentinel returned when the user chose "Round video" (handled by the
+/// voice feature's recorder rather than a picker).
+const videoNoteChoice = '::video-note::';
+
+/// Where the user wants to pick media from; returns local file paths, or
+/// [videoNoteChoice].
+Future<List<String>> pickAttachments(
+  BuildContext context,
+  FfmpegService ffmpeg, {
+  bool allowVideoNote = true,
+}) async {
   final source = await showModalBottomSheet<String>(
     context: context,
     backgroundColor: GlowColors.surfaceHigh,
@@ -31,6 +40,13 @@ Future<List<String>> pickAttachments(BuildContext context, FfmpegService ffmpeg)
             ),
             _Source(icon: Icons.videocam_rounded, label: 'Video', color: GlowColors.coral, value: 'video'),
             _Source(icon: Icons.attach_file_rounded, label: 'File', color: GlowColors.amber, value: 'file'),
+            if (allowVideoNote)
+              _Source(
+                icon: Icons.radio_button_checked_rounded,
+                label: 'Round video',
+                color: GlowColors.teal,
+                value: 'note',
+              ),
           ],
         ),
       ),
@@ -38,6 +54,8 @@ Future<List<String>> pickAttachments(BuildContext context, FfmpegService ffmpeg)
   );
   final picker = ImagePicker();
   switch (source) {
+    case 'note':
+      return const [videoNoteChoice];
     case 'gallery':
       final files = await picker.pickMultipleMedia(limit: 10, requestFullMetadata: false);
       return [for (final f in files) f.path];

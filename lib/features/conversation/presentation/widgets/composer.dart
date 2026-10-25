@@ -202,12 +202,15 @@ class _ComposerState extends State<Composer> {
                   SendOrb(
                     mode: mode,
                     charge: hasText ? (text.length / _fullCharge).clamp(0.08, 1.0) : 0,
-                    onTap: switch (mode) {
-                      OrbMode.send => _send,
-                      OrbMode.mic => widget.onVoice ?? () {},
-                      OrbMode.stop => widget.onVoice ?? () {},
-                      OrbMode.busy => () {},
-                    },
+                    // A mode forced by an extension (recording) routes taps to it.
+                    onTap: widget.orbMode != null
+                        ? (widget.onVoice ?? () {})
+                        : switch (mode) {
+                            OrbMode.send => _send,
+                            OrbMode.mic => widget.onVoice ?? () {},
+                            OrbMode.stop => widget.onVoice ?? () {},
+                            OrbMode.busy => () {},
+                          },
                     onLongPress: hasText && widget.editing == null
                         ? _sendOptions
                         : (!hasText ? widget.onDictate : null),

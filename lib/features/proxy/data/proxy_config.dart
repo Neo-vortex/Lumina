@@ -1,0 +1,121 @@
+import 'package:handy_tdlib_next/api.dart' as td;
+
+enum ProxyKind { socks5, http, mtproto }
+
+/// A proxy as the user configured it. Secrets (password, MTProto secret)
+/// are persisted separately in Keystore storage.
+class ProxyConfig {
+  const ProxyConfig({
+    required this.server,
+    required this.port,
+    required this.kind,
+    this.username = '',
+    this.password = '',
+    this.secret = '',
+    this.httpOnly = false,
+    this.enabled = false,
+  });
+
+  final String server;
+  final int port;
+  final ProxyKind kind;
+  final String username;
+  final String password;
+  final String secret;
+  final bool httpOnly;
+  final bool enabled;
+
+  String get id => '$server:$port:${kind.name}';
+
+  td.ProxyType toTd() => switch (kind) {
+    ProxyKind.socks5 => td.ProxyTypeSocks5(username: username, password: password),
+    ProxyKind.http => td.ProxyTypeHttp(username: username, password: password, httpOnly: httpOnly),
+    ProxyKind.mtproto => td.ProxyTypeMtproto(secret: secret),
+  };
+
+  factory ProxyConfig.fromTd(td.Proxy p) => switch (p.type) {
+    td.ProxyTypeSocks5(:final username, :final password) => ProxyConfig(
+      server: p.server,
+      port: p.port,
+      kind: ProxyKind.socks5,
+      username: username,
+      password: password,
+      enabled: p.isEnabled,
+    ),
+    td.ProxyTypeHttp(:final username, :final password, :final httpOnly) => ProxyConfig(
+      server: p.server,
+      port: p.port,
+      kind: ProxyKind.http,
+      username: username,
+      password: password,
+      httpOnly: httpOnly,
+      enabled: p.isEnabled,
+    ),
+    td.ProxyTypeMtproto(:final secret) => ProxyConfig(
+      server: p.server,
+      port: p.port,
+      kind: ProxyKind.mtproto,
+      secret: secret,
+      enabled: p.isEnabled,
+    ),
+  };
+
+  /// Non-secret fields only.
+  Map<String, Object> toJson() => {
+    'server': server,
+    'port': port,
+    'kind': kind.name,
+    'username': username,
+    'httpOnly': httpOnly,
+    'enabled': enabled,
+  };
+
+  factory ProxyConfig.fromJson(Map<String, dynamic> j, {String password = '', String secret = ''}) =>
+      ProxyConfig(
+        server: j['server'] as String,
+        port: j['port'] as int,
+        kind: ProxyKind.values.byName(j['kind'] as String),
+        username: j['username'] as String? ?? '',
+        httpOnly: j['httpOnly'] as bool? ?? false,
+        enabled: j['enabled'] as bool? ?? false,
+        password: password,
+        secret: secret,
+      );
+
+  ProxyConfig copyWith({bool? enabled}) => ProxyConfig(
+    server: server,
+    port: port,
+    kind: kind,
+    username: username,
+    password: password,
+    secret: secret,
+    httpOnly: httpOnly,
+    enabled: enabled ?? this.enabled,
+  );
+
+  /// Parses proxy share links:
+  /// `tg://proxy?server=…&port=…&secret=…`, `https://t.me/proxy?…`,
+  /// `tg://socks?server=…&port=…&user=…&pass=…`, `https://t.me/socks?…`.
+  static ProxyConfig? parseLink(String input) {
+    final uri = Uri.tryParse(input.trim());
+    if (uri == null) return null;
+    final q = uri.queryParameters;
+    final server = q['server'];
+    final port = int.tryParse(q['port'] ?? '');
+    if (server == null || server.isEmpty || port == null || port <= 0 || port > 65535) return null;
+    final path = '${uri.host}${uri.path}'.toLowerCase();
+    if (path.contains('proxy') && q['secret'] != null) {
+      return ProxyConfig(server: server, port: port, kind: ProxyKind.mtproto, secret: q['secret']!);
+    }
+    if (path.contains('socks')) {
+      return ProxyConfig(
+        server: server,
+        port: port,
+        kind: ProxyKind.socks5,
+        username: q['user'] ?? '',
+        password: q['pass'] ?? '',
+      );
+    }
+    return null;
+  }
+}

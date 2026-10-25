@@ -33,6 +33,19 @@ android {
         versionName = flutter.versionName
     }
 
+    packaging {
+        jniLibs {
+            // libVLC and ffmpeg-kit both bundle the NDK C++ runtime.
+            pickFirsts += "lib/**/libc++_shared.so"
+        }
+    }
+
+    androidResources {
+        // Bundled models are already incompressible; storing them uncompressed
+        // makes first-use extraction a straight copy.
+        noCompress += listOf("bin", "gguf")
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
