@@ -480,14 +480,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
-  handy_tdlib_next:
-    dependency: "direct main"
-    description:
-      name: handy_tdlib_next
-      sha256: e63e7dc8fc84ab74d0e6d5efc60baf6b3d3f2a164a436bcb9d4ad9b7ea64cde7
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.3.16"
   hooks:
     dependency: transitive
     description:
@@ -704,6 +696,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.3.0"
+  lumina_tdlib:
+    dependency: "direct main"
+    description:
+      path: "packages/lumina_tdlib"
+      relative: true
+    source: path
+    version: "1.8.69"
   matcher:
     dependency: transitive
     description:

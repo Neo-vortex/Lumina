@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../theme/glow_colors.dart';
 import '../display.dart';

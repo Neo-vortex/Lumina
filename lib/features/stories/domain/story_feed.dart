@@ -1,4 +1,4 @@
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 /// Pure helpers over TDLib's active-story lists.
 abstract final class StoryFeed {

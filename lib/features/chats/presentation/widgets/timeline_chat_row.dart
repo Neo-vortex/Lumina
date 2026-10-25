@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../core/telegram/display.dart';
 import '../../../../core/telegram/telegram_cache.dart';
@@ -87,8 +87,8 @@ class _TimelineChatRowState extends State<TimelineChatRow> with SingleTickerProv
         overflow: TextOverflow.ellipsis,
       );
     } else if (draft != null) {
-      final draftText = switch (draft.inputMessageText) {
-        td.InputMessageText(:final text) => text.text,
+      final draftText = switch (draft.content) {
+        td.DraftMessageContentText(:final text) => text.text,
         _ => '',
       };
       preview = Text.rich(

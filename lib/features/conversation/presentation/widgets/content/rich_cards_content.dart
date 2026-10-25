@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../../core/tdlib/td_client.dart';
 import '../../../../../core/tdlib/td_errors.dart';
@@ -37,13 +37,24 @@ class LocationContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final (location, title, subtitle, live, expiresIn) = switch (message.content) {
       td.MessageVenue(:final venue) => (venue.location, venue.title, venue.address, 0, 0),
-      td.MessageLocation(:final location, :final livePeriod, :final expiresIn) => (
+      td.MessageLocation(:final location) => (
         location,
-        livePeriod > 0 ? 'Live location' : 'Location',
+        'Location',
         '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}',
-        livePeriod,
-        expiresIn,
+        0,
+        0,
       ),
+      td.MessageLiveLocation(
+        location: td.LiveLocation(:final location, :final livePeriod),
+        :final expiresIn,
+      ) =>
+        (
+          location,
+          'Live location',
+          '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}',
+          livePeriod,
+          expiresIn,
+        ),
       _ => (const td.Location(latitude: 0, longitude: 0, horizontalAccuracy: 0), 'Location', '', 0, 0),
     };
     final isLive = live > 0 && expiresIn > 0;
@@ -114,9 +125,8 @@ class LocationContent extends StatelessWidget {
                         td.EditMessageLiveLocation(
                           chatId: message.chatId,
                           messageId: message.id,
-                          livePeriod: 0,
-                          heading: 0,
-                          proximityAlertRadius: 0,
+                          // Null stops sharing.
+                          location: null,
                         ),
                       );
                     } on TdException catch (e) {
@@ -324,9 +334,10 @@ class _PollContentState extends State<PollContent> {
     final p = widget.poll;
     final voted = p.options.any((o) => o.isChosen);
     final showResults = voted || p.isClosed;
-    final (multiple, correct) = switch (p.type) {
-      td.PollTypeRegular(:final allowMultipleAnswers) => (allowMultipleAnswers, -1),
-      td.PollTypeQuiz(:final correctOptionId) => (false, correctOptionId),
+    final multiple = p.allowsMultipleAnswers;
+    final correct = switch (p.type) {
+      td.PollTypeRegular() => const <int>{},
+      td.PollTypeQuiz(:final correctOptionIds) => correctOptionIds.toSet(),
     };
     final isQuiz = p.type is td.PollTypeQuiz;
     final explanation = switch (p.type) {
@@ -361,7 +372,9 @@ class _PollContentState extends State<PollContent> {
                 showResults: showResults,
                 picked: _picked.contains(i),
                 multiple: multiple,
-                correct: correct == i ? true : (correct >= 0 && p.options[i].isChosen ? false : null),
+                correct: correct.contains(i)
+                    ? true
+                    : (correct.isNotEmpty && p.options[i].isChosen ? false : null),
                 textColor: widget.textColor,
                 mutedColor: widget.mutedColor,
                 onTap: showResults || _busy

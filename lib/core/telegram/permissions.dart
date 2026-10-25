@@ -1,4 +1,4 @@
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import 'telegram_cache.dart';
 

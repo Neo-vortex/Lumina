@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 /// Icon + one-line description for content without a dedicated renderer.
 class GenericContent extends StatelessWidget {
@@ -78,7 +78,7 @@ IconData genericIcon(td.MessageContent c) => switch (c) {
   td.MessageVideoNote() || td.MessageExpiredVideoNote() => Icons.videocam_rounded,
   td.MessagePoll() => Icons.poll_rounded,
   td.MessageContact() => Icons.person_rounded,
-  td.MessageLocation() || td.MessageVenue() => Icons.place_rounded,
+  td.MessageLocation() || td.MessageLiveLocation() || td.MessageVenue() => Icons.place_rounded,
   td.MessageCall() => Icons.call_rounded,
   td.MessageSticker() => Icons.emoji_emotions_rounded,
   _ => Icons.help_outline_rounded,

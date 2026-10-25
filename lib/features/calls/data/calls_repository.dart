@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../core/tdlib/td_client.dart';
 
@@ -41,6 +41,7 @@ class CallsRepository {
     td.DiscardCall(
       callId: callId,
       isDisconnected: disconnected,
+      inviteLink: '',
       duration: duration.inSeconds,
       isVideo: video,
       connectionId: 0,
@@ -50,8 +51,12 @@ class CallsRepository {
   Future<void> sendSignaling(int callId, Uint8List data) =>
       _client.invoke<td.Ok>(td.SendCallSignalingData(callId: callId, data: base64Encode(data)));
 
-  Future<void> sendDebugInformation(int callId, String info) =>
-      _client.invoke<td.Ok>(td.SendCallDebugInformation(callId: callId, debugInformation: info));
+  Future<void> sendDebugInformation(int callId, String info) => _client.invoke<td.Ok>(
+    td.SendCallDebugInformation(
+      callId: td.InputCallDiscarded(callId: callId),
+      debugInformation: info,
+    ),
+  );
 
   Future<void> rate(
     int callId,
@@ -59,7 +64,12 @@ class CallsRepository {
     String comment = '',
     List<td.CallProblem> problems = const [],
   }) => _client.invoke<td.Ok>(
-    td.SendCallRating(callId: callId, rating: rating, comment: comment, problems: problems),
+    td.SendCallRating(
+      callId: td.InputCallDiscarded(callId: callId),
+      rating: rating,
+      comment: comment,
+      problems: problems,
+    ),
   );
 
   /// The Telegram user with this phone number (dialed in the Phone app), or

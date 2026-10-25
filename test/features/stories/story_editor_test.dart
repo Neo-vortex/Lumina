@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:lumina/core/media/ffmpeg_service.dart';
 import 'package:lumina/core/storage/app_preferences.dart';
 import 'package:lumina/core/telegram/file_store.dart';
@@ -39,17 +39,19 @@ td.File _file(int id, String path) => td.File(
 
 td.Story _story(int id, {required String path, bool canBeForwarded = true}) => td.Story(
   id: id,
-  senderChatId: 42,
+  posterChatId: 42,
   date: 1760000000,
-  isBeingSent: false,
+  isBeingPosted: false,
   isBeingEdited: false,
   isEdited: false,
   isPostedToChatPage: false,
   isVisibleOnlyForSelf: false,
+  canBeAddedToAlbum: false,
   canBeDeleted: false,
   canBeEdited: false,
   canBeForwarded: canBeForwarded,
   canBeReplied: true,
+  canSetPrivacySettings: false,
   canToggleIsPostedToChatPage: false,
   canGetStatistics: false,
   canGetInteractions: false,
@@ -65,6 +67,7 @@ td.Story _story(int id, {required String path, bool canBeForwarded = true}) => t
   ),
   areas: const [],
   caption: const td.FormattedText(text: 'sunset', entities: []),
+  albumIds: const [],
 );
 
 void main() {
@@ -169,8 +172,9 @@ void main() {
             chatId: 42,
             list: td.StoryListMain(),
             order: 1,
+            canBeArchived: false,
             maxReadStoryId: 0,
-            stories: [td.StoryInfo(storyId: 9, date: 0, isForCloseFriends: false)],
+            stories: [td.StoryInfo(storyId: 9, date: 0, isForCloseFriends: false, isLive: false)],
           ),
         ),
       );

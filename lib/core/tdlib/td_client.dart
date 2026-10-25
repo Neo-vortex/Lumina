@@ -1,7 +1,7 @@
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 /// The app's only view of TDLib. Everything above this layer depends on the
-/// interface, so the `handy_tdlib_next` fork can be swapped (or faked in
+/// interface, so the `lumina_tdlib` bindings can be swapped (or faked in
 /// tests) without touching features.
 abstract interface class TdClient {
   /// TDLib updates (objects whose `extra` is null) for the live client.

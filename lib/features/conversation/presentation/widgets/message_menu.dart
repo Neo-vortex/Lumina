@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../core/telegram/widgets/formatted_text_view.dart';
 import '../../../../core/theme/glow_colors.dart';
@@ -181,6 +181,7 @@ td.InputTextQuote? quoteFromSelection(td.FormattedText message, String selected,
   ];
   return td.InputTextQuote(
     text: td.FormattedText(text: message.text.substring(start, end), entities: entities),
+    richTexts: const [],
     position: start,
   );
 }

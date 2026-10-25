@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/painting.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 /// Something placed on a story in the editor. Positions are fractions of the
 /// 9:16 frame, so the same decoration renders identically in the editor,
@@ -220,13 +220,13 @@ abstract final class DecorationPainter {
     );
   }
 
-  static td.StoryAreaPosition positionOf(
+  static td.AreaPosition positionOf(
     Offset center,
     Size size,
     Size frame,
     double rotation, {
     bool rounded = true,
-  }) => td.StoryAreaPosition(
+  }) => td.AreaPosition(
     xPercentage: center.dx * 100,
     yPercentage: center.dy * 100,
     widthPercentage: size.width / frame.width * 100,

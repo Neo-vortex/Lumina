@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:lumina/core/storage/app_preferences.dart';
 import 'package:lumina/features/media/data/live_location_service.dart';
 
@@ -30,12 +30,14 @@ td.Message message(int id, {bool pending = true, int chatId = 7}) {
     id,
     chatId: chatId,
     outgoing: true,
-    content: const td.MessageLocation(
-      location: td.Location(latitude: 52.52, longitude: 13.405, horizontalAccuracy: 0),
-      livePeriod: 900,
+    content: const td.MessageLiveLocation(
+      location: td.LiveLocation(
+        location: td.Location(latitude: 52.52, longitude: 13.405, horizontalAccuracy: 0),
+        livePeriod: 900,
+        heading: 0,
+        proximityAlertRadius: 0,
+      ),
       expiresIn: 900,
-      heading: 0,
-      proximityAlertRadius: 0,
     ),
   );
   return pending ? m.copyWith(sendingState: const td.MessageSendingStatePending(sendingId: 0)) : m;
@@ -76,7 +78,9 @@ void main() {
     final edits = client.sentOf<td.EditMessageLiveLocation>();
     expect(edits, hasLength(1));
     expect(edits.single.messageId, 500);
-    expect(edits.single.location?.latitude, 52.52);
+    expect(edits.single.location?.location.latitude, 52.52);
+    // TDLib 1.8.69 takes the full live location; the period must stay the message's own.
+    expect(edits.single.location?.livePeriod, 900);
 
     now = now.add(const Duration(minutes: 16));
     await s.tick();
@@ -108,12 +112,14 @@ void main() {
       const td.UpdateMessageContent(
         chatId: 7,
         messageId: 500,
-        newContent: td.MessageLocation(
-          location: td.Location(latitude: 0, longitude: 0, horizontalAccuracy: 0),
-          livePeriod: 900,
+        newContent: td.MessageLiveLocation(
+          location: td.LiveLocation(
+            location: td.Location(latitude: 0, longitude: 0, horizontalAccuracy: 0),
+            livePeriod: 900,
+            heading: 0,
+            proximityAlertRadius: 0,
+          ),
           expiresIn: 0,
-          heading: 0,
-          proximityAlertRadius: 0,
         ),
       ),
     );

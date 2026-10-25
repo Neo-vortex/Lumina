@@ -1,4 +1,4 @@
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../core/media/ffmpeg_service.dart';
 import 'video_presets.dart';
@@ -111,8 +111,10 @@ class MediaSender {
     final selfDestruct = viewOnce ? const td.MessageSelfDestructTypeImmediately() : null;
     if (asFile || media.kind == MediaKind.file) {
       return td.InputMessageDocument(
-        document: td.InputFileLocal(path: path),
-        disableContentTypeDetection: asFile,
+        document: td.InputDocument(
+          document: td.InputFileLocal(path: path),
+          disableContentTypeDetection: asFile,
+        ),
         caption: caption,
       );
     }
@@ -121,17 +123,19 @@ class MediaSender {
       final cover = media.probe?.hasVideo ?? false ? await _ffmpeg.coverArt(path) : null;
       final coverProbe = cover == null ? null : await _ffmpeg.probe(cover);
       return td.InputMessageAudio(
-        audio: td.InputFileLocal(path: path),
-        albumCoverThumbnail: cover == null
-            ? null
-            : td.InputThumbnail(
-                thumbnail: td.InputFileLocal(path: cover),
-                width: coverProbe?.width ?? 0,
-                height: coverProbe?.height ?? 0,
-              ),
-        duration: media.probe?.duration.inSeconds ?? 0,
-        title: _clip(trackTitle(media)),
-        performer: _clip(media.probe?.performer ?? ''),
+        audio: td.InputAudio(
+          audio: td.InputFileLocal(path: path),
+          albumCoverThumbnail: cover == null
+              ? null
+              : td.InputThumbnail(
+                  thumbnail: td.InputFileLocal(path: cover),
+                  width: coverProbe?.width ?? 0,
+                  height: coverProbe?.height ?? 0,
+                ),
+          duration: media.probe?.duration.inSeconds ?? 0,
+          title: _clip(trackTitle(media)),
+          performer: _clip(media.probe?.performer ?? ''),
+        ),
         caption: caption,
       );
     }
@@ -140,10 +144,12 @@ class MediaSender {
         : media.probe;
     if (media.kind == MediaKind.photo) {
       return td.InputMessagePhoto(
-        photo: td.InputFileLocal(path: path),
-        addedStickerFileIds: const [],
-        width: probe?.width ?? 0,
-        height: probe?.height ?? 0,
+        photo: td.InputPhoto(
+          photo: td.InputFileLocal(path: path),
+          addedStickerFileIds: const [],
+          width: probe?.width ?? 0,
+          height: probe?.height ?? 0,
+        ),
         caption: caption,
         showCaptionAboveMedia: false,
         selfDestructType: selfDestruct,
@@ -153,19 +159,22 @@ class MediaSender {
     final thumb = await _ffmpeg.thumbnail(path);
     final thumbProbe = thumb == null ? null : await _ffmpeg.probe(thumb);
     return td.InputMessageVideo(
-      video: td.InputFileLocal(path: path),
-      thumbnail: thumb == null
-          ? null
-          : td.InputThumbnail(
-              thumbnail: td.InputFileLocal(path: thumb),
-              width: thumbProbe?.width ?? 0,
-              height: thumbProbe?.height ?? 0,
-            ),
-      addedStickerFileIds: const [],
-      duration: probe?.duration.inSeconds ?? 0,
-      width: probe?.width ?? 0,
-      height: probe?.height ?? 0,
-      supportsStreaming: path.endsWith('.mp4'),
+      video: td.InputVideo(
+        video: td.InputFileLocal(path: path),
+        thumbnail: thumb == null
+            ? null
+            : td.InputThumbnail(
+                thumbnail: td.InputFileLocal(path: thumb),
+                width: thumbProbe?.width ?? 0,
+                height: thumbProbe?.height ?? 0,
+              ),
+        startTimestamp: 0,
+        addedStickerFileIds: const [],
+        duration: probe?.duration.inSeconds ?? 0,
+        width: probe?.width ?? 0,
+        height: probe?.height ?? 0,
+        supportsStreaming: path.endsWith('.mp4'),
+      ),
       caption: caption,
       showCaptionAboveMedia: false,
       selfDestructType: selfDestruct,

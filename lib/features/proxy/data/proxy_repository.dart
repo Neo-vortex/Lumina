@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../core/storage/app_preferences.dart';
 import '../../../core/storage/secure_store.dart';
@@ -40,9 +40,10 @@ class ProxyRepository {
   StreamSubscription<td.Update>? _sub;
 
   Future<List<SavedProxy>> list() async {
-    final result = await _client.invoke<td.Proxies>(const td.GetProxies());
+    final result = await _client.invoke<td.AddedProxies>(const td.GetProxies());
     return [
-      for (final p in result.proxies) SavedProxy(p.id, ProxyConfig.fromTd(p), lastUsed: p.lastUsedDate),
+      for (final p in result.proxies)
+        if (ProxyConfig.fromTd(p) case final config?) SavedProxy(p.id, config, lastUsed: p.lastUsedDate),
     ];
   }
 
@@ -64,16 +65,16 @@ class ProxyRepository {
   }
 
   Future<SavedProxy> add(ProxyConfig c, {bool enable = true}) async {
-    final p = await _client.invoke<td.Proxy>(
-      td.AddProxy(server: c.server, port: c.port, enable: enable, type: c.toTd()),
+    final p = await _client.invoke<td.AddedProxy>(
+      td.AddProxy(proxy: c.toTdProxy(), enable: enable, comment: ''),
     );
     await _persist();
-    return SavedProxy(p.id, ProxyConfig.fromTd(p));
+    return SavedProxy(p.id, ProxyConfig.fromTd(p)!);
   }
 
   Future<void> edit(int id, ProxyConfig c) async {
-    await _client.invoke<td.Proxy>(
-      td.EditProxy(proxyId: id, server: c.server, port: c.port, enable: c.enabled, type: c.toTd()),
+    await _client.invoke<td.AddedProxy>(
+      td.EditProxy(proxyId: id, proxy: c.toTdProxy(), enable: c.enabled, comment: ''),
     );
     await _persist();
   }
@@ -95,8 +96,9 @@ class ProxyRepository {
 
   /// Round-trip time through the proxy, or the TDLib error.
   Future<Duration> ping(int id) async {
+    final saved = (await list()).firstWhere((p) => p.id == id);
     final s = await _client.invoke<td.Seconds>(
-      td.PingProxy(proxyId: id),
+      td.PingProxy(proxy: saved.config.toTdProxy()),
       timeout: const Duration(seconds: 20),
     );
     return Duration(microseconds: (s.seconds * 1e6).round());
@@ -104,15 +106,20 @@ class ProxyRepository {
 
   /// Tests a configuration before saving it (no proxy id yet).
   Future<void> test(ProxyConfig c) => _client.invoke<td.Ok>(
-    td.TestProxy(server: c.server, port: c.port, type: c.toTd(), dcId: 2, timeout: 10),
+    td.TestProxy(proxy: c.toTdProxy(), dcId: 2, timeout: 10),
     timeout: const Duration(seconds: 20),
   );
 
   Future<String?> shareLink(int id) async {
     try {
-      final url = await _client.invoke<td.HttpUrl>(td.GetProxyLink(proxyId: id));
+      final saved = (await list()).firstWhere((p) => p.id == id);
+      final url = await _client.invoke<td.HttpUrl>(
+        td.GetInternalLink(type: td.InternalLinkTypeProxy(proxy: saved.config.toTdProxy()), isHttp: true),
+      );
       return url.url;
     } on TdException {
+      return null;
+    } on StateError {
       return null;
     }
   }
@@ -161,8 +168,8 @@ class ProxyRepository {
       final existing = await list();
       if (existing.isNotEmpty) return;
       for (final c in await saved()) {
-        await _client.invoke<td.Proxy>(
-          td.AddProxy(server: c.server, port: c.port, enable: c.enabled, type: c.toTd()),
+        await _client.invoke<td.AddedProxy>(
+          td.AddProxy(proxy: c.toTdProxy(), enable: c.enabled, comment: ''),
         );
       }
     } on Exception {

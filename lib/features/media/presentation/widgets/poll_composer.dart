@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../core/theme/glow_colors.dart';
 
@@ -35,11 +35,17 @@ td.InputMessagePoll? buildPoll({
   }
   return td.InputMessagePoll(
     question: f(q),
-    options: [for (final o in options) f(o)],
+    options: [for (final o in options) td.InputPollOption(text: f(o))],
     isAnonymous: anonymous,
+    allowsMultipleAnswers: !quiz && multiple,
+    allowsRevoting: false,
+    membersOnly: false,
+    countryCodes: const [],
+    shuffleOptions: false,
+    hideResultsUntilCloses: false,
     type: quiz
-        ? td.PollTypeQuiz(correctOptionId: correct!, explanation: f(explanation.trim()))
-        : td.PollTypeRegular(allowMultipleAnswers: multiple),
+        ? td.InputPollTypeQuiz(correctOptionIds: [correct!], explanation: f(explanation.trim()))
+        : const td.InputPollTypeRegular(allowAddingOptions: false),
     openPeriod: 0,
     closeDate: 0,
     isClosed: false,

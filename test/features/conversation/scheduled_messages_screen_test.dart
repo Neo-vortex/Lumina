@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:lumina/core/storage/app_preferences.dart';
 import 'package:lumina/core/telegram/telegram_cache.dart';
 import 'package:lumina/features/conversation/data/messages_repository.dart';
@@ -42,7 +42,10 @@ void main() {
             scheduled(
               11,
               'see you monday',
-              td.MessageSchedulingStateSendAtDate(sendDate: at.millisecondsSinceEpoch ~/ 1000),
+              td.MessageSchedulingStateSendAtDate(
+                sendDate: at.millisecondsSinceEpoch ~/ 1000,
+                repeatPeriod: 0,
+              ),
             ),
             scheduled(10, 'ping when online', const td.MessageSchedulingStateSendWhenOnline()),
           ],

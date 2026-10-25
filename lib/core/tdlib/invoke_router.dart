@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import 'td_errors.dart';
 import 'isolates/td_messages.dart';

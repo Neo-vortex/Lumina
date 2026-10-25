@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../core/storage/app_preferences.dart';
 import '../../../core/telegram/file_store.dart';

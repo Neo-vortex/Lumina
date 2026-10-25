@@ -4,7 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../core/media/ffmpeg_service.dart';
 import '../../../../core/telegram/display.dart';
@@ -117,12 +117,14 @@ class _VideoNoteRecorderScreenState extends State<VideoNoteRecorderScreen> {
     final probe = await ffmpeg.probe(out);
     final thumb = await ffmpeg.thumbnail(out, at: Duration.zero);
     return td.InputMessageVideoNote(
-      videoNote: td.InputFileLocal(path: out),
-      thumbnail: thumb == null
-          ? null
-          : td.InputThumbnail(thumbnail: td.InputFileLocal(path: thumb), width: 320, height: 320),
-      duration: probe?.duration.inSeconds ?? _elapsed.inSeconds,
-      length: _side,
+      videoNote: td.InputVideoNote(
+        videoNote: td.InputFileLocal(path: out),
+        thumbnail: thumb == null
+            ? null
+            : td.InputThumbnail(thumbnail: td.InputFileLocal(path: thumb), width: 320, height: 320),
+        duration: probe?.duration.inSeconds ?? _elapsed.inSeconds,
+        length: _side,
+      ),
     );
   }
 

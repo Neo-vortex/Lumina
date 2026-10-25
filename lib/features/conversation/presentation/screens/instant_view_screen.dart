@@ -1,7 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:intl/intl.dart' show DateFormat, NumberFormat;
 
 import '../../../../core/media/audio_playback.dart';
@@ -39,7 +39,7 @@ class _InstantViewScreenState extends State<InstantViewScreen> {
   @override
   void initState() {
     super.initState();
-    _load(full: false);
+    _load();
   }
 
   @override
@@ -48,17 +48,13 @@ class _InstantViewScreenState extends State<InstantViewScreen> {
     super.dispose();
   }
 
-  Future<void> _load({required bool full}) async {
+  Future<void> _load() async {
     try {
       final p = await context.read<TdClient>().invoke<td.WebPageInstantView>(
-        td.GetWebPageInstantView(url: widget.url, forceFull: full),
+        td.GetWebPageInstantView(url: widget.url, onlyLocal: false),
       );
       if (!mounted) return;
       setState(() => _page = p);
-      // TDLib may return a partial page first; fetch the rest.
-      if (!p.isFull && !full) {
-        _load(full: true);
-      }
     } catch (e) {
       if (mounted) setState(() => _error = 'This article can’t be shown here.');
     }
@@ -108,7 +104,7 @@ class _InstantViewScreenState extends State<InstantViewScreen> {
                   controller: _scroll,
                   padding: const EdgeInsets.fromLTRB(18, 8, 18, 48),
                   children: [
-                    for (final b in page.pageBlocks) _Block(b, anchors: _anchors, onAnchor: _jump),
+                    for (final b in page.blocks) _Block(b, anchors: _anchors, onAnchor: _jump),
                     if (page.viewCount > 0)
                       Padding(
                         padding: const EdgeInsets.only(top: 24),
@@ -140,8 +136,8 @@ class _Block extends StatelessWidget {
     children: [for (final b in blocks) _Block(b, anchors: anchors, onAnchor: onAnchor)],
   );
 
-  Widget _caption(td.PageBlockCaption c) {
-    if (_isEmpty(c.text) && _isEmpty(c.credit)) return const SizedBox.shrink();
+  Widget _caption(td.PageBlockCaption? c) {
+    if (c == null || (_isEmpty(c.text) && _isEmpty(c.credit))) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Column(
@@ -150,7 +146,7 @@ class _Block extends StatelessWidget {
           if (!_isEmpty(c.text)) _rich(c.text, const TextStyle(color: GlowColors.textMuted, fontSize: 13.5)),
           if (!_isEmpty(c.credit))
             _rich(
-              c.credit,
+              c.credit!,
               const TextStyle(color: GlowColors.textMuted, fontSize: 12, fontStyle: FontStyle.italic),
             ),
         ],
@@ -158,7 +154,8 @@ class _Block extends StatelessWidget {
     );
   }
 
-  static bool _isEmpty(td.RichText t) => switch (t) {
+  static bool _isEmpty(td.RichText? t) => switch (t) {
+    null => true,
     td.RichTextPlain(:final text) => text.isEmpty,
     td.RichTexts(:final texts) => texts.every(_isEmpty),
     _ => false,
@@ -222,6 +219,26 @@ class _Block extends StatelessWidget {
         v: 4,
       ),
       td.PageBlockParagraph(:final text) => pad(_rich(text, _body)),
+      td.PageBlockSectionHeading(:final text, :final size) => pad(
+        _rich(
+          text,
+          TextStyle(
+            fontSize: 26 - 2.0 * size.clamp(1, 6),
+            fontWeight: FontWeight.w700,
+            color: GlowColors.text,
+          ),
+        ),
+        v: 10,
+      ),
+      td.PageBlockThinking(:final text) => pad(
+        _rich(text, _body.copyWith(color: GlowColors.textMuted, fontStyle: FontStyle.italic)),
+      ),
+      td.PageBlockMathematicalExpression(:final expression) => pad(
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Text(expression, style: const TextStyle(fontFamily: 'monospace', fontSize: 15)),
+        ),
+      ),
       td.PageBlockPreformatted(:final text) => pad(
         Container(
           padding: const EdgeInsets.all(12),
@@ -251,7 +268,7 @@ class _Block extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SizedBox(width: 26, child: Text(it.label.isEmpty ? '•' : it.label, style: _body)),
-                    Expanded(child: _children(it.pageBlocks)),
+                    Expanded(child: _children(it.blocks)),
                   ],
                 ),
               ),
@@ -259,20 +276,30 @@ class _Block extends StatelessWidget {
         ),
         v: 4,
       ),
-      td.PageBlockBlockQuote(:final text, :final credit) => pad(
+      td.PageBlockBlockQuote(:final blocks, :final credit) => pad(
         Container(
           padding: const EdgeInsets.only(left: 14),
           decoration: const BoxDecoration(
             border: Border(left: BorderSide(color: GlowColors.violet, width: 3)),
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _rich(text, _body.copyWith(fontStyle: FontStyle.italic)),
+              _children(blocks),
               if (!_isEmpty(credit))
-                _rich(credit, const TextStyle(color: GlowColors.textMuted, fontSize: 14)),
+                _rich(credit!, const TextStyle(color: GlowColors.textMuted, fontSize: 14)),
             ],
           ),
+        ),
+      ),
+      td.PageBlockExpandableBlockQuote(:final text, :final credit) => Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          title: _rich(text, _body.copyWith(fontStyle: FontStyle.italic)),
+          children: [
+            if (!_isEmpty(credit)) _rich(credit!, const TextStyle(color: GlowColors.textMuted, fontSize: 14)),
+          ],
         ),
       ),
       td.PageBlockPullQuote(:final text, :final credit) => pad(
@@ -282,7 +309,7 @@ class _Block extends StatelessWidget {
               text,
               const TextStyle(fontSize: 21, fontStyle: FontStyle.italic, height: 1.4, color: GlowColors.text),
             ),
-            if (!_isEmpty(credit)) _rich(credit, const TextStyle(color: GlowColors.textMuted)),
+            if (!_isEmpty(credit)) _rich(credit!, const TextStyle(color: GlowColors.textMuted)),
           ],
         ),
         v: 14,
@@ -353,13 +380,12 @@ class _Block extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (audio != null)
-              _AudioTile(
-                file: audio.audio,
-                mime: audio.mimeType,
-                title: [audio.performer, audio.title].where((s) => s.isNotEmpty).join(' — '),
-                duration: audio.duration,
-              ),
+            _AudioTile(
+              file: audio.audio,
+              mime: audio.mimeType,
+              title: [audio.performer, audio.title].where((s) => s.isNotEmpty).join(' — '),
+              duration: audio.duration,
+            ),
             _caption(caption),
           ],
         ),
@@ -368,13 +394,12 @@ class _Block extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (voiceNote != null)
-              _AudioTile(
-                file: voiceNote.voice,
-                mime: voiceNote.mimeType,
-                title: 'Voice message',
-                duration: voiceNote.duration,
-              ),
+            _AudioTile(
+              file: voiceNote.voice,
+              mime: voiceNote.mimeType,
+              title: 'Voice message',
+              duration: voiceNote.duration,
+            ),
             _caption(caption),
           ],
         ),
@@ -383,8 +408,8 @@ class _Block extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 8),
         child: _Block(cover, anchors: anchors, onAnchor: onAnchor),
       ),
-      td.PageBlockCollage(:final pageBlocks, :final caption) ||
-      td.PageBlockSlideshow(:final pageBlocks, :final caption) => pad(
+      td.PageBlockCollage(blocks: final pageBlocks, :final caption) ||
+      td.PageBlockSlideshow(blocks: final pageBlocks, :final caption) => pad(
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -403,7 +428,7 @@ class _Block extends StatelessWidget {
           ],
         ),
       ),
-      td.PageBlockDetails(:final header, :final pageBlocks, :final isOpen) => Theme(
+      td.PageBlockDetails(:final header, blocks: final pageBlocks, :final isOpen) => Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           initiallyExpanded: isOpen,
@@ -416,7 +441,7 @@ class _Block extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (!_isEmpty(caption)) _rich(caption, const TextStyle(color: GlowColors.textMuted)),
+            if (!_isEmpty(caption)) _rich(caption!, const TextStyle(color: GlowColors.textMuted)),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Table(
@@ -490,7 +515,7 @@ class _Block extends StatelessWidget {
           onTap: () => openLink(context, 'https://t.me/$username'),
         ),
       ),
-      td.PageBlockEmbeddedPost(:final author, :final date, :final pageBlocks, :final caption) => pad(
+      td.PageBlockEmbeddedPost(:final author, :final date, blocks: final pageBlocks, :final caption) => pad(
         Container(
           padding: const EdgeInsets.only(left: 12),
           decoration: const BoxDecoration(
@@ -540,6 +565,41 @@ class _Block extends StatelessWidget {
             ),
             _caption(caption),
           ],
+        ),
+      ),
+      td.PageBlockDocument(:final document, :final caption) => pad(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.description_rounded, color: GlowColors.cyan),
+              title: Text(document.fileName.isEmpty ? 'File' : document.fileName),
+            ),
+            _caption(caption),
+          ],
+        ),
+      ),
+      td.PageBlockButtonRow(:final buttons) => pad(
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final button in buttons)
+              OutlinedButton(
+                onPressed: switch (button.type) {
+                  td.InlineKeyboardButtonTypeUrl(:final url) => () => openLink(context, url),
+                  _ => null,
+                },
+                child: _rich(button.text, const TextStyle(color: GlowColors.cyan)),
+              ),
+          ],
+        ),
+      ),
+      td.PageBlockUnsupported() => pad(
+        const Text(
+          'Part of this article can’t be shown here.',
+          style: TextStyle(color: GlowColors.textMuted, fontStyle: FontStyle.italic),
         ),
       ),
       td.PageBlockMap(:final location, :final caption) => pad(
@@ -629,10 +689,33 @@ class _RichTextViewState extends State<_RichTextView> {
         recognizer: _tap(() => openLink(context, 'tel:$phoneNumber')),
       ),
       td.RichTextAnchorLink(:final text, :final anchorName) ||
-      td.RichTextReference(:final text, :final anchorName) => TextSpan(
+      td.RichTextReferenceLink(:final text, referenceName: final anchorName) => TextSpan(
         children: [_span(text, s.merge(link))],
         recognizer: _tap(() => widget.onAnchor(anchorName)),
       ),
+      td.RichTextMention(:final text, :final username) => TextSpan(
+        children: [_span(text, s.merge(link))],
+        recognizer: _tap(() => openLink(context, 'https://t.me/$username')),
+      ),
+      td.RichTextHashtag(:final text) ||
+      td.RichTextCashtag(:final text) ||
+      td.RichTextBotCommand(:final text) ||
+      td.RichTextMentionName(:final text) ||
+      td.RichTextBankCardNumber(:final text) ||
+      td.RichTextTonAddress(:final text) => _span(text, s.copyWith(color: GlowColors.cyan)),
+      td.RichTextSpoiler(:final text) => _span(
+        text,
+        s.copyWith(backgroundColor: GlowColors.textMuted.withValues(alpha: 0.35)),
+      ),
+      td.RichTextDateTime(:final text) ||
+      td.RichTextDiff(:final text) ||
+      td.RichTextReference(:final text) => _span(text, s),
+      td.RichTextCustomEmoji(:final alternativeText) => TextSpan(text: alternativeText, style: s),
+      td.RichTextMathematicalExpression(:final expression) => TextSpan(
+        text: expression,
+        style: s.copyWith(fontFamily: 'monospace'),
+      ),
+      td.RichTextButton(:final button) => _span(button.text, s.merge(link)),
       td.RichTextAnchor() => const TextSpan(),
       td.RichTextIcon(:final document, :final width, :final height) => WidgetSpan(
         child: SizedBox(

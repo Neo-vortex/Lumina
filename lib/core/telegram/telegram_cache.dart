@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../tdlib/td_client.dart';
 
@@ -139,8 +139,8 @@ class TelegramCache {
       case td.UpdateSecretChat(:final secretChat):
         secretChats[secretChat.id] = secretChat;
         _emit(SecretChatChanged(secretChat.id));
-      case td.UpdateChatAction(:final chatId, :final messageThreadId, :final senderId, :final action):
-        if (messageThreadId == 0) _onChatAction(chatId, senderId, action);
+      case td.UpdateChatAction(:final chatId, :final topicId, :final senderId, :final action):
+        if (topicId == null) _onChatAction(chatId, senderId, action);
       case td.UpdateAuthorizationState(authorizationState: td.AuthorizationStateClosed()):
         clear();
       case td.UpdateConnectionState(:final state):
@@ -295,6 +295,7 @@ class TelegramCache {
     photo: clearPhoto ? null : c.photo,
     accentColorId: c.accentColorId,
     backgroundCustomEmojiId: c.backgroundCustomEmojiId,
+    upgradedGiftColors: c.upgradedGiftColors,
     profileAccentColorId: c.profileAccentColorId,
     profileBackgroundCustomEmojiId: c.profileBackgroundCustomEmojiId,
     permissions: c.permissions,
@@ -308,6 +309,7 @@ class TelegramCache {
     isMarkedAsUnread: c.isMarkedAsUnread,
     viewAsTopics: c.viewAsTopics,
     hasScheduledMessages: c.hasScheduledMessages,
+    hasWelcomeMessages: c.hasWelcomeMessages,
     canBeDeletedOnlyForSelf: c.canBeDeletedOnlyForSelf,
     canBeDeletedForAllUsers: c.canBeDeletedForAllUsers,
     canBeReported: c.canBeReported,
@@ -317,12 +319,13 @@ class TelegramCache {
     lastReadOutboxMessageId: c.lastReadOutboxMessageId,
     unreadMentionCount: c.unreadMentionCount,
     unreadReactionCount: c.unreadReactionCount,
+    unreadPollVoteCount: c.unreadPollVoteCount,
     notificationSettings: c.notificationSettings,
     availableReactions: c.availableReactions,
     messageAutoDeleteTime: c.messageAutoDeleteTime,
     emojiStatus: c.emojiStatus,
     background: c.background,
-    themeName: c.themeName,
+    theme: c.theme,
     actionBar: c.actionBar,
     businessBotManageBar: c.businessBotManageBar,
     videoChat: c.videoChat,

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:lumina/core/media/ffmpeg_service.dart';
 import 'package:lumina/core/storage/app_preferences.dart';
 import 'package:lumina/features/stories/data/stories_repository.dart';
@@ -12,8 +12,11 @@ td.ChatActiveStories _active(int chatId, List<int> ids, {int read = 0, int order
       chatId: chatId,
       list: list ?? const td.StoryListMain(),
       order: order,
+      canBeArchived: false,
       maxReadStoryId: read,
-      stories: [for (final id in ids) td.StoryInfo(storyId: id, date: 0, isForCloseFriends: false)],
+      stories: [
+        for (final id in ids) td.StoryInfo(storyId: id, date: 0, isForCloseFriends: false, isLive: false),
+      ],
     );
 
 void main() {

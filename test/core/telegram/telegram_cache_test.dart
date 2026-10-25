@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:lumina/core/telegram/telegram_cache.dart';
 
 import '../../helpers/fakes.dart';
@@ -60,7 +60,6 @@ void main() {
     cache.apply(
       const td.UpdateChatAction(
         chatId: 1,
-        messageThreadId: 0,
         senderId: td.MessageSenderUser(userId: 7),
         action: td.ChatActionTyping(),
       ),
@@ -69,7 +68,6 @@ void main() {
     cache.apply(
       const td.UpdateChatAction(
         chatId: 1,
-        messageThreadId: 0,
         senderId: td.MessageSenderUser(userId: 7),
         action: td.ChatActionCancel(),
       ),

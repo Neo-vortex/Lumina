@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 /// An extra tab on the chat info screen, contributed by another feature
 /// (e.g. saved story history). [slivers] fill the page below the header.

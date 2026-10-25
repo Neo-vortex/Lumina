@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:intl/intl.dart';
 
 import '../theme/glow_colors.dart';
@@ -136,6 +136,7 @@ abstract final class Display {
       td.MessagePoll() => 'Poll',
       td.MessageContact(:final contact) => 'Contact · ${contact.firstName} ${contact.lastName}'.trim(),
       td.MessageLocation() => 'Location',
+      td.MessageLiveLocation() => 'Live location',
       td.MessageVenue() => 'Venue',
       td.MessageCall(:final isVideo) => isVideo ? 'Video call' : 'Call',
       td.MessageExpiredPhoto() => 'Photo expired',
@@ -189,7 +190,8 @@ abstract final class Display {
     td.MessageText() || td.MessagePhoto() || td.MessageVideo() || td.MessageAnimation() => false,
     td.MessageDocument() || td.MessageAudio() || td.MessageVoiceNote() || td.MessageVideoNote() => false,
     td.MessageSticker() || td.MessageAnimatedEmoji() || td.MessageDice() || td.MessagePoll() => false,
-    td.MessageContact() || td.MessageLocation() || td.MessageVenue() || td.MessageCall() => false,
+    td.MessageContact() || td.MessageLocation() || td.MessageLiveLocation() => false,
+    td.MessageVenue() || td.MessageCall() => false,
     td.MessageExpiredPhoto() || td.MessageExpiredVideo() => false,
     td.MessageExpiredVoiceNote() || td.MessageExpiredVideoNote() => false,
     td.MessageUnsupported() || td.MessageGame() || td.MessageInvoice() || td.MessageStory() => false,

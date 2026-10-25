@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/telegram/widgets/formatted_text_view.dart';

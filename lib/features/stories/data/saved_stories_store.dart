@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/media/ffmpeg_service.dart';
@@ -130,7 +130,7 @@ class SavedStoriesStore extends ChangeNotifier {
 
   Future<SaveResult> _save(td.Story story, String chatTitle, bool auto) async {
     await ready();
-    if (isSaved(story.senderChatId, story.id)) return SaveResult.alreadySaved;
+    if (isSaved(story.posterChatId, story.id)) return SaveResult.alreadySaved;
     if (!story.canBeForwarded) return SaveResult.protected;
     final (td.File? file, bool isVideo, double duration) = switch (story.content) {
       td.StoryContentPhoto(:final photo) when photo.sizes.isNotEmpty => (
@@ -144,22 +144,22 @@ class SavedStoriesStore extends ChangeNotifier {
     if (file == null) return SaveResult.unsupported;
     try {
       final src = await _files.downloadAndWait(file.id, priority: auto ? 2 : 24);
-      final folder = Directory('${_dir!.path}/${story.senderChatId}');
+      final folder = Directory('${_dir!.path}/${story.posterChatId}');
       await folder.create(recursive: true);
       final ext = isVideo ? 'mp4' : (src.toLowerCase().endsWith('.png') ? 'png' : 'jpg');
-      final name = '${story.senderChatId}/${story.id}.$ext';
+      final name = '${story.posterChatId}/${story.id}.$ext';
       await File(src).copy(pathOf(name));
       var thumb = name;
       if (isVideo) {
         final t = await _ffmpeg.thumbnail(pathOf(name));
         if (t != null) {
-          thumb = '${story.senderChatId}/${story.id}_thumb.jpg';
+          thumb = '${story.posterChatId}/${story.id}_thumb.jpg';
           await File(t).rename(pathOf(thumb)).catchError((_) => File(t).copy(pathOf(thumb)));
         }
       }
       _entries.add(
         SavedStory(
-          chatId: story.senderChatId,
+          chatId: story.posterChatId,
           storyId: story.id,
           postedAt: story.date,
           savedAt: DateTime.now().millisecondsSinceEpoch ~/ 1000,

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:lumina/features/media/presentation/widgets/attach_sheet.dart';
 import 'package:lumina/features/media/presentation/widgets/poll_composer.dart';
 
@@ -41,8 +41,8 @@ void main() {
     test('trims and drops empty rows', () {
       final poll = buildPoll(question: ' Lunch? ', rows: [' pizza ', '', 'sushi', ''])!;
       expect(poll.question.text, 'Lunch?');
-      expect(poll.options.map((o) => o.text), ['pizza', 'sushi']);
-      expect(poll.type, isA<td.PollTypeRegular>());
+      expect(poll.options.map((o) => o.text.text), ['pizza', 'sushi']);
+      expect(poll.type, isA<td.InputPollTypeRegular>());
       expect(poll.isAnonymous, isTrue);
     });
 
@@ -54,8 +54,8 @@ void main() {
         correctRow: 2,
         explanation: ' It is Paris ',
       )!;
-      final type = poll.type as td.PollTypeQuiz;
-      expect(type.correctOptionId, 1);
+      final type = poll.type as td.InputPollTypeQuiz;
+      expect(type.correctOptionIds, [1]);
       expect(type.explanation.text, 'It is Paris');
     });
 
@@ -66,7 +66,8 @@ void main() {
 
     test('multiple answers only for regular polls', () {
       final poll = buildPoll(question: 'Q', rows: ['a', 'b'], multiple: true, anonymous: false)!;
-      expect((poll.type as td.PollTypeRegular).allowMultipleAnswers, isTrue);
+      expect(poll.type, isA<td.InputPollTypeRegular>());
+      expect(poll.allowsMultipleAnswers, isTrue);
       expect(poll.isAnonymous, isFalse);
     });
   });

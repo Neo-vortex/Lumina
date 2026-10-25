@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:lumina/core/storage/app_preferences.dart';
 import 'package:lumina/features/conversation/bloc/conversation_cubit.dart';
 import 'package:lumina/features/conversation/data/messages_repository.dart';
@@ -50,6 +50,7 @@ void main() {
   test('a new reply target drops the quote unless one is given', () {
     const quote = td.InputTextQuote(
       text: td.FormattedText(text: 'x', entities: []),
+      richTexts: [],
       position: 0,
     );
     final m = fakeMessage(1), other = fakeMessage(2);
@@ -65,6 +66,7 @@ void main() {
     final repo = MessagesRepository(client: client, prefs: AppPreferences.inMemory());
     const quote = td.InputTextQuote(
       text: td.FormattedText(text: 'bridge', entities: []),
+      richTexts: [],
       position: 16,
     );
     await repo.sendText(1, 'on my way', replyToMessageId: 5, quote: quote);

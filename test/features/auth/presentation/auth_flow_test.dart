@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:lumina/app/app.dart';
 import 'package:lumina/core/config/app_config.dart';
 import 'package:lumina/core/storage/app_preferences.dart';

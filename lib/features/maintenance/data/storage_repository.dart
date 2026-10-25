@@ -1,4 +1,4 @@
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../core/media/ffmpeg_service.dart';
 import '../../../core/storage/app_preferences.dart';

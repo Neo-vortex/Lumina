@@ -31,7 +31,8 @@ dependencies:
   flutter:
     sdk: flutter
 
-  handy_tdlib_next: 2.3.16
+  lumina_tdlib:
+    path: packages/lumina_tdlib
   path_provider: ^2.1.6
   flutter_secure_storage: ^11.2.0
   flutter_bloc: ^9.1.1

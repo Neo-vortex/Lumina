@@ -1,5 +1,5 @@
 import 'package:flutter/widgets.dart';
-import 'package:handy_tdlib_next/api.dart' as td;
+import 'package:lumina_tdlib/api.dart' as td;
 
 /// Lets other features decorate a chat row's avatar (story halos) without
 /// the chat list depending on them. Provided by the composition root.
