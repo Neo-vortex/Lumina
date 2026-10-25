@@ -49,6 +49,7 @@ import 'package:flutter/material.dart' show Icons;
 import '../features/conversation/presentation/widgets/conversation_extensions.dart';
 import '../features/home/presentation/widgets/compose_orb.dart';
 import '../features/settings/presentation/screens/settings_screen.dart';
+import '../features/settings/presentation/settings_category.dart';
 
 /// "Use proxy for calls": the active SOCKS5 proxy as the engine wants it.
 Future<EngineProxy?> callProxyFor(ProxyRepository proxies) async {
@@ -198,13 +199,13 @@ List<RepositoryProvider<Object>> featureProviders() => [
   RepositoryProvider<SettingsEntries>(
     create: (_) => SettingsEntries(
       (context) => [
-        const ConnectionModeSettings(),
-        const CallSettings(),
-        const ConnectionSettings(),
-        const StorageSettings(),
-        const SearchSettings(),
-        const SpeechSettings(),
-        const BackgroundSettings(),
+        SettingsEntry(SettingsCategory.media, (_) => const SpeechSettings()),
+        SettingsEntry(SettingsCategory.notifications, (_) => const ConnectionModeSettings()),
+        SettingsEntry(SettingsCategory.notifications, (_) => const BackgroundSettings()),
+        SettingsEntry(SettingsCategory.data, (_) => const StorageSettings()),
+        SettingsEntry(SettingsCategory.data, (_) => const SearchSettings()),
+        SettingsEntry(SettingsCategory.connection, (_) => const ConnectionSettings()),
+        SettingsEntry(SettingsCategory.connection, (_) => const CallSettings()),
       ],
     ),
   ),
