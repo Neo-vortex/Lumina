@@ -133,6 +133,46 @@ class StoriesRepository extends ChangeNotifier {
     ),
   );
 
+  /// Who viewed, reacted to or reposted a story the user (or a channel they
+  /// administer, [asChat]) posted. Page with [StoryInteractions.nextOffset].
+  Future<td.StoryInteractions> interactions(
+    td.Story story, {
+    required bool asChat,
+    String query = '',
+    bool onlyContacts = false,
+    bool reactionsFirst = false,
+    String offset = '',
+    int limit = 50,
+  }) => _client.invoke<td.StoryInteractions>(
+    asChat
+        ? td.GetChatStoryInteractions(
+            storySenderChatId: story.senderChatId,
+            storyId: story.id,
+            preferForwards: false,
+            offset: offset,
+            limit: limit,
+          )
+        : td.GetStoryInteractions(
+            storyId: story.id,
+            query: query,
+            onlyContacts: onlyContacts,
+            preferForwards: false,
+            preferWithReaction: reactionsFirst,
+            offset: offset,
+            limit: limit,
+          ),
+  );
+
+  /// Channels and supergroups the user may post stories to (besides
+  /// themselves). Each must still pass [cannotPost].
+  Future<List<int>> postTargets() async {
+    try {
+      return (await _client.invoke<td.Chats>(const td.GetChatsToSendStories())).chatIds;
+    } on TdException {
+      return const [];
+    }
+  }
+
   /// Why [chatId] can't post a story right now, or null when it can.
   Future<String?> cannotPost(int chatId) async {
     try {
@@ -162,6 +202,8 @@ class StoriesRepository extends ChangeNotifier {
     StoryAudience audience = StoryAudience.everyone,
     bool keepOnProfile = false,
     bool protect = false,
+    List<td.InputStoryArea> areas = const [],
+    String? overlayPng,
     void Function(double)? onProgress,
   }) async {
     final td.InputStoryContent content;
@@ -171,14 +213,14 @@ class StoriesRepository extends ChangeNotifier {
       final out = await _ffmpeg.tempPath('mp4');
       final duration = probe.duration > StoryMedia.maxVideo ? StoryMedia.maxVideo : probe.duration;
       var ok = await _ffmpeg.run(
-        StoryMedia.videoArgs(path, out, hasAudio: probe.hasAudio),
+        StoryMedia.videoArgs(path, out, hasAudio: probe.hasAudio, overlay: overlayPng),
         duration: duration,
         onProgress: onProgress,
       );
       ok =
           ok ||
           await _ffmpeg.run(
-            StoryMedia.videoArgs(path, out, hasAudio: probe.hasAudio, encoder: 'mpeg4'),
+            StoryMedia.videoArgs(path, out, hasAudio: probe.hasAudio, encoder: 'mpeg4', overlay: overlayPng),
             duration: duration,
             onProgress: onProgress,
           );
@@ -192,7 +234,7 @@ class StoriesRepository extends ChangeNotifier {
       );
     } else {
       final out = await _ffmpeg.tempPath('jpg');
-      final ok = await _ffmpeg.run(StoryMedia.photoArgs(path, out));
+      final ok = await _ffmpeg.run(StoryMedia.photoArgs(path, out, overlay: overlayPng));
       content = td.InputStoryContentPhoto(
         photo: td.InputFileLocal(path: ok ? out : path),
         addedStickerFileIds: const [],
@@ -203,6 +245,7 @@ class StoriesRepository extends ChangeNotifier {
         td.SendStory(
           chatId: chatId,
           content: content,
+          areas: areas.isEmpty ? null : td.InputStoryAreas(areas: areas),
           caption: caption.isEmpty ? null : td.FormattedText(text: caption, entities: const []),
           privacySettings: audience.privacy,
           activePeriod: 86400,

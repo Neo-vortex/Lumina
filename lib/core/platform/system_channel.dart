@@ -12,6 +12,14 @@ class SystemChannel {
 
   Future<int> freeSpace(String path) async => (await _ch.invokeMethod<int>('freeSpace', {'path': path})) ?? 0;
 
+  /// Coarse device location with a best-effort place name, or null when
+  /// the user declines or no fix is available.
+  Future<({double latitude, double longitude, String name})?> currentLocation() async {
+    final r = await _ch.invokeMapMethod<String, Object?>('currentLocation');
+    if (r == null) return null;
+    return (latitude: r['latitude']! as double, longitude: r['longitude']! as double, name: (r['name'] ?? '') as String);
+  }
+
   Future<int> totalRam() async => (await _ch.invokeMethod<int>('totalRam')) ?? 0;
 
   Future<bool> isIgnoringBatteryOptimizations() async =>

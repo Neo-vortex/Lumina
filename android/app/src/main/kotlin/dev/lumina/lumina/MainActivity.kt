@@ -4,6 +4,10 @@ import android.app.ActivityManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.location.Geocoder
+import android.location.Location
+import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -66,6 +70,7 @@ class MainActivity : FlutterActivity() {
                     }
                 }
             }
+            "currentLocation" -> withLocationPermission(result) { locate(result) }
             "freeSpace" -> {
                 val path = call.argument<String>("path") ?: filesDir.path
                 result.success(StatFs(path).availableBytes)
@@ -132,10 +137,69 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    // ---- Location (story location tags) ------------------------------------
+
+    private var pendingLocation: (() -> Unit)? = null
+    private var pendingLocationResult: MethodChannel.Result? = null
+
+    private fun withLocationPermission(result: MethodChannel.Result, then: () -> Unit) {
+        val perm = android.Manifest.permission.ACCESS_COARSE_LOCATION
+        if (checkSelfPermission(perm) == PackageManager.PERMISSION_GRANTED) return then()
+        pendingLocation = then
+        pendingLocationResult = result
+        requestPermissions(arrayOf(perm), LOCATION_REQUEST)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != LOCATION_REQUEST) return
+        val then = pendingLocation
+        val result = pendingLocationResult
+        pendingLocation = null
+        pendingLocationResult = null
+        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) then?.invoke() else result?.success(null)
+    }
+
+    @Suppress("MissingPermission", "DEPRECATION")
+    private fun locate(result: MethodChannel.Result) {
+        val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val known = lm.getProviders(true).mapNotNull { runCatching { lm.getLastKnownLocation(it) }.getOrNull() }
+            .maxByOrNull { it.time }
+        val fresh = known != null && System.currentTimeMillis() - known.time < 30 * 60 * 1000
+        if (fresh || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return describe(known, result)
+        val provider = if (lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) LocationManager.NETWORK_PROVIDER
+        else LocationManager.GPS_PROVIDER
+        var done = false
+        val timeout = Runnable { if (!done) { done = true; describe(known, result) } }
+        main.postDelayed(timeout, 8000)
+        lm.getCurrentLocation(provider, null, mainExecutor) { loc ->
+            if (!done) { done = true; main.removeCallbacks(timeout); describe(loc ?: known, result) }
+        }
+    }
+
+    /** Coordinates plus a best-effort place name from the system geocoder. */
+    @Suppress("DEPRECATION")
+    private fun describe(loc: Location?, result: MethodChannel.Result) {
+        if (loc == null) return result.success(null)
+        io.execute {
+            val name = runCatching {
+                Geocoder(this).getFromLocation(loc.latitude, loc.longitude, 1)?.firstOrNull()?.let {
+                    listOfNotNull(it.featureName?.takeIf { f -> f != it.subThoroughfare }, it.locality ?: it.subAdminArea)
+                        .distinct().joinToString(", ")
+                }
+            }.getOrNull().orEmpty()
+            main.post { result.success(mapOf("latitude" to loc.latitude, "longitude" to loc.longitude, "name" to name)) }
+        }
+    }
+
     private fun start(intent: Intent): Boolean = try {
         startActivity(intent)
         true
     } catch (e: ActivityNotFoundException) {
         false
+    }
+
+    companion object {
+        private const val LOCATION_REQUEST = 4107
     }
 }

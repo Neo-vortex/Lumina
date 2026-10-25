@@ -245,9 +245,27 @@ chat info, stories and storage. Run
   halo. Swipe sideways in the viewer to move between people. Posting uses
   `canSendStory` first; videos are cut to 60 s and letterboxed
   (`StoryMedia`, tested), with an mpeg4 fallback. Active period is fixed
-  at 24 h (other periods need Premium). Not done yet: story viewers list,
-  channel stories posting (pass a channel chat id to `PostStoryScreen`),
-  stickers/areas.
+  at 24 h (other periods need Premium).
+- **Viewers:** own stories show a views button → `showStoryViewers`
+  (`getStoryInteractions`, search, reactions first, contacts only; channel
+  stories use `getChatStoryInteractions`).
+- **Post as:** `getChatsToSendStories` fills a "Post as" picker; channel
+  stories are always public.
+- **Stickers & tags** (`domain/story_decoration.dart`): emoji and text
+  stickers, link and location pills are *burned in* (one transparent PNG
+  overlay rendered by `DecorationPainter`, composited by ffmpeg); link,
+  location and suggested-reaction tags are also sent as story *areas*.
+  Reaction bubbles and weather are drawn by the viewer
+  (`StoryAreasLayer`); links/places open after a confirmation. Location
+  uses `SystemChannel.currentLocation` (coarse permission, asked on use).
+- **Story history** (owner request): `SavedStoriesStore` keeps copies of
+  other people's stories in app-private storage (`saved_stories/`, JSON
+  index), with per-person auto-save that never calls `openStory`. Stories
+  with `canBeForwarded == false` are never saved (TDLib: saving must be
+  forbidden). Wiped on logout. UI: bookmark in the viewer, chat info tab
+  "Story history" (`ChatInfoExtensions`), Glimpses → history list.
+- **Declined:** keeping view-once / self-destructing media. The sender
+  chose for it to disappear; don't add this.
 
 ### 5.5 Proxy (phase 7)
 - `lib/features/proxy/`: a list from `getProxies` with enable switches, an
