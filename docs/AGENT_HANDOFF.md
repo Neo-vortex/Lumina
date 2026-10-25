@@ -138,6 +138,27 @@ chat info, stories and storage. Run
 
 ## 4. Environment & build
 
+### CI (`.github/workflows/android.yml`)
+- Every push and PR: LFS checkout (LFS objects are cached, since GitHub's
+  free LFS bandwidth is 1 GB/month and the models are ~290 MB), `flutter
+  analyze`, `flutter test`, then `flutter build apk --release
+  --split-per-abi` for arm64-v8a and x86_64, the 16 KB check, and an
+  artifact upload.
+- Push to `main` replaces the **`latest-build`** pre-release; a `v*` tag
+  creates a normal release. Both attach `lumina-<abi>-release.apk` and
+  `SHA256SUMS.txt`.
+- Release builds are **signed with a debug key** (`buildTypes.release`
+  uses `signingConfigs.debug`). Not for the Play Store.
+- Repository secrets:
+  - `TG_API_ID`, `TG_API_HASH`: Telegram API credentials (my.telegram.org).
+    Without them the APK builds but cannot sign in.
+  - `DEBUG_KEYSTORE_B64` (recommended): a stable debug keystore, so each
+    build installs over the previous one. Create it once:
+    `keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"`
+    then `gh secret set DEBUG_KEYSTORE_B64 --body "$(base64 -w0 debug.keystore)"`.
+
+### Local
+
 - **Build machine note:** Maven Central rate-limited this environment
   (HTTP 429). `~/.gradle/init.d/maven-central-mirror.gradle` redirects to
   Google's official mirror (`maven-central.storage-download.googleapis.com`).
