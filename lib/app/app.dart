@@ -17,6 +17,7 @@ import '../features/auth/data/auth_repository.dart';
 import '../features/calls/bloc/call_cubit.dart';
 import '../features/calls/data/call_engine.dart';
 import '../features/calls/data/calls_repository.dart';
+import '../features/calls/presentation/call_host.dart';
 import '../features/chats/data/chats_repository.dart';
 import '../features/conversation/data/messages_repository.dart';
 import 'auth_gate.dart';
@@ -40,6 +41,8 @@ class LuminaApp extends StatelessWidget {
   final AppPreferences preferences;
   final SecureStore? secureStore;
   final TdSettings settings;
+
+  static final _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   Widget build(BuildContext context) {
@@ -93,6 +96,9 @@ class LuminaApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           theme: buildGlowTheme(),
           themeMode: ThemeMode.dark,
+          navigatorKey: _navigatorKey,
+          builder: (context, child) =>
+              CallHost(navigatorKey: _navigatorKey, child: child ?? const SizedBox.shrink()),
           home: const LifecycleWatcher(child: AuthGate()),
         ),
       ),

@@ -56,6 +56,9 @@ class CallCubit extends Cubit<CallState> {
   /// Re-registers after the "calling account" setting changed.
   Future<void> refreshTelecom() async => _system?.registerTelecom(provider: _useCallingAccount());
 
+  /// Whether this call goes through the Phone app's own call screen.
+  Future<bool> _systemUi() async => _useCallingAccount() && (await _system?.callingAccountEnabled() ?? false);
+
   Future<bool> _permissions({required bool video}) async {
     final system = _system;
     if (system == null) return true;
@@ -93,7 +96,15 @@ class CallCubit extends Cubit<CallState> {
     if (protocol == null) return 'Calls are not available in this build';
     if (!await _permissions(video: video)) return 'Lumina needs the microphone for calls';
     _endedHere = false;
-    emit(CallState(phase: CallPhase.requesting, userId: userId, outgoing: true, video: video));
+    emit(
+      CallState(
+        phase: CallPhase.requesting,
+        userId: userId,
+        outgoing: true,
+        video: video,
+        systemUi: fromDialer || await _systemUi(),
+      ),
+    );
     try {
       final id = await _repository.create(userId, protocol, video: video);
       if (!fromDialer) {
@@ -249,6 +260,8 @@ class CallCubit extends Cubit<CallState> {
     final system = _system;
     if (system == null) return;
     await _capabilities(); // Subscribes to Telecom events.
+    final systemUi = await _systemUi();
+    if (systemUi && state.callId == call.id) emit(state.copyWith(systemUi: true));
     final name = _nameOf(call.userId);
     final viaTelecom = await system.reportIncoming(
       callId: call.id,

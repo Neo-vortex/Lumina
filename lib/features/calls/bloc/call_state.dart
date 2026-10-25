@@ -35,6 +35,7 @@ class CallState {
     this.muted = false,
     this.speaker = false,
     this.held = false,
+    this.systemUi = false,
     this.signalBars,
     this.remoteMuted = false,
     this.remoteVideo = false,
@@ -60,6 +61,10 @@ class CallState {
 
   /// On hold for another (e.g. cellular) call.
   final bool held;
+
+  /// The Phone app's in-call screen shows this call (calling account), so
+  /// Lumina doesn't open its own.
+  final bool systemUi;
   final int? signalBars;
   final bool remoteMuted;
   final bool remoteVideo;
@@ -81,6 +86,7 @@ class CallState {
     bool? muted,
     bool? speaker,
     bool? held,
+    bool? systemUi,
     int? signalBars,
     bool? remoteMuted,
     bool? remoteVideo,
@@ -99,6 +105,7 @@ class CallState {
     muted: muted ?? this.muted,
     speaker: speaker ?? this.speaker,
     held: held ?? this.held,
+    systemUi: systemUi ?? this.systemUi,
     signalBars: signalBars ?? this.signalBars,
     remoteMuted: remoteMuted ?? this.remoteMuted,
     remoteVideo: remoteVideo ?? this.remoteVideo,
