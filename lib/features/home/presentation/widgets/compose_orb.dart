@@ -107,6 +107,9 @@ class _ComposeOrbState extends State<ComposeOrb> {
   }
 }
 
+/// The orb's menu: glowing pills rising from the orb, one per action
+/// (a fan of round buttons got crowded beyond four actions, and its labels
+/// collided). Staggered rise; reduced motion shows them at once.
 class _RadialMenu extends StatelessWidget {
   const _RadialMenu({required this.center, required this.actions, required this.animation});
 
@@ -116,70 +119,111 @@ class _RadialMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const radius = 118.0;
+    final size = MediaQuery.sizeOf(context);
+    final ambient = Motion.ambientEnabled(context);
     final n = actions.length;
-    return Stack(
-      children: [
-        for (var i = 0; i < n; i++)
-          AnimatedBuilder(
-            animation: animation,
-            builder: (context, child) {
-              // Spread on an upper arc from 200° to 340°.
-              final t = n == 1 ? 0.5 : i / (n - 1);
-              final angle = (200 + 140 * t) * math.pi / 180;
-              final p = Curves.easeOutBack.transform(animation.value);
-              final pos = center + Offset(math.cos(angle), math.sin(angle)) * radius * p;
-              return Positioned(
-                left: pos.dx - 36,
-                top: pos.dy - 36,
-                child: Opacity(opacity: animation.value.clamp(0.0, 1.0), child: child),
-              );
-            },
-            child: _Petal(action: actions[i]),
+    // Material ancestor: real text styles (not the debug fallback) and ink.
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            // Just above the orb (64 dp tall, centred on [center]).
+            bottom: size.height - center.dy + 44,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < n; i++)
+                  AnimatedBuilder(
+                    animation: animation,
+                    builder: (context, child) {
+                      // The pill nearest the orb (last) appears first.
+                      final order = n - 1 - i;
+                      final start = ambient ? (order * 0.08).clamp(0.0, 0.5) : 0.0;
+                      final t = ambient
+                          ? Curves.easeOutCubic.transform(
+                              ((animation.value - start) / (1 - start)).clamp(0.0, 1.0),
+                            )
+                          : animation.value;
+                      return Opacity(
+                        opacity: t,
+                        child: Transform.translate(offset: Offset(0, (1 - t) * 24), child: child),
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _Petal(action: actions[i], hue: i / math.max(1, n - 1)),
+                    ),
+                  ),
+              ],
+            ),
           ),
-      ],
+        ],
+      ),
     );
   }
 }
 
 class _Petal extends StatelessWidget {
-  const _Petal({required this.action});
+  const _Petal({required this.action, required this.hue});
 
   final ComposeAction action;
 
+  /// 0…1 down the column: shifts the icon's glow from violet to magenta.
+  final double hue;
+
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 72,
-      child: Column(
-        children: [
-          Semantics(
-            button: true,
-            label: action.label,
-            excludeSemantics: true,
-            child: GestureDetector(
-              onTap: () => Navigator.pop(context, action),
-              child: Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: GlowColors.surfaceHigh,
-                  border: Border.all(color: GlowColors.violet.withValues(alpha: 0.7)),
-                  boxShadow: glow(GlowColors.violet, intensity: 0.5),
+    final accent = Color.lerp(GlowColors.violet, GlowColors.magenta, hue)!;
+    return Semantics(
+      button: true,
+      label: action.label,
+      excludeSemantics: true,
+      child: Material(
+        color: GlowColors.surfaceHigh,
+        shape: StadiumBorder(side: BorderSide(color: accent.withValues(alpha: 0.55))),
+        elevation: 0,
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: () => Navigator.pop(context, action),
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 200, minHeight: 52),
+            padding: const EdgeInsets.fromLTRB(8, 6, 22, 6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(26),
+              boxShadow: glow(accent, intensity: 0.35),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    // White only on the deep tones (contrast rule).
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color.lerp(GlowColors.violetDeep, GlowColors.magentaDeep, hue)!,
+                        Color.lerp(GlowColors.violetDeep, GlowColors.magentaDeep, 1 - hue)!,
+                      ],
+                    ),
+                  ),
+                  child: Icon(action.icon, color: Colors.white, size: 21),
                 ),
-                child: Icon(action.icon, color: GlowColors.text),
-              ),
+                const SizedBox(width: 14),
+                Text(
+                  action.label,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: GlowColors.text),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            action.label,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            style: const TextStyle(fontSize: 11, color: GlowColors.text, shadows: [Shadow(blurRadius: 4)]),
-          ),
-        ],
+        ),
       ),
     );
   }
