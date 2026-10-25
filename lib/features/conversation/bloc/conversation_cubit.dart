@@ -42,7 +42,8 @@ class ConversationCubit extends Cubit<ConversationState> {
 
   static const _page = 50;
 
-  Future<void> start() async {
+  /// [focusMessageId] opens the chat at that message (search results).
+  Future<void> start({int? focusMessageId}) async {
     try {
       await _repository.openChat(chatId);
     } on TdException catch (e) {
@@ -50,7 +51,9 @@ class ConversationCubit extends Cubit<ConversationState> {
     }
     final chat = state.chat ?? _cache.chats[chatId];
     final lastRead = chat?.lastReadInboxMessageId ?? 0;
-    if (chat != null && chat.unreadCount > 0 && lastRead > 0) {
+    if (focusMessageId != null) {
+      await _loadAround(focusMessageId, highlight: true);
+    } else if (chat != null && chat.unreadCount > 0 && lastRead > 0) {
       await _loadAround(lastRead, markUnreadAfter: lastRead);
     } else {
       await _loadLatest();

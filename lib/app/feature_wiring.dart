@@ -6,13 +6,17 @@ import '../core/media/ffmpeg_service.dart';
 import '../core/media/tdlib_stream_server.dart';
 import '../core/storage/app_preferences.dart';
 import '../core/storage/secure_store.dart';
+import '../core/search/message_search.dart';
 import '../core/tdlib/td_client.dart';
+import '../core/telegram/telegram_cache.dart';
 import '../core/telegram/file_store.dart';
 import '../core/models/bundled_models.dart';
 import '../features/proxy/data/proxy_repository.dart';
 import '../features/auth/presentation/widgets/auth_scaffold.dart';
 import '../features/proxy/presentation/screens/proxy_screen.dart';
 import '../features/proxy/presentation/widgets/connection_settings.dart';
+import '../features/search/data/message_indexer.dart';
+import '../features/search/presentation/widgets/search_settings.dart';
 import '../features/transcription/data/transcription_center.dart';
 import '../features/transcription/data/whisper_service.dart';
 import '../features/transcription/presentation/widgets/speech_settings.dart';
@@ -54,6 +58,17 @@ List<RepositoryProvider<Object>> featureProviders() => [
   RepositoryProvider<AuthExtras>(
     create: (_) => AuthExtras(openProxy: (context) => Navigator.of(context).push(ProxyScreen.route())),
   ),
+  RepositoryProvider<MessageIndexer>(
+    lazy: false,
+    create: (c) => MessageIndexer(
+      client: c.read<TdClient>(),
+      cache: c.read<TelegramCache>(),
+      secure: c.read<SecureStore>(),
+      prefs: c.read<AppPreferences>(),
+    ),
+    dispose: (i) => i.dispose(),
+  ),
+  RepositoryProvider<MessageSearch>(create: (c) => c.read<MessageIndexer>()),
   RepositoryProvider<ModelInstaller>(create: (_) => ModelInstaller()),
   RepositoryProvider<WhisperService>(
     create: (c) => WhisperService(ffmpeg: c.read<FfmpegService>(), models: c.read<ModelInstaller>()),
@@ -75,6 +90,8 @@ List<RepositoryProvider<Object>> featureProviders() => [
   ),
   RepositoryProvider<ComposeActions>(create: (_) => const ComposeActions([])),
   RepositoryProvider<SettingsEntries>(
-    create: (_) => SettingsEntries((context) => [const ConnectionSettings(), const SpeechSettings()]),
+    create: (_) => SettingsEntries(
+      (context) => [const ConnectionSettings(), const SearchSettings(), const SpeechSettings()],
+    ),
   ),
 ];

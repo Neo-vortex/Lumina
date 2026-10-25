@@ -123,7 +123,7 @@ does not copy Telegram's look.
 | Media: photos, videos, GIFs, albums (cluster), documents, stickers, viewer, VLC player, attach + review, converter | ✅ (APK builds; verify on device) | `lib/features/media/`, `conversation/.../content/` |
 | Voice notes (record, Opus, waveform, playback 0.5–4×), video notes (play + record), music | ✅ | `lib/features/voice/`, `core/media/audio_playback.dart` |
 | Whisper (bundled model, transcribe, translate, dictation, chunking) | ✅ | `lib/features/transcription/`, `core/models/` |
-| Local FTS search | ⬜ | planned `lib/features/search/` |
+| Local FTS search (encrypted sqlite3mc, trigram + unicode61, worker isolate, live + backfill, global + in-chat, settings, wipe on close) | ✅ (tested on real SQLite) | `lib/features/search/` |
 | Tiny LLM actions | ⬜ | planned `lib/features/assistant/` |
 | Proxy (list, toggle, add/edit, paste link, test, share, login-screen access, encrypted restore after wipe) | ✅ | `lib/features/proxy/` |
 | Groups/channels admin, chat info, secret chats, contacts, new chat/group/channel | ⬜ | planned `lib/features/chat_info/`, `lib/features/compose/` |
@@ -298,7 +298,10 @@ error mapping, cache ordering, row grouping and video presets. Run
 - `file_picker` 13 may return `content://` URIs; copy them through `XFile`.
 - `RadioListTile.groupValue` is deprecated; use `RadioGroup`.
 - `provider` rejects a `ChangeNotifier` through a plain `RepositoryProvider`.
-  That's why `AppPreferences` exposes a `changes` listenable instead.
+  `main.dart` and `test/flutter_test_config.dart` set
+  `Provider.debugCheckInvalidValueType = null`, because services
+  (VoiceRecorder, TranscriptionCenter, MessageIndexer) are listened to
+  explicitly with `ListenableBuilder`, never through `context.watch`.
 - Sponsored messages: report impressions with `viewMessages` (always, even
   in ghost mode) and clicks with `clickChatSponsoredMessage`.
 
