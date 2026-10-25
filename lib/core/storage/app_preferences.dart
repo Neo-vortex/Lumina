@@ -136,6 +136,10 @@ class AppPreferences {
   String get attachUsage => _string('attach.usage') ?? '{}';
   set attachUsage(String v) => _set('attach.usage', v);
 
+  /// Active outgoing live locations (JSON), resumed after process death.
+  String get liveLocations => _string('live.shares') ?? '[]';
+  set liveLocations(String v) => _set('live.shares', v);
+
   // ---- Links -----------------------------------------------------------------
 
   /// Attach a link preview when sending a message with a link.

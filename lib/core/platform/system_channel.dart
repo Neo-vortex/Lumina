@@ -24,6 +24,25 @@ class SystemChannel {
     );
   }
 
+  /// A fresh precise-if-allowed fix without geocoding, for live locations.
+  /// Never prompts; null without permission or a fix.
+  Future<({double latitude, double longitude, double accuracy})?> currentPosition() async {
+    final r = await _ch.invokeMapMethod<String, Object?>('currentPosition');
+    if (r == null) return null;
+    return (
+      latitude: r['latitude']! as double,
+      longitude: r['longitude']! as double,
+      accuracy: (r['accuracy'] as num?)?.toDouble() ?? 0,
+    );
+  }
+
+  /// Starts the live-location foreground service. With [ask], first asks for
+  /// precise location and notifications. False without location access.
+  Future<bool> liveLocationStart({bool ask = true}) async =>
+      (await _ch.invokeMethod<bool>('liveLocationStart', {'ask': ask})) ?? false;
+
+  Future<void> liveLocationStop() => _ch.invokeMethod<void>('liveLocationStop');
+
   Future<int> totalRam() async => (await _ch.invokeMethod<int>('totalRam')) ?? 0;
 
   Future<bool> isIgnoringBatteryOptimizations() async =>

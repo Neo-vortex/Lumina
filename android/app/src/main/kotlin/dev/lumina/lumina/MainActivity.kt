@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
@@ -71,6 +72,16 @@ class MainActivity : FlutterActivity() {
                 }
             }
             "currentLocation" -> withLocationPermission(result) { locate(result) }
+            "currentPosition" -> position(result)
+            "liveLocationStart" -> {
+                val begin = { granted: Boolean -> result.success(granted && LiveLocationService.start(this)) }
+                if (hasLocation() || call.argument<Boolean>("ask") != true) begin(hasLocation())
+                else requestLive(begin)
+            }
+            "liveLocationStop" -> {
+                LiveLocationService.stop(this)
+                result.success(null)
+            }
             "freeSpace" -> {
                 val path = call.argument<String>("path") ?: filesDir.path
                 result.success(StatFs(path).availableBytes)
@@ -150,8 +161,33 @@ class MainActivity : FlutterActivity() {
         requestPermissions(arrayOf(perm), LOCATION_REQUEST)
     }
 
+    private var pendingLive: ((Boolean) -> Unit)? = null
+
+    private fun hasLocation() = listOf(
+        android.Manifest.permission.ACCESS_FINE_LOCATION,
+        android.Manifest.permission.ACCESS_COARSE_LOCATION,
+    ).any { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+
+    /** Live location asks for precise location (the user may still pick approximate) and notifications. */
+    private fun requestLive(then: (Boolean) -> Unit) {
+        pendingLive?.invoke(false)
+        pendingLive = then
+        val perms = mutableListOf(
+            android.Manifest.permission.ACCESS_FINE_LOCATION,
+            android.Manifest.permission.ACCESS_COARSE_LOCATION,
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) perms += android.Manifest.permission.POST_NOTIFICATIONS
+        requestPermissions(perms.toTypedArray(), LIVE_REQUEST)
+    }
+
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == LIVE_REQUEST) {
+            val then = pendingLive
+            pendingLive = null
+            then?.invoke(hasLocation())
+            return
+        }
         if (requestCode != LOCATION_REQUEST) return
         val then = pendingLocation
         val result = pendingLocationResult
@@ -174,6 +210,35 @@ class MainActivity : FlutterActivity() {
         main.postDelayed(timeout, 8000)
         lm.getCurrentLocation(provider, null, mainExecutor) { loc ->
             if (!done) { done = true; main.removeCallbacks(timeout); describe(loc ?: known, result) }
+        }
+    }
+
+    /** A fresh fix for live locations: GPS when precise access is granted, no geocoding, never prompts. */
+    @Suppress("MissingPermission", "DEPRECATION")
+    private fun position(result: MethodChannel.Result) {
+        if (!hasLocation()) return result.success(null)
+        val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val fine = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val known = lm.getProviders(true).mapNotNull { runCatching { lm.getLastKnownLocation(it) }.getOrNull() }
+            .maxByOrNull { it.time }
+        fun reply(loc: Location?) = result.success(
+            loc?.let { mapOf("latitude" to it.latitude, "longitude" to it.longitude, "accuracy" to it.accuracy.toDouble()) },
+        )
+        val recent = known != null && System.currentTimeMillis() - known.time < 30 * 1000
+        if (recent) return reply(known)
+        val provider = when {
+            fine && lm.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+            lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+            else -> return reply(known)
+        }
+        var done = false
+        val timeout = Runnable { if (!done) { done = true; reply(known) } }
+        main.postDelayed(timeout, 20000)
+        val got = { loc: Location? -> if (!done) { done = true; main.removeCallbacks(timeout); reply(loc ?: known) } }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            lm.getCurrentLocation(provider, null, mainExecutor) { got(it) }
+        } else {
+            lm.requestSingleUpdate(provider, LocationListener { got(it) }, Looper.getMainLooper())
         }
     }
 
@@ -201,5 +266,6 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val LOCATION_REQUEST = 4107
+        private const val LIVE_REQUEST = 4109
     }
 }

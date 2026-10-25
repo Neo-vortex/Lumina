@@ -22,6 +22,7 @@ import '../features/transcription/data/transcription_center.dart';
 import '../features/transcription/data/whisper_service.dart';
 import '../features/transcription/presentation/widgets/speech_settings.dart';
 import '../features/voice/data/voice_recorder.dart';
+import '../features/media/data/live_location_service.dart';
 import '../features/media/data/media_sender.dart';
 import 'app_conversation_extensions.dart';
 import 'app_story_wiring.dart';
@@ -103,12 +104,19 @@ List<RepositoryProvider<Object>> featureProviders() => [
     create: (_) =>
         ComposeFlows((context, chatId) => Navigator.of(context).push(ConversationScreen.route(chatId))),
   ),
+  // Not lazy: shares saved before the process died resume at launch.
+  RepositoryProvider<LiveLocationService>(
+    lazy: false,
+    create: (c) => LiveLocationService(client: c.read<TdClient>(), prefs: c.read<AppPreferences>()),
+    dispose: (s) => s.dispose(),
+  ),
   RepositoryProvider<ConversationExtensions>(
     create: (c) => AppConversationExtensions(
       recorder: c.read<VoiceRecorder>(),
       transcripts: c.read<TranscriptionCenter>(),
       prefs: c.read<AppPreferences>(),
       flows: c.read<ComposeFlows>(),
+      liveLocations: c.read<LiveLocationService>(),
     ),
   ),
   RepositoryProvider<ChatInfoRepository>(
