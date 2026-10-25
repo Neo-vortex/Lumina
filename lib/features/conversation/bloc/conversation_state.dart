@@ -19,6 +19,7 @@ class ConversationState {
     this.selected = const {},
     this.error,
     this.revision = 0,
+    this.sponsored = const [],
   });
 
   final int chatId;
@@ -54,6 +55,9 @@ class ConversationState {
 
   final String? error;
 
+  /// Channel sponsored messages, shown below the newest post.
+  final List<td.SponsoredMessage> sponsored;
+
   /// Bumped when cache data the screen shows changes (read state, typing,
   /// users) without the message list changing.
   final int revision;
@@ -77,6 +81,7 @@ class ConversationState {
     Set<int>? selected,
     String? Function()? error,
     int? revision,
+    List<td.SponsoredMessage>? sponsored,
   }) => ConversationState(
     chatId: chatId,
     chat: chat ?? this.chat,
@@ -95,5 +100,6 @@ class ConversationState {
     selected: selected ?? this.selected,
     error: error != null ? error() : this.error,
     revision: revision ?? this.revision,
+    sponsored: sponsored ?? this.sponsored,
   );
 }

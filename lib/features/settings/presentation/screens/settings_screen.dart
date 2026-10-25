@@ -8,6 +8,7 @@ import '../../../../core/theme/glow_colors.dart';
 import '../../../../core/widgets/glow_button.dart';
 import '../../../auth/bloc/auth_bloc.dart';
 import '../../../auth/domain/auth_step.dart';
+import '../../../conversation/data/messages_repository.dart';
 import '../../../home/presentation/widgets/bot_limitations_card.dart';
 import '../widgets/settings_section.dart';
 
@@ -74,6 +75,17 @@ class SettingsScreen extends StatelessWidget {
                   title: 'Privacy',
                   children: [
                     SwitchListTile(
+                      value: prefs.ghostMode,
+                      onChanged: (v) => prefs.ghostMode = v,
+                      secondary: Icon(
+                        Icons.blur_on_rounded,
+                        color: prefs.ghostMode ? GlowColors.cyan : GlowColors.textMuted,
+                      ),
+                      title: const Text('Ghost mode'),
+                      subtitle: const Text('No read receipts, typing, online status or story views'),
+                    ),
+                    const Divider(height: 1, color: GlowColors.outline),
+                    SwitchListTile(
                       value: prefs.hideReadReceipts,
                       onChanged: (v) => prefs.hideReadReceipts = v,
                       title: const Text('Read without read receipts'),
@@ -90,8 +102,15 @@ class SettingsScreen extends StatelessWidget {
                       title: const Text('Appear offline'),
                       subtitle: const Text('Don’t show you as online while the app is open'),
                     ),
+                    SwitchListTile(
+                      value: prefs.hideStoryViews,
+                      onChanged: (v) => prefs.hideStoryViews = v,
+                      title: const Text('View stories anonymously'),
+                      subtitle: const Text('Opening a story doesn’t mark it as viewed'),
+                    ),
                   ],
                 ),
+              if (!caps.isBot) _AdsSection(isPremium: me.isPremium, prefs: prefs),
               if (!caps.isBot)
                 SettingsSection(
                   title: 'Stories',
@@ -153,5 +172,38 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
     if ((confirmed ?? false) && context.mounted) context.read<AuthBloc>().add(const AuthLogOutRequested());
+  }
+}
+
+class _AdsSection extends StatelessWidget {
+  const _AdsSection({required this.isPremium, required this.prefs});
+
+  final bool isPremium;
+  final AppPreferences prefs;
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsSection(
+      title: 'Channels',
+      children: [
+        SwitchListTile(
+          value: prefs.hideSponsored,
+          onChanged: (v) async {
+            prefs.hideSponsored = v;
+            if (isPremium) {
+              // Telegram's own ad-free switch for Premium accounts.
+              await context.read<MessagesRepository>().setSponsoredEnabled(!v).catchError((_) {});
+            }
+          },
+          title: const Text('Hide channel ads'),
+          subtitle: Text(
+            isPremium
+                ? 'Uses Telegram Premium’s ad-free setting.'
+                : 'Hidden on this device only. Telegram’s API terms ask apps to show sponsored '
+                      'messages, so Telegram may restrict apps whose users hide them.',
+          ),
+        ),
+      ],
+    );
   }
 }

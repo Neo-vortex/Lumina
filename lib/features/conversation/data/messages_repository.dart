@@ -300,6 +300,22 @@ class MessagesRepository {
   Future<td.MessageProperties> properties(int chatId, int messageId) =>
       _client.invoke<td.MessageProperties>(td.GetMessageProperties(chatId: chatId, messageId: messageId));
 
+  Future<List<td.SponsoredMessage>> sponsored(int chatId) async {
+    final result = await _client.invoke<td.SponsoredMessages>(td.GetChatSponsoredMessages(chatId: chatId));
+    return result.messages;
+  }
+
+  /// Ad impressions are always reported (they are not read receipts).
+  Future<void> viewSponsored(int chatId, int messageId) =>
+      _client.invoke<td.Ok>(td.ViewMessages(chatId: chatId, messageIds: [messageId], forceRead: true));
+
+  Future<void> clickSponsored(int chatId, int messageId) =>
+      _client.invoke<td.Ok>(td.ClickChatSponsoredMessage(chatId: chatId, messageId: messageId));
+
+  /// Official ad toggle (Premium accounts).
+  Future<void> setSponsoredEnabled(bool enabled) =>
+      _client.invoke<td.Ok>(td.ToggleHasSponsoredMessagesEnabled(hasSponsoredMessagesEnabled: enabled));
+
   /// Marks a self-destructing / view-once message as opened.
   Future<void> openContent(int chatId, int messageId) =>
       _client.invoke<td.Ok>(td.OpenMessageContent(chatId: chatId, messageId: messageId));
