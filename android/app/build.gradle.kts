@@ -65,6 +65,8 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             // JNI-bound classes of the calls engine.
             proguardFiles("calls-rules.pro")
+            // JNI-bound classes of libVLC (video playback).
+            proguardFiles("media-rules.pro")
         }
     }
 }

@@ -56,6 +56,14 @@ dependencies:
   provider: ^6.1.5+1
   llamadart: ^0.16.2
 
+# flutter_vlc_player 7.4.4's Android side was regenerated with Pigeon 25
+# but no matching Dart side was published (2.0.5 and the retracted 3.0.0
+# use the old channel names), so every player call failed. Vendored copy
+# with lib/src/messages/messages.dart regenerated from 7.4.4's pigeons/.
+dependency_overrides:
+  flutter_vlc_player_platform_interface:
+    path: packages/flutter_vlc_player_platform_interface
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
