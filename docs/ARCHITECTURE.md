@@ -59,8 +59,16 @@ need is left out, not created empty.
 | `presentation` | its `bloc`, `domain`, `core/theme`, `core/widgets` | call `TdClient` or repositories directly |
 | `bloc` | its `data`, `domain`, `core/tdlib/td_errors` | import Flutter widgets |
 | `data` | `core/*` | hold UI state |
-| `domain` | `handy_tdlib_next` models, `core/tdlib/td_errors` | do I/O |
+| `domain` | `lumina_tdlib` models, `core/tdlib/td_errors` | do I/O |
 | `core/tdlib/isolates` | FFI, `dart:convert` | run on the UI isolate |
+
+## TDLib bindings
+
+`packages/lumina_tdlib` holds the FFI client (`TdPlugin`, four `td_json_client`
+functions) and the Dart API generated from the pinned `schema/td_api.tl` by
+`tool/generate.dart`. The generated `lib/src/tdapi` is committed; CI fails if
+it is stale. `libtdjson.so` comes from the `tdlib-<key>` release that
+`tdlib.yml` builds from the same commit (DECISIONS D15).
 
 ## TDLib threading (spec §2.3)
 

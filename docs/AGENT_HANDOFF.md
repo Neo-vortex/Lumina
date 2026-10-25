@@ -13,8 +13,8 @@ Companion docs:
 
 ## 1. Product in one paragraph
 
-Android-only Flutter Telegram client on TDLib (`handy_tdlib_next` 2.3.16 /
-TDLib 1.8.36). It supports phone and bot-token login, VLC video with
+Android-only Flutter Telegram client on TDLib (`lumina_tdlib`, in-repo /
+TDLib 1.8.69). It supports phone and bot-token login, VLC video with
 streaming, offline Whisper speech-to-text with translate-to-English
 (bundled model), a tiny on-device LLM that turns a message into a calendar
 event, alarm, reminder or note, a local encrypted full-text message
@@ -25,7 +25,8 @@ does not copy Telegram's look.
 
 ### 2.1 Original spec v3.0 (condensed, still binding)
 
-- **Bridge:** `handy_tdlib_next` pinned. No `td_send`/`td_receive`/JSON
+- **Bridge:** `lumina_tdlib` (`packages/lumina_tdlib`), TDLib pinned in
+  `schema/VERSION` (DECISIONS D15). No `td_send`/`td_receive`/JSON
   conversion on the UI isolate. Invoke vs update by `@extra`. One live
   client per process.
 - **Auth:** phone FSM (code, password, email, registration) and bot token
@@ -48,7 +49,7 @@ does not copy Telegram's look.
   chats (users only); groups: create, members, admin rights, slow mode,
   pinned banner, member list, invite links; channels: posts, admin post,
   edit/delete/pin, subscriber count, discussion link. Communities: omitted
-  (not in TDLib 1.8.36).
+  (available since the 1.8.69 upgrade; not built yet).
 - **Media:** VLC with gestures (double-tap ±10 s, horizontal scrub with
   timestamp, vertical brightness/volume, pinch zoom). Use TDLib transfers
   only (`updateFile`). Record 16 kHz mono WAV.
@@ -444,6 +445,9 @@ chat info, stories, storage, the attach hub, polls, music, send options, live lo
   `build`, `test`, `drive` and `attach` (other commands pass through).
   `LUMINA_CREDENTIALS=<path>` points it at another file. Never commit or
   print the file's contents.
+- Run `tool/fetch_tdlib.sh` once (and after each TDLib pin change) before
+  `tool/flutter.sh run`: it puts the CI-built `libtdjson.so` into the app's
+  git-ignored jniLibs.
 - ABI filter: arm64-v8a and x86_64.
 - **Licensing:** Lumina is GPL-3.0-or-later (DECISIONS D14). ffmpeg stays
   the LGPL `ffmpeg_kit_flutter_new_full` build (the GPL codecs add nothing). H.264 and
