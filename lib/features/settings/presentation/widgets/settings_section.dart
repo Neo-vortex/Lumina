@@ -30,11 +30,12 @@ class SettingsSection extends StatelessWidget {
               ),
             ),
           ),
-          Container(
-            decoration: BoxDecoration(
-              color: GlowColors.surface,
+          // Material, not a coloured box, so list tiles show their ink.
+          Material(
+            color: GlowColors.surface,
+            shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: GlowColors.outline),
+              side: const BorderSide(color: GlowColors.outline),
             ),
             clipBehavior: Clip.antiAlias,
             child: Column(children: children),
