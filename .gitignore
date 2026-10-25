@@ -49,3 +49,6 @@ app.*.map.json
 
 # Local Telegram API credentials (read by tool/flutter.sh)
 credential.txt
+
+# Calls engine output (tool/build_calls_engine.sh; CI downloads it)
+/android/app/src/main/jniLibs/*/liblumina_calls.so

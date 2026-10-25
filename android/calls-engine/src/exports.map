@@ -1,0 +1,7 @@
+{
+  global:
+    Java_*;
+    JNI_OnLoad;
+  local:
+    *;    # hide WebRTC, tgcalls, BoringSSL, FFmpeg… (ffmpeg-kit ships its own)
+};

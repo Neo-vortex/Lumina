@@ -1,0 +1,106 @@
+name: Calls engine
+
+# Builds liblumina_calls.so (tgcalls + WebRTC from Telegram-Android, plus
+# Lumina's JNI glue) once per input hash and publishes it as the
+# pre-release calls-engine-<key>. The app workflow calls this first and
+# downloads the result, so app builds don't recompile WebRTC.
+# Source for the binaries: this repository at the publishing commit, plus
+# Telegram-Android at the commit pinned in tool/fetch_calls_engine.sh.
+on:
+  workflow_call:
+    outputs:
+      key:
+        description: Engine cache key (release calls-engine-<key>)
+        value: ${{ jobs.key.outputs.key }}
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  key:
+    runs-on: ubuntu-latest
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+      exists: ${{ steps.key.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: key
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          key=$(tool/calls_engine_key.sh)
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          if gh release view "calls-engine-$key" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Engine $key already published"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: key
+    if: needs.key.outputs.exists != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      matrix:
+        abi: [arm64-v8a, x86_64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: NDK 27.2 and CMake 3.22 (what Telegram builds this code with)
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "ndk;27.2.12479018" "cmake;3.22.1" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          sudo apt-get install -y ninja-build ccache > /dev/null
+
+      - name: ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: calls-ccache-${{ matrix.abi }}-${{ needs.key.outputs.key }}
+          restore-keys: calls-ccache-${{ matrix.abi }}-
+
+      - name: Fetch sources
+        run: tool/fetch_calls_engine.sh
+
+      - name: Build
+        env:
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          CCACHE_MAXSIZE: 2G
+          JOBS: 4
+        run: |
+          tool/build_calls_engine.sh ${{ matrix.abi }}
+          ccache -s | tail -n 5
+          mkdir -p dist
+          cp "build/calls-engine/out/${{ matrix.abi }}/liblumina_calls.so" "dist/liblumina_calls-${{ matrix.abi }}.so"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calls-engine-${{ matrix.abi }}
+          path: dist/*.so
+          retention-days: 3
+
+  publish:
+    needs: [key, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: calls-engine-*
+          merge-multiple: true
+          path: dist
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ needs.key.outputs.key }}
+        run: |
+          (cd dist && sha256sum *.so > SHA256SUMS.txt && ls -l)
+          gh release create "calls-engine-$KEY" --repo "$GITHUB_REPOSITORY" \
+            --prerelease --target "$GITHUB_SHA" \
+            --title "Calls engine $KEY" \
+            --notes "liblumina_calls.so for arm64-v8a and x86_64, built from ${GITHUB_SHA::7} (GPL-3.0-or-later; tgcalls and WebRTC from Telegram-Android, see tool/fetch_calls_engine.sh). Used by the app builds; not an app release." \
+            dist/*.so dist/SHA256SUMS.txt \
+            || gh release view "calls-engine-$KEY" --repo "$GITHUB_REPOSITORY" > /dev/null

@@ -22,7 +22,15 @@ env:
   FLUTTER_VERSION: '3.47.8'
 
 jobs:
+  # liblumina_calls.so, built only when its inputs change (see calls-engine.yml).
+  engine:
+    uses: ./.github/workflows/calls-engine.yml
+
   build:
+    needs: engine
+    # A failed engine build still produces an APK (calls then say they're
+    # unavailable); the step below warns.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -67,6 +75,21 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties', 'pubspec.lock') }}
           restore-keys: gradle-
+
+      - name: Calls engine
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ needs.engine.outputs.key }}
+        run: |
+          if [ -n "$KEY" ] && gh release download "calls-engine-$KEY" -p 'liblumina_calls-*.so' -D engine; then
+            for abi in arm64-v8a x86_64; do
+              mkdir -p "android/app/src/main/jniLibs/$abi"
+              mv "engine/liblumina_calls-$abi.so" "android/app/src/main/jniLibs/$abi/liblumina_calls.so"
+            done
+            ls -l android/app/src/main/jniLibs/*/liblumina_calls.so
+          else
+            echo "::warning::Calls engine $KEY is not available; this APK has no calls"
+          fi
 
       - run: flutter pub get
       - run: flutter analyze
