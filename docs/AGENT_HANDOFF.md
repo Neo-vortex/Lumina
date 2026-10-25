@@ -185,9 +185,9 @@ does not copy Telegram's look.
       engine is gone, so nothing could send updates anyway.
   - Tests: tile order, `buildPoll`, music kind/tags/audio content, send
     options, schedule presets and `LiveLocationService`.
-- TODO: nothing left in A except the widget test below.
-- `ScheduledMessagesScreen` itself has no widget test yet. Scheduled
-  updates no longer leak into the timeline.
+- Nothing left in A. `ScheduledMessagesScreen` has widget tests (order,
+  send now, delete, empty state). Scheduled updates no longer leak into
+  the timeline.
 
 **B. Calls (owner item 21), not started**
 - See §5.7 for the design. Nothing is implemented: no call UI, no
@@ -197,7 +197,10 @@ does not copy Telegram's look.
 - Confirm a green run of `.github/workflows/android.yml`:
   - The first run failed on `abiFilters` vs `--split-per-abi`; that is
     fixed in `android/app/build.gradle.kts`.
-  - Later runs were cancelled by newer pushes; `main` now never cancels.
+  - A running build on `main` is never cancelled, but GitHub replaces a
+    *pending* run with the newest push (one pending run per group), so
+    quick consecutive pushes build only the latest commit.
+  - Green: run 40187963183 (commit 62a325f), all steps through release.
 - Owner action: add the repository secrets `TG_API_ID`, `TG_API_HASH` and
   (recommended) `DEBUG_KEYSTORE_B64` (§4).
 - The local release build in the dev container failed only for lack of
@@ -247,9 +250,9 @@ does not copy Telegram's look.
 | Rich text (code blocks, quotes, custom emoji, card numbers, media timestamps), composer formatting menu, link previews (receive + compose with size/position/remove), Instant View reader, Custom Tab links | ✅ | `core/telegram/entity_edit.dart`, `formatted_text_view.dart`, `conversation/.../formatting_controller.dart`, `link_preview_card.dart`, `instant_view_screen.dart` |
 | Hardening (cache/optimizeStorage, battery prompt, 16 KB check) | ✅ | `lib/features/maintenance/` (StorageRepository: usage by kind, clear, keep-media auto clean; Background settings + one-time battery prompt in `LifecycleWatcher`); memory pressure frees the LLM and Whisper; `tool/check_16kb.py <apk>` |
 
-Tests: `flutter test`, 137 tests covering routing, auth FSM (bloc_test),
+Tests: `flutter test`, 141 tests covering routing, auth FSM (bloc_test),
 error mapping, cache ordering, row grouping, video presets, search, assistant,
-chat info, stories, storage, the attach hub, polls, music, send options and live locations. Run
+chat info, stories, storage, the attach hub, polls, music, send options, live locations and the scheduled list. Run
 `flutter analyze` too; it must stay at zero issues.
 
 ## 4. Environment & build

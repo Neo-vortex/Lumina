@@ -54,7 +54,7 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen> {
   Future<void> _load() async {
     try {
       final m = await _repo.scheduled(widget.chat.id);
-      if (mounted) setState(() => _messages = m..sort((a, b) => _when(a).compareTo(_when(b))));
+      if (mounted) setState(() => _messages = [...m]..sort((a, b) => _when(a).compareTo(_when(b))));
     } on TdException catch (e) {
       if (mounted) _snack(e.message);
     }
