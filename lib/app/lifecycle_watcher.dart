@@ -6,6 +6,7 @@ import '../core/storage/app_preferences.dart';
 import '../core/tdlib/td_client.dart';
 import '../features/auth/bloc/auth_bloc.dart';
 import '../features/auth/domain/auth_step.dart';
+import '../features/search/data/message_indexer.dart';
 
 /// App lifecycle duties (spec §10.2):
 /// * re-checks the TDLib receive loop on resume (the process may have been
@@ -69,7 +70,13 @@ class _LifecycleWatcherState extends State<LifecycleWatcher> {
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthState>(
       listenWhen: (a, b) => a.step is! AuthReady && b.step is AuthReady,
-      listener: (_, _) => _syncOnline(),
+      listener: (context, state) {
+        _syncOnline();
+        final step = state.step;
+        if (step is AuthReady) {
+          context.read<MessageIndexer>().activate(isBot: step.capabilities.isBot).ignore();
+        }
+      },
       child: widget.child,
     );
   }

@@ -108,6 +108,16 @@ class AppPreferences {
   String get whisperLanguage => _string('dictation.language') ?? 'auto';
   set whisperLanguage(String v) => _set('dictation.language', v);
 
+  // ---- Search ----------------------------------------------------------------
+
+  /// Keep an on-device full-text index of message text (user request).
+  bool get searchIndexEnabled => _bool('search.enabled', true);
+  set searchIndexEnabled(bool v) => _set('search.enabled', v);
+
+  /// Also index older history in the background, not just new messages.
+  bool get searchBackfill => _bool('search.backfill', true);
+  set searchBackfill(bool v) => _set('search.backfill', v);
+
   // ---- Proxy -----------------------------------------------------------------
 
   /// Saved proxies (JSON, secrets excluded; they live in SecureStore).

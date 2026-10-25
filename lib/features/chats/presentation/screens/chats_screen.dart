@@ -4,7 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:handy_tdlib_next/api.dart' as td;
 
+import '../../../../core/search/message_search.dart';
+import '../../../../core/telegram/display.dart';
 import '../../../../core/telegram/telegram_cache.dart';
+import '../../../../core/telegram/widgets/chat_avatar.dart';
+import '../../../../core/widgets/highlighted_snippet.dart';
 import '../../../../core/telegram/widgets/connection_status.dart';
 import '../../../../core/theme/glow_colors.dart';
 import '../../../../core/widgets/luminous_refresh.dart';
@@ -29,6 +33,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
   var _searching = false;
   var _botNoticeDismissed = false;
   List<td.Chat>? _results;
+  List<MessageHit> _messageHits = const [];
   Timer? _debounce;
 
   @override
@@ -42,7 +47,20 @@ class _ChatsScreenState extends State<ChatsScreen> {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 250), () async {
       final results = await context.read<ChatsRepository>().search(q);
-      if (mounted && _search.text == q) setState(() => _results = results);
+      var hits = const <MessageHit>[];
+      if (!mounted) return;
+      try {
+        final index = context.read<MessageSearch>();
+        if (q.trim().length >= 2) hits = await index.search(q, limit: 60);
+      } on ProviderNotFoundException {
+        // No local index in this build.
+      }
+      if (mounted && _search.text == q) {
+        setState(() {
+          _results = results;
+          _messageHits = hits;
+        });
+      }
     });
   }
 
@@ -108,7 +126,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
               ),
             Expanded(
               child: _results != null
-                  ? _ResultsList(results: _results!, onOpen: _open)
+                  ? _ResultsList(
+                      results: _results!,
+                      messageHits: _messageHits,
+                      query: _search.text.trim(),
+                      onOpen: _open,
+                      onOpenMessage: (hit) =>
+                          Navigator.of(context)
+                              .push(ConversationScreen.route(hit.chatId, focusMessageId: hit.messageId)),
+                    )
                   : BlocBuilder<ChatListCubit, ChatListState>(
                       builder: (context, state) {
                         if (state.chats.isEmpty) {
@@ -163,30 +189,69 @@ class _ChatsScreenState extends State<ChatsScreen> {
 }
 
 class _ResultsList extends StatelessWidget {
-  const _ResultsList({required this.results, required this.onOpen});
+  const _ResultsList({
+    required this.results,
+    required this.messageHits,
+    required this.query,
+    required this.onOpen,
+    required this.onOpenMessage,
+  });
 
   final List<td.Chat> results;
+  final List<MessageHit> messageHits;
+  final String query;
   final void Function(td.Chat) onOpen;
+  final void Function(MessageHit) onOpenMessage;
 
   @override
   Widget build(BuildContext context) {
-    if (results.isEmpty) {
+    if (results.isEmpty && messageHits.isEmpty) {
       return const Center(
         child: Text('Nothing found', style: TextStyle(color: GlowColors.textMuted)),
       );
     }
     final cache = context.read<TelegramCache>();
-    return ListView.builder(
-      itemCount: results.length,
-      itemBuilder: (context, i) {
-        final chat = cache.chats[results[i].id] ?? results[i];
-        return TimelineChatRow(
-          chat: chat,
-          isFirst: i == 0,
-          isLast: i == results.length - 1,
-          onTap: () => onOpen(chat),
-        );
-      },
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 120),
+      children: [
+        for (var i = 0; i < results.length; i++)
+          TimelineChatRow(
+            chat: cache.chats[results[i].id] ?? results[i],
+            isFirst: i == 0,
+            isLast: i == results.length - 1,
+            onTap: () => onOpen(cache.chats[results[i].id] ?? results[i]),
+          ),
+        if (messageHits.isNotEmpty)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 6),
+            child: Text(
+              'MESSAGES',
+              style: TextStyle(
+                color: GlowColors.violet,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.1,
+              ),
+            ),
+          ),
+        for (final hit in messageHits)
+          ListTile(
+            leading: cache.chats[hit.chatId] != null
+                ? ChatAvatar.chat(cache.chats[hit.chatId]!, size: 40)
+                : const Icon(Icons.chat_bubble_outline_rounded),
+            title: Text(
+              cache.chats[hit.chatId]?.title ?? 'Chat',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: HighlightedSnippet(text: hit.snippet),
+            trailing: Text(
+              Display.listTime(DateTime.fromMillisecondsSinceEpoch(hit.date * 1000), DateTime.now()),
+              style: const TextStyle(color: GlowColors.textMuted, fontSize: 12),
+            ),
+            onTap: () => onOpenMessage(hit),
+          ),
+      ],
     );
   }
 }

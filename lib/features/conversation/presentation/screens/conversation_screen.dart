@@ -32,7 +32,7 @@ import 'chat_search_screen.dart';
 class ConversationScreen extends StatefulWidget {
   const ConversationScreen({super.key});
 
-  static Route<void> route(int chatId) => MaterialPageRoute(
+  static Route<void> route(int chatId, {int? focusMessageId}) => MaterialPageRoute(
     builder: (context) => BlocProvider(
       create: (context) => ConversationCubit(
         chatId: chatId,
@@ -40,7 +40,7 @@ class ConversationScreen extends StatefulWidget {
         cache: context.read<TelegramCache>(),
         updates: context.read<TdClient>().updates,
         showSponsored: _showSponsored(context, chatId),
-      )..start(),
+      )..start(focusMessageId: focusMessageId),
       child: const ConversationScreen(),
     ),
   );
