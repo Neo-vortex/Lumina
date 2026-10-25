@@ -15,10 +15,14 @@ android {
     }
 
     defaultConfig {
-        ndk {
-            // handy_tdlib_next also ships x86 / armeabi-v7a; keep only the
-            // ABIs this app targets (arm64 devices, x86_64 emulators).
-            abiFilters += listOf("arm64-v8a", "x86_64")
+        // handy_tdlib_next also ships x86 / armeabi-v7a; keep only the ABIs
+        // this app targets (arm64 devices, x86_64 emulators). `flutter build
+        // apk --split-per-abi` sets its own ABI splits, which Gradle refuses
+        // to combine with ndk.abiFilters.
+        if (!project.hasProperty("split-per-abi")) {
+            ndk {
+                abiFilters += listOf("arm64-v8a", "x86_64")
+            }
         }
         applicationId = "dev.lumina.lumina"
         // 24, not 21: whisper_edge builds whisper.cpp with minSdk 24, which sets
