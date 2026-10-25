@@ -24,6 +24,7 @@ import '../features/transcription/presentation/widgets/speech_settings.dart';
 import '../features/voice/data/voice_recorder.dart';
 import '../features/calls/data/call_engine.dart';
 import '../features/calls/data/calls_repository.dart';
+import '../features/calls/domain/engine_params.dart';
 import '../features/calls/presentation/call_settings.dart';
 import '../features/notifications/data/notification_center.dart';
 import '../features/notifications/presentation/connection_mode_settings.dart';
@@ -48,6 +49,14 @@ import 'package:flutter/material.dart' show Icons;
 import '../features/conversation/presentation/widgets/conversation_extensions.dart';
 import '../features/home/presentation/widgets/compose_orb.dart';
 import '../features/settings/presentation/screens/settings_screen.dart';
+
+/// "Use proxy for calls": the active SOCKS5 proxy as the engine wants it.
+Future<EngineProxy?> callProxyFor(ProxyRepository proxies) async {
+  final p = await proxies.callProxy();
+  return p == null
+      ? null
+      : EngineProxy(host: p.server, port: p.port, login: p.username, password: p.password);
+}
 
 /// The app's navigator (call screen, opening a chat from a notification).
 final appNavigatorKey = GlobalKey<NavigatorState>();

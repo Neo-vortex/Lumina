@@ -18,6 +18,7 @@ import '../features/calls/bloc/call_cubit.dart';
 import '../features/calls/data/call_engine.dart';
 import '../features/calls/data/calls_repository.dart';
 import '../features/calls/presentation/call_host.dart';
+import '../features/proxy/data/proxy_repository.dart';
 import '../features/chats/data/chats_repository.dart';
 import '../features/conversation/data/messages_repository.dart';
 import 'auth_gate.dart';
@@ -85,6 +86,7 @@ class LuminaApp extends StatelessWidget {
                 system: engine is CallSystem ? engine as CallSystem : null,
                 nameOf: (id) => Display.userName(cache.users[id]),
                 useCallingAccount: () => preferences.callsUseCallingAccount,
+                callProxy: () => callProxyFor(context.read<ProxyRepository>()),
               );
             },
           ),

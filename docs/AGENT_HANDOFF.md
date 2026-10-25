@@ -305,8 +305,12 @@ does not copy Telegram's look.
     *pending* run with the newest push (one pending run per group), so
     quick consecutive pushes build only the latest commit.
   - Green: run 40187963183 (commit 62a325f), all steps through release.
-- Owner action: add the repository secrets `TG_API_ID`, `TG_API_HASH` and
-  (recommended) `DEBUG_KEYSTORE_B64` (§4).
+- Decided (2026-10-25): this repository sets **no secrets**. Its CI APKs
+  have no API credentials and can't sign in; people who want working CI
+  builds add `TG_API_ID` / `TG_API_HASH` (and optionally
+  `DEBUG_KEYSTORE_B64`) to their own fork (§4). Local builds use
+  `tool/flutter.sh` + `credential.txt`. Possible follow-up (offered, not
+  requested): entering an API ID at login when the build has none.
 - The local release build in the dev container failed only for lack of
   disk space. CI has ~20 GB after the cleanup step.
 
@@ -364,7 +368,7 @@ does not copy Telegram's look.
 | Rich text (code blocks, quotes, custom emoji, card numbers, media timestamps), composer formatting menu, link previews (receive + compose with size/position/remove), Instant View reader, Custom Tab links | ✅ | `core/telegram/entity_edit.dart`, `formatted_text_view.dart`, `conversation/.../formatting_controller.dart`, `link_preview_card.dart`, `instant_view_screen.dart` |
 | Hardening (cache/optimizeStorage, battery prompt, 16 KB check) | ✅ | `lib/features/maintenance/` (StorageRepository: usage by kind, clear, keep-media auto clean; Background settings + one-time battery prompt in `LifecycleWatcher`); memory pressure frees the LLM and Whisper; `tool/check_16kb.py <apk>` |
 
-Tests: `flutter test`, 179 tests covering routing, auth FSM (bloc_test),
+Tests: `flutter test`, 182 tests covering routing, auth FSM (bloc_test),
 error mapping, cache ordering, row grouping, video presets, search, assistant,
 chat info, stories, storage, the attach hub, polls, music, send options, live locations, the scheduled list, reply quotes, calls and notifications. Run
 `flutter analyze` too; it must stay at zero issues.
@@ -382,7 +386,7 @@ chat info, stories, storage, the attach hub, polls, music, send options, live lo
   `SHA256SUMS.txt`.
 - Release builds are **signed with a debug key** (`buildTypes.release`
   uses `signingConfigs.debug`). Not for the Play Store.
-- Repository secrets:
+- Repository secrets (none set here by decision; forks add their own):
   - `TG_API_ID`, `TG_API_HASH`: Telegram API credentials (my.telegram.org).
     Without them the APK builds but cannot sign in.
   - `DEBUG_KEYSTORE_B64` (recommended): a stable debug keystore, so each
@@ -605,7 +609,11 @@ chat info, stories, storage, the attach hub, polls, music, send options, live lo
    Flutter `Texture`, local self-view PiP.
 6. **Screen share + camera PiP compositor** (MediaProjection service,
    GL compositor feeding one `VideoSource`).
-7. **Proxy for calls** (SOCKS5 into tgcalls' proxy config, see below).
+7. **Proxy for calls**, done: Settings → Connection → "Use proxy for
+   calls" (`calls.useProxy`). `ProxyRepository.callProxy()` returns the
+   active proxy only when it is SOCKS5; `callProxyFor` (feature_wiring)
+   turns it into `EngineProxy`, which turns P2P off. The switch explains
+   when the active proxy is HTTP/MTProto. Device test pending.
 
 - `CallProtocol`: `udpP2p`, `udpReflector`, `minLayer 65`, `maxLayer 92`,
   and `libraryVersions` must list the tgcalls versions actually bundled
