@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../core/theme/glow_colors.dart';
+import '../theme/glow_colors.dart';
 
 /// Picks when a message should go out: quick presets first, then a full
 /// date + time picker. Null when cancelled.

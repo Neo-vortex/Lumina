@@ -6,16 +6,21 @@ import 'package:handy_tdlib_next/api.dart' as td;
 
 import '../../../../core/media/ffmpeg_service.dart';
 import '../../../../core/telegram/display.dart';
+import '../../../../core/telegram/send_options.dart';
 import '../../../../core/theme/glow_colors.dart';
 import '../../../../core/widgets/glow_background.dart';
+import '../../../../core/widgets/send_options_sheet.dart';
 import '../../data/media_sender.dart';
 import '../widgets/video_convert_sheet.dart';
 
 /// What the review screen hands back to the conversation.
 class MediaSendRequest {
-  const MediaSendRequest(this.contents, {required this.asAlbum});
+  const MediaSendRequest(this.contents, {required this.asAlbum, this.options = const SendOptions()});
   final List<td.InputMessageContent> contents;
   final bool asAlbum;
+
+  /// Silent / scheduled / when-online, from long-pressing send.
+  final SendOptions options;
 }
 
 /// Review picked media before sending: caption, spoiler, view-once,
@@ -26,9 +31,13 @@ class SendMediaScreen extends StatefulWidget {
     required this.items,
     required this.allowViewOnce,
     required this.parseCaption,
+    this.initialAsFile = false,
   });
 
   final List<PickedMedia> items;
+
+  /// Starts with "Send as file" on (File tile, or "Original quality").
+  final bool initialAsFile;
 
   /// View-once exists only in private chats (and not for bots).
   final bool allowViewOnce;
@@ -39,14 +48,22 @@ class SendMediaScreen extends StatefulWidget {
     required List<String> paths,
     required bool allowViewOnce,
     required Future<td.FormattedText> Function(String) parseCaption,
+    bool asFiles = false,
+    bool music = false,
   }) async {
     final sender = context.read<MediaSender>();
-    final items = await Future.wait(paths.map(sender.inspect));
+    final items = await Future.wait(paths.map((p) => sender.inspect(p, music: music)));
     if (!context.mounted) return null;
     return Navigator.of(context).push<MediaSendRequest>(
       MaterialPageRoute(
-        builder: (_) =>
-            SendMediaScreen(items: items, allowViewOnce: allowViewOnce, parseCaption: parseCaption),
+        builder: (_) => SendMediaScreen(
+          items: items,
+          allowViewOnce: allowViewOnce,
+          parseCaption: parseCaption,
+          // Music goes out as tracks; the picker marks it as files only so
+          // nothing gets recompressed.
+          initialAsFile: asFiles && !music,
+        ),
       ),
     );
   }
@@ -57,7 +74,7 @@ class SendMediaScreen extends StatefulWidget {
 
 class _SendMediaScreenState extends State<SendMediaScreen> {
   final _caption = TextEditingController();
-  var _asFile = false;
+  late var _asFile = widget.initialAsFile;
   var _spoiler = false;
   var _viewOnce = false;
   var _working = false;
@@ -81,7 +98,12 @@ class _SendMediaScreenState extends State<SendMediaScreen> {
     if (preset != null) setState(() => m.preset = preset);
   }
 
-  Future<void> _send() async {
+  Future<void> _sendWithOptions() async {
+    final options = await showSendOptionsSheet(context);
+    if (options != null && mounted) await _send(options);
+  }
+
+  Future<void> _send([SendOptions options = const SendOptions()]) async {
     final sender = context.read<MediaSender>();
     setState(() => _working = true);
     try {
@@ -129,7 +151,7 @@ class _SendMediaScreenState extends State<SendMediaScreen> {
         );
       }
       final album = contents.length > 1 && !_viewOnce;
-      if (mounted) Navigator.pop(context, MediaSendRequest(contents, asAlbum: album));
+      if (mounted) Navigator.pop(context, MediaSendRequest(contents, asAlbum: album, options: options));
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -145,6 +167,7 @@ class _SendMediaScreenState extends State<SendMediaScreen> {
   Widget build(BuildContext context) {
     final single = widget.items.length == 1;
     final hasMedia = widget.items.any((m) => m.kind != MediaKind.file);
+    final visual = widget.items.any((m) => m.kind == MediaKind.photo || m.kind == MediaKind.video);
     return Scaffold(
       appBar: AppBar(
         backgroundColor: GlowColors.background,
@@ -204,12 +227,13 @@ class _SendMediaScreenState extends State<SendMediaScreen> {
                             selected: _asFile,
                             onSelected: _working ? null : (v) => setState(() => _asFile = v),
                           ),
-                          FilterChip(
-                            label: const Text('Spoiler'),
-                            selected: _spoiler,
-                            onSelected: _working || _asFile ? null : (v) => setState(() => _spoiler = v),
-                          ),
-                          if (widget.allowViewOnce && single)
+                          if (visual)
+                            FilterChip(
+                              label: const Text('Spoiler'),
+                              selected: _spoiler,
+                              onSelected: _working || _asFile ? null : (v) => setState(() => _spoiler = v),
+                            ),
+                          if (widget.allowViewOnce && single && visual)
                             FilterChip(
                               label: const Text('View once'),
                               selected: _viewOnce,
@@ -233,14 +257,19 @@ class _SendMediaScreenState extends State<SendMediaScreen> {
                               ),
                             ),
                           ),
-                          IconButton.filled(
-                            tooltip: 'Send',
-                            style: IconButton.styleFrom(
-                              backgroundColor: GlowColors.violetDeep,
-                              minimumSize: const Size(52, 52),
+                          // Long-press: silent / schedule / when online, as
+                          // in the composer.
+                          GestureDetector(
+                            onLongPress: _working ? null : _sendWithOptions,
+                            child: IconButton.filled(
+                              tooltip: 'Send (hold for options)',
+                              style: IconButton.styleFrom(
+                                backgroundColor: GlowColors.violetDeep,
+                                minimumSize: const Size(52, 52),
+                              ),
+                              onPressed: _working ? null : _send,
+                              icon: const Icon(Icons.arrow_upward_rounded),
                             ),
-                            onPressed: _working ? null : _send,
-                            icon: const Icon(Icons.arrow_upward_rounded),
                           ),
                         ],
                       ),
@@ -276,6 +305,26 @@ class _Tile extends StatelessWidget {
             Image.file(File(media.path), fit: BoxFit.cover, cacheWidth: 800)
           else if (media.kind == MediaKind.video)
             const Center(child: Icon(Icons.movie_rounded, size: 48, color: GlowColors.textMuted))
+          else if (media.kind == MediaKind.audio)
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.music_note_rounded, size: 42, color: GlowColors.cyan),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                    child: Text(trackTitle(media), textAlign: TextAlign.center, maxLines: 2),
+                  ),
+                  if (media.probe?.performer case final p?)
+                    Text(p, style: const TextStyle(color: GlowColors.textMuted, fontSize: 12)),
+                  if (media.probe case final p?)
+                    Text(
+                      Display.duration(p.duration.inSeconds),
+                      style: const TextStyle(color: GlowColors.textMuted, fontSize: 12),
+                    ),
+                ],
+              ),
+            )
           else
             Center(
               child: Column(

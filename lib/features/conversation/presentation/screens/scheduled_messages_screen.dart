@@ -12,7 +12,7 @@ import '../../../../core/telegram/widgets/formatted_text_view.dart';
 import '../../../../core/theme/glow_colors.dart';
 import '../../data/messages_repository.dart';
 import '../widgets/message_menu.dart';
-import '../widgets/schedule_picker.dart';
+import '../../../../core/widgets/schedule_picker.dart';
 
 /// A chat's scheduled messages (Telegram's "Scheduled" view): when each
 /// goes out, and send now / reschedule / edit / delete.

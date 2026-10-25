@@ -145,6 +145,30 @@ Contrast ratios computed with the WCAG 2.x relative-luminance formula:
   long-press, a light impact on send, selection clicks on threshold crossings
   (swipe-to-reply, record lock/cancel). No haptics on passive events.
 
+## 8. Attachment picker
+
+- **UX-34** A compact modal sheet with two large primary actions for what
+  people send most (Gallery, Camera; tap for photo, hold for video), then
+  small tiles for the rest. Big targets for the frequent actions, and the
+  sheet keeps the conversation visible behind it (Material modal bottom
+  sheet: room for icons and short descriptions, dismissed to return).
+- **UX-35** Tiles are ordered by how often *this* user picks them. Ties keep
+  the declared order, so a fresh install has a stable grid, and the order
+  only changes when the sheet opens, never while it is shown. Research on
+  adaptive menus finds that predictability matters more for satisfaction
+  than raw accuracy, so changes are kept rare and easy to model.
+- **UX-36** The gallery uses the system Photo Picker, not our own grid over
+  `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO`. It needs no runtime permission
+  (backported to old Android versions through Google Play services), it
+  includes cloud photos, and Google Play restricts the broad media
+  permissions to apps whose core use needs persistent access. A messenger
+  that picks media on demand doesn't qualify.
+- **UX-37** The embedded photo picker (inline in the app's own UI) would be
+  closer to Telegram's grid, but `androidx.photopicker` is still alpha
+  (1.0.0-alpha01) and needs a recent system. Not used for now; revisit when
+  it is stable. "Original quality" in the sheet sends photos and videos as
+  files; the Music tile sends audio as playable tracks.
+
 ## Gaps (searched, not found)
 
 - No sources tested glow/neon effects for readability specifically. UX-04
@@ -179,3 +203,9 @@ Contrast ratios computed with the WCAG 2.x relative-luminance formula:
 - [Android Developers – make apps more accessible](https://developer.android.com/guide/topics/ui/accessibility/apps)
 - [Android codelab – accessibility in Compose (48 dp targets)](https://developer.android.com/codelabs/jetpack-compose-accessibility)
 - [Flutter API – Feedback.forLongPress](https://api.flutter.dev/flutter/widgets/Feedback/forLongPress.html)
+- [Material Design – bottom sheets](https://material.io/components/sheets-bottom)
+- [Gajos et al. – predictability and accuracy in adaptive user interfaces (CHI 2008)](https://kgajos.seas.harvard.edu/papers/kgajos-chi08-predictability.pdf)
+- [Android Developers Blog – photo picker everywhere](https://android-developers.googleblog.com/2023/04/photo-picker-everywhere.html)
+- [Android Developers Blog – cloud photos in the photo picker](https://android-developers.googleblog.com/2024/02/cloud-photos-now-available-in-android-photo-picker.html)
+- [Google Play – photo and video permissions policy](https://support.google.com/googleplay/android-developer/answer/14115180)
+- [AndroidX – photopicker releases (embedded picker)](https://developer.android.com/jetpack/androidx/releases/photopicker)

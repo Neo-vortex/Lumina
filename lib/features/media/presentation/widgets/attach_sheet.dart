@@ -76,12 +76,14 @@ Future<AttachPick?> pickAttachments(
 }) async {
   final usage = _Usage(prefs);
   final tiles = [
-    for (final t in _Tile.values)
-      if ((t != _Tile.roundVideo || allowVideoNote) &&
-          (t != _Tile.poll || allowPoll) &&
-          (t != _Tile.contact || allowContact))
-        t,
-  ]..sort((a, b) => usage.of(b).compareTo(usage.of(a)));
+    for (final name in attachTileOrder(
+      usage.counts,
+      allowVideoNote: allowVideoNote,
+      allowPoll: allowPoll,
+      allowContact: allowContact,
+    ))
+      _Tile.values.byName(name),
+  ];
   var asFiles = prefs.attachAsFiles;
 
   final choice = await showModalBottomSheet<String>(
@@ -200,6 +202,26 @@ Future<AttachPick?> pickAttachments(
   return null;
 }
 
+/// Tile names, most used first. Ties keep the declared order (file,
+/// location, contact…), so a fresh install sees a stable grid.
+List<String> attachTileOrder(
+  Map<String, int> usage, {
+  bool allowVideoNote = true,
+  bool allowPoll = true,
+  bool allowContact = true,
+}) {
+  final tiles = [
+    for (final t in _Tile.values)
+      if ((t != _Tile.roundVideo || allowVideoNote) &&
+          (t != _Tile.poll || allowPoll) &&
+          (t != _Tile.contact || allowContact))
+        t,
+  ];
+  double score(_Tile t) => (usage[t.name] ?? 0) - t.index / 100;
+  tiles.sort((a, b) => score(b).compareTo(score(a)));
+  return [for (final t in tiles) t.name];
+}
+
 /// How often each tile was used, for adaptive ordering.
 class _Usage {
   _Usage(this._prefs) {
@@ -211,8 +233,7 @@ class _Usage {
   final AppPreferences _prefs;
   final _counts = <String, int>{};
 
-  // Ties keep the declared order (file, location, contact…).
-  double of(_Tile t) => (_counts[t.name] ?? 0) - t.index / 100;
+  Map<String, int> get counts => _counts;
 
   void bump(String key) {
     _counts[key] = (_counts[key] ?? 0) + 1;

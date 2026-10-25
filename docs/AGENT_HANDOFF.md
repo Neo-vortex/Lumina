@@ -7,7 +7,7 @@ the status table and "Next steps" in the same commit as the work.
 Companion docs:
 - [ARCHITECTURE.md](ARCHITECTURE.md): layers, folder rules, TDLib threading
 - [DECISIONS.md](DECISIONS.md): resolved decisions and spec corrections
-- [UX_RESEARCH.md](UX_RESEARCH.md): UX requirements UX-01…UX-33 with sources
+- [UX_RESEARCH.md](UX_RESEARCH.md): UX requirements UX-01…UX-37 with sources
 
 ---
 
@@ -149,6 +149,24 @@ does not copy Telegram's look.
     voting, quiz, retract and stop) in
     `conversation/.../content/rich_cards_content.dart`.
   - Contact sharing is wired in `app_conversation_extensions.dart`.
+  - `MediaPick.asFiles` / `.music` reach `SendMediaScreen.open`: "Send as
+    file" starts on for the File tile and "Original quality", and Music
+    sends `InputMessageAudio` (duration, and title/performer from container
+    tags via `FfmpegService.audioTags`, clipped to 64 characters). Audio
+    picked through File stays a document.
+  - Long-pressing send on `SendMediaScreen` offers silent / schedule /
+    when-online (`core/widgets/send_options_sheet.dart`, shared with the
+    composer). `MediaSendRequest.options` is passed to `sendAlbum` /
+    `sendContent`, with a "Scheduled · View" snackbar.
+  - `SendOptions` and `pickScheduleTime` moved to `core/` (the media
+    feature can't import conversation); `messages_repository.dart`
+    re-exports `SendOptions`.
+  - Poll building is `buildPoll` (pure). It fixed a quiz bug: the correct
+    answer was a row index, but TDLib wants the index among non-empty
+    options, and removing a row above it didn't shift it.
+  - Picker research recorded as UX-34…37.
+  - Tests: tile order, `buildPoll`, music kind/tags/audio content, send
+    options and schedule presets.
 - TODO:
   1. **Live location updater**: write `media/data/live_location_service.dart`.
      - Every ~60 s while sharing, get `SystemChannel.currentLocation()`
@@ -158,24 +176,9 @@ does not copy Telegram's look.
      - Needs a foreground service to keep going in the background, plus
        `ACCESS_FINE_LOCATION` if wanted.
      - Today the live message is only sent once.
-  2. **`MediaPick.asFiles` and `.music` are ignored**: in `_attach`, pass
-     them into `SendMediaScreen.open`. That needs a new `initialAsFile`
-     parameter. Music (audio paths) should become `InputMessageAudio`
-     with duration, title and performer from `FfmpegService.probe`.
-     Today audio goes out as a document.
-  3. **Send options for media**: on `SendMediaScreen`, long-pressing send
-     should offer silent / schedule / when-online, like the composer. Use
-     `pickScheduleTime`. Return `SendOptions` in `MediaSendRequest` and
-     thread them through `ConversationCubit.sendAlbum` / `sendContent`.
-  4. Record the picker research as UX-34…37 in `docs/UX_RESEARCH.md`:
-     - Compact sheet with big primary actions.
-     - Adaptive tile order.
-     - The system Photo Picker (Play policy limits `READ_MEDIA_*`).
-     - Google's embedded photo picker is still alpha, so not used.
-  5. Tests for the hub's usage ordering and for poll building.
-- Scheduled messages are done (`scheduled_messages_screen.dart`,
-  `schedule_picker.dart`, header button, snackbar "View") but have no
-  tests yet. Scheduled updates no longer leak into the timeline.
+  2. Album cover thumbnails for music (`albumCoverThumbnail`) are not sent.
+- `ScheduledMessagesScreen` itself has no widget test yet. Scheduled
+  updates no longer leak into the timeline.
 
 **B. Calls (owner item 21), not started**
 - See §5.7 for the design. Nothing is implemented: no call UI, no
@@ -235,9 +238,9 @@ does not copy Telegram's look.
 | Rich text (code blocks, quotes, custom emoji, card numbers, media timestamps), composer formatting menu, link previews (receive + compose with size/position/remove), Instant View reader, Custom Tab links | ✅ | `core/telegram/entity_edit.dart`, `formatted_text_view.dart`, `conversation/.../formatting_controller.dart`, `link_preview_card.dart`, `instant_view_screen.dart` |
 | Hardening (cache/optimizeStorage, battery prompt, 16 KB check) | ✅ | `lib/features/maintenance/` (StorageRepository: usage by kind, clear, keep-media auto clean; Background settings + one-time battery prompt in `LifecycleWatcher`); memory pressure frees the LLM and Whisper; `tool/check_16kb.py <apk>` |
 
-Tests: `flutter test`, 99 tests covering routing, auth FSM (bloc_test),
+Tests: `flutter test`, 130 tests covering routing, auth FSM (bloc_test),
 error mapping, cache ordering, row grouping, video presets, search, assistant,
-chat info, stories and storage. Run
+chat info, stories, storage, the attach hub, polls, music and send options. Run
 `flutter analyze` too; it must stay at zero issues.
 
 ## 4. Environment & build

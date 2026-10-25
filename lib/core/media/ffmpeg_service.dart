@@ -21,6 +21,8 @@ class MediaProbe {
     required this.pixelFormat,
     required this.frameRate,
     required this.rotation,
+    this.title,
+    this.performer,
   });
 
   final String path;
@@ -38,6 +40,10 @@ class MediaProbe {
   final String? pixelFormat;
   final double? frameRate;
   final int rotation;
+
+  /// Container tags, for music (`title`, `artist`).
+  final String? title;
+  final String? performer;
 
   bool get hasVideo => videoCodec != null;
   bool get hasAudio => audioCodec != null;
@@ -72,6 +78,7 @@ class FfmpegService {
     }
     if (rotation.abs() % 180 == 90) (w, h) = (h, w);
     final seconds = double.tryParse(info.getDuration() ?? '') ?? 0;
+    final (title, performer) = audioTags(info.getTags());
     return MediaProbe(
       path: path,
       sizeBytes: int.tryParse(info.getSize() ?? '') ?? await File(path).length(),
@@ -84,7 +91,21 @@ class FfmpegService {
       pixelFormat: pix,
       frameRate: fps,
       rotation: rotation,
+      title: title,
+      performer: performer,
     );
+  }
+
+  /// Title and performer from container tags. Tag keys differ in case
+  /// between formats (ID3 `TITLE`, Vorbis `title`).
+  static (String?, String?) audioTags(Map<dynamic, dynamic>? tags) {
+    if (tags == null) return (null, null);
+    final lower = {
+      for (final e in tags.entries)
+        if (e.value is String && (e.value as String).trim().isNotEmpty)
+          '${e.key}'.toLowerCase(): (e.value as String).trim(),
+    };
+    return (lower['title'], lower['artist'] ?? lower['album_artist'] ?? lower['performer']);
   }
 
   static double? _parseRate(String? r) {
