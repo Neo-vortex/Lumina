@@ -131,7 +131,7 @@ does not copy Telegram's look.
     - **Custom renderer:** when the user shares their screen and also
       chooses to share the front camera, the outgoing video is the screen
       with a small **picture-in-picture camera bubble** composited on it.
-    Not started, see §2.3 and §5.7.
+    In progress (license decided: GPL-3.0-or-later), see §2.3 and §5.7.
 - **Declined:** "keep disposable (view-once / self-destructing) pictures
   and mark them as kept." The sender chose for them to disappear, so this
   must not be built (§5.4).
@@ -189,9 +189,10 @@ does not copy Telegram's look.
   send now, delete, empty state). Scheduled updates no longer leak into
   the timeline.
 
-**B. Calls (owner item 21), not started**
-- See §5.7 for the design. Nothing is implemented: no call UI, no
-  `createCall` / `acceptCall`, no media engine.
+**B. Calls (owner item 21), in progress, see §5.7 for the phases**
+- License decided: GPL-3.0-or-later (DECISIONS D14, `LICENSE`).
+- Phase 1 (native engine build) is next. Nothing else exists yet: no call
+  UI, no `createCall` / `acceptCall`.
 
 **C. CI / release**
 - Confirm a green run of `.github/workflows/android.yml`:
@@ -309,8 +310,8 @@ chat info, stories, storage, the attach hub, polls, music, send options, live lo
   `LUMINA_CREDENTIALS=<path>` points it at another file. Never commit or
   print the file's contents.
 - ABI filter: arm64-v8a and x86_64.
-- **Licensing:** ffmpeg is the LGPL `ffmpeg_kit_flutter_new_full` build.
-  Do not switch to the GPL variant, which would make the app GPL. H.264 and
+- **Licensing:** Lumina is GPL-3.0-or-later (DECISIONS D14). ffmpeg stays
+  the LGPL `ffmpeg_kit_flutter_new_full` build (the GPL codecs add nothing). H.264 and
   H.265 encoding use the hardware encoders `h264_mediacodec` /
   `hevc_mediacodec`, with an `mpeg4` fallback.
 - **APK size:** models ≈ 300 MB. For Play distribution, move the models to
@@ -447,7 +448,7 @@ chat info, stories, storage, the attach hub, polls, music, send options, live lo
   callback so the feature does not import the conversation feature. The
   "Post story" orb entry is still to be added with Stories (§5.4).
 
-### 5.7 Calls (owner item 21), design, not implemented
+### 5.7 Calls (owner item 21), design and phases
 
 **What TDLib gives and what it doesn't**
 - TDLib does **signaling only**:
@@ -463,13 +464,46 @@ chat info, stories, storage, the attach hub, polls, music, send options, live lo
   (github.com/TelegramMessenger/tgcalls), a C++ library on top of WebRTC.
   Lumina must build it for arm64-v8a and x86_64, wrap it in JNI/FFI, and
   feed it TDLib's signaling. This is the bulk of the work.
-- Options:
-  1. **Recommended:** reuse the prebuilt tgcalls + WebRTC from the
-     Telegram-Android source tree (GPLv2). Lumina would then have to be
-     GPL-compatible. Record this license decision in DECISIONS.md before
-     starting.
-  2. Build tgcalls + WebRTC from source in CI. WebRTC builds take hours,
-     so cache the artifacts.
+- Decided (D14): reuse Telegram-Android's engine. Their
+  `TMessagesProj/jni` builds WebRTC (vendored, ~1,700 files in
+  `voip/CMakeLists.txt`) and tgcalls (submodule) with plain CMake, and
+  links prebuilt static libs committed per ABI in `jni/prebuild/lib/<abi>`
+  (crypto, ssl, opus, libvpx, openh264, iwasm, dav1d, ffmpeg). Headers come
+  from submodules: tgcalls, absl, libyuv, boringssl, xiph/opus, ffmpeg,
+  libvpx, dav1d, wamr. Java side: their `org.webrtc` package (173 files;
+  the native code expects these exact class names).
+
+**Phases**
+1. **Engine build.** `tool/fetch_calls_engine.sh` sparse-checks out
+   DrKLO/Telegram at a pinned commit (with only the submodules above,
+   shallow). A Lumina-owned top-level CMake reuses their
+   `voip/CMakeLists.txt` but replaces `org_telegram_messenger_voip_Instance.cpp`
+   (tied to Telegram's tgnet and Java classes) with our JNI glue, and
+   builds `liblumina_calls.so` for arm64-v8a and x86_64. A separate CI
+   workflow builds it once per pin and publishes it as a release asset;
+   the app workflow downloads it, so app builds stay fast. Ship license
+   notices.
+2. **JNI + Kotlin engine.** `dev.lumina.calls.CallEngine` (adapted from
+   Telegram's `NativeInstance`): start with TDLib's `CallStateReady`
+   (servers, encryption key, config, allowP2p, custom parameters), feed
+   signaling both ways, mute, audio route, network type, stats, stop
+   (returns debug log for `sendCallDebugInformation`). A
+   `MethodChannel`/`EventChannel` exposes it to Dart.
+3. **Dart signaling.** `features/calls/`: `CallsRepository` (`createCall`
+   with `CallProtocol` listing the bundled `libraryVersions`,
+   `acceptCall`, `discardCall`, `sendCallSignalingData`, `updateCall`,
+   `updateNewCallSignalingData`, rating), `CallCubit` state machine.
+   Tests with `FakeTdClient`.
+4. **Audio-call UI.** In-call screen, header/chat-info call buttons,
+   incoming call full-screen notification, foreground service
+   (`phoneCall|microphone`), self-managed `ConnectionService`, proximity
+   wake lock, audio routing.
+5. **Video.** Camera capture (front default, switch), remote renderer as a
+   Flutter `Texture`, local self-view PiP.
+6. **Screen share + camera PiP compositor** (MediaProjection service,
+   GL compositor feeding one `VideoSource`).
+7. **Proxy for calls** (SOCKS5 into tgcalls' proxy config, see below).
+
 - `CallProtocol`: `udpP2p`, `udpReflector`, `minLayer 65`, `maxLayer 92`,
   and `libraryVersions` must list the tgcalls versions actually bundled
   (for example "4.0.0", "5.0.0", "7.0.0", "8.0.0", "9.0.0", "11.0.0").
