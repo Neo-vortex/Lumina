@@ -1,0 +1,13 @@
+name: lumina_tdlib
+description: TDLib JSON bindings generated from the td_api.tl pinned in schema/VERSION.
+publish_to: none
+version: 1.8.69
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  ffi: ^2.1.2
+
+dev_dependencies:
+  test: ^1.25.0
