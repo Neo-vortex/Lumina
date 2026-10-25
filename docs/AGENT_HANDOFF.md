@@ -129,6 +129,7 @@ does not copy Telegram's look.
 | Proxy (list, toggle, add/edit, paste link, test, share, login-screen access, encrypted restore after wipe) | ✅ | `lib/features/proxy/` |
 | Groups/channels admin, chat info, secret chats, contacts, new chat/group/channel | ✅ | `lib/features/chat_info/` (repository, ChatInfoScreen, contact picker, permissions sheet, `ComposeFlows`); wired in `app/feature_wiring.dart` |
 | Stories | ✅ | `lib/features/stories/` (StoriesRepository, halos via `ChatRowExtensions`, viewer with bottom-left ring, Glimpses grid, post with ffmpeg 1080×1920 / 720×1280 prep); wired in `app/app_story_wiring.dart` |
+| Rich text (code blocks, quotes, custom emoji, card numbers, media timestamps), composer formatting menu, link previews (receive + compose with size/position/remove), Instant View reader, Custom Tab links | ✅ | `core/telegram/entity_edit.dart`, `formatted_text_view.dart`, `conversation/.../formatting_controller.dart`, `link_preview_card.dart`, `instant_view_screen.dart` |
 | Hardening (cache/optimizeStorage, battery prompt, 16 KB check) | ✅ | `lib/features/maintenance/` (StorageRepository: usage by kind, clear, keep-media auto clean; Background settings + one-time battery prompt in `LifecycleWatcher`); memory pressure frees the LLM and Whisper; `tool/check_16kb.py <apk>` |
 
 Tests: `flutter test`, 99 tests covering routing, auth FSM (bloc_test),

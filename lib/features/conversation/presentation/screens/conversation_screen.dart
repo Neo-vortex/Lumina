@@ -19,6 +19,7 @@ import '../../../auth/domain/auth_step.dart';
 import '../../bloc/conversation_cubit.dart';
 import '../../data/messages_repository.dart';
 import '../widgets/composer.dart';
+import '../widgets/formatting_controller.dart';
 import '../widgets/conversation_extensions.dart';
 import '../widgets/conversation_header.dart';
 import '../widgets/forward_sheet.dart';
@@ -61,7 +62,7 @@ class ConversationScreen extends StatefulWidget {
 }
 
 class _ConversationScreenState extends State<ConversationScreen> {
-  final _text = TextEditingController();
+  final _text = FormattingController();
   final _scroll = ScrollController();
   final _list = ListController();
   final _seenAtOpen = <int>{};
@@ -77,13 +78,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
   void initState() {
     super.initState();
     final draft = _cubit.state.chat?.draftMessage?.inputMessageText;
-    if (draft case td.InputMessageText(:final text)) _text.text = text.text;
+    if (draft case td.InputMessageText(:final text)) _text.setFormatted(text);
     _scroll.addListener(_onScroll);
   }
 
   @override
   void dispose() {
-    _cubit.saveDraft(_text.text);
+    _cubit.saveDraft(_text.text, entities: _text.entities);
     _scroll.removeListener(_onScroll);
     _scroll.dispose();
     _list.dispose();
@@ -139,8 +140,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
     });
   }
 
-  Future<void> _send(String text, SendOptions options) async {
-    final error = await _cubit.send(text, options: options);
+  Future<void> _send(String text, SendOptions options, td.LinkPreviewOptions? preview) async {
+    final error = await _cubit.send(text, entities: _text.entities, options: options, linkPreview: preview);
     if (!mounted) return;
     if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
@@ -185,7 +186,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
           await showSelectText(context, m);
         case MessageAction.edit:
           _cubit.startEdit(m);
-          _text.text = messageText(m)?.text ?? '';
+          _text.setFormatted(messageText(m) ?? const td.FormattedText(text: '', entities: []));
         case MessageAction.pin:
           await _cubit.pin(m);
         case MessageAction.unpin:
@@ -398,6 +399,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
                         onDictate: () => extensions.onDictate(context, chat, _text),
                         recordingOverlay: extensions.recordingOverlay(context, chat),
                         orbMode: extensions.orbMode(context, chat),
+                        loadPreview: _cubit.linkPreview,
+                        previewsOnSend: context.read<AppPreferences>().linkPreviewsOnSend,
                       ),
                     )
                   else

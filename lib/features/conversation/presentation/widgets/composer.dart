@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:handy_tdlib_next/api.dart' as td;
@@ -7,6 +9,8 @@ import '../../../../core/telegram/telegram_cache.dart';
 import '../../../../core/theme/glow_colors.dart';
 import '../../../../core/theme/motion.dart';
 import '../../data/messages_repository.dart';
+import 'formatting_controller.dart';
+import 'link_preview_card.dart';
 import 'send_orb.dart';
 
 /// Message composer: reply/edit strip, attach button, multiline field and
@@ -26,12 +30,16 @@ class Composer extends StatefulWidget {
     this.onDictate,
     this.recordingOverlay,
     this.orbMode,
+    this.loadPreview,
+    this.previewsOnSend = true,
   });
 
   final TextEditingController controller;
   final td.Message? replyTo;
   final td.Message? editing;
-  final Future<void> Function(String text, SendOptions options) onSend;
+
+  /// [preview] says how to attach (or not) the link preview.
+  final Future<void> Function(String text, SendOptions options, td.LinkPreviewOptions? preview) onSend;
   final VoidCallback onCancelMode;
   final ValueChanged<String> onChanged;
   final VoidCallback? onAttach;
@@ -44,12 +52,27 @@ class Composer extends StatefulWidget {
   /// Forces the orb mode (e.g. stop while recording, busy while dictating).
   final OrbMode? orbMode;
 
+  /// Builds the preview Telegram will attach for a link in the text.
+  final Future<td.LinkPreview?> Function(td.FormattedText text)? loadPreview;
+
+  /// Settings → "Link previews when sending".
+  final bool previewsOnSend;
+
   @override
   State<Composer> createState() => _ComposerState();
 }
 
 class _ComposerState extends State<Composer> {
   var _sending = false;
+
+  // Link preview while composing.
+  static final _linkish = RegExp(r'(https?://|www\.|t\.me/)\S+', caseSensitive: false);
+  Timer? _previewTimer;
+  String? _previewFor;
+  td.LinkPreview? _preview;
+  String? _dismissedUrl;
+  bool? _large;
+  var _above = false;
 
   static const _fullCharge = 160;
 
@@ -61,18 +84,83 @@ class _ComposerState extends State<Composer> {
 
   @override
   void dispose() {
+    _previewTimer?.cancel();
     widget.controller.removeListener(_onText);
     super.dispose();
   }
 
-  void _onText() => setState(() {});
+  void _onText() {
+    setState(() {});
+    _schedulePreview();
+  }
+
+  void _schedulePreview() {
+    final load = widget.loadPreview;
+    final text = widget.controller.text;
+    final link = _linkish.firstMatch(text)?.group(0);
+    if (load == null || !widget.previewsOnSend || link == null) {
+      _previewTimer?.cancel();
+      if (_preview != null || _previewFor != null) {
+        setState(() {
+          _preview = null;
+          _previewFor = null;
+        });
+      }
+      return;
+    }
+    if (link == _previewFor) return;
+    _previewTimer?.cancel();
+    _previewTimer = Timer(const Duration(milliseconds: 600), () async {
+      _previewFor = link;
+      final c = widget.controller;
+      final p = await load(
+        c is FormattingController ? c.formatted : td.FormattedText(text: text, entities: const []),
+      );
+      if (!mounted || _previewFor != link) return;
+      setState(() {
+        _preview = p;
+        _large = null;
+      });
+    });
+  }
+
+  /// What to tell TDLib about the preview for the text being sent.
+  td.LinkPreviewOptions? _previewOptions() {
+    final hasLink = _linkish.hasMatch(widget.controller.text);
+    if (!hasLink) return null;
+    final p = _preview;
+    if (!widget.previewsOnSend || p == null || p.url == _dismissedUrl) {
+      return const td.LinkPreviewOptions(
+        isDisabled: true,
+        url: '',
+        forceSmallMedia: false,
+        forceLargeMedia: false,
+        showAboveText: false,
+      );
+    }
+    return td.LinkPreviewOptions(
+      isDisabled: false,
+      url: p.url,
+      forceSmallMedia: _large == false,
+      forceLargeMedia: _large == true,
+      showAboveText: _above,
+    );
+  }
 
   Future<void> _send([SendOptions options = const SendOptions()]) async {
     final text = widget.controller.text;
     if (text.trim().isEmpty || _sending) return;
     setState(() => _sending = true);
-    await widget.onSend(text, options);
-    if (mounted) setState(() => _sending = false);
+    await widget.onSend(text, options, _previewOptions());
+    if (mounted) {
+      setState(() {
+        _sending = false;
+        _preview = null;
+        _previewFor = null;
+        _dismissedUrl = null;
+        _above = false;
+      });
+    }
   }
 
   Future<void> _sendOptions() async {
@@ -161,6 +249,22 @@ class _ComposerState extends State<Composer> {
                       onCancel: widget.onCancelMode,
                     ),
             ),
+            AnimatedSize(
+              duration: Motion.micro,
+              curve: Motion.enter,
+              child: _preview == null || _preview!.url == _dismissedUrl || widget.recordingOverlay != null
+                  ? const SizedBox(width: double.infinity)
+                  : _PreviewStrip(
+                      preview: _preview!,
+                      large: _large ?? _preview!.showLargeMedia,
+                      above: _above,
+                      onToggleSize: _preview!.hasLargeMedia
+                          ? () => setState(() => _large = !(_large ?? _preview!.showLargeMedia))
+                          : null,
+                      onToggleAbove: () => setState(() => _above = !_above),
+                      onRemove: () => setState(() => _dismissedUrl = _preview!.url),
+                    ),
+            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
               child: Row(
@@ -189,6 +293,17 @@ class _ComposerState extends State<Composer> {
                             maxLines: 6,
                             textCapitalization: TextCapitalization.sentences,
                             keyboardType: TextInputType.multiline,
+                            contextMenuBuilder: (context, state) {
+                              final c = widget.controller;
+                              return AdaptiveTextSelectionToolbar.buttonItems(
+                                anchors: state.contextMenuAnchors,
+                                buttonItems: [
+                                  ...state.contextMenuButtonItems,
+                                  if (c is FormattingController)
+                                    ...formattingMenuItems(context, c, hideToolbar: state.hideToolbar),
+                                ],
+                              );
+                            },
                             decoration: InputDecoration(
                               hintText: widget.editing != null ? 'Edit message' : 'Message',
                               hintStyle: const TextStyle(color: GlowColors.textMuted),
@@ -223,6 +338,58 @@ class _ComposerState extends State<Composer> {
       ),
     );
   }
+}
+
+class _PreviewStrip extends StatelessWidget {
+  const _PreviewStrip({
+    required this.preview,
+    required this.large,
+    required this.above,
+    required this.onToggleSize,
+    required this.onToggleAbove,
+    required this.onRemove,
+  });
+
+  final td.LinkPreview preview;
+  final bool large;
+  final bool above;
+  final VoidCallback? onToggleSize;
+  final VoidCallback onToggleAbove;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 6, 4, 0),
+    child: Row(
+      children: [
+        Expanded(
+          child: LinkPreviewCard(
+            preview: preview,
+            textColor: GlowColors.text,
+            accent: GlowColors.cyan,
+            largeMedia: large,
+            compact: true,
+          ),
+        ),
+        if (onToggleSize != null)
+          IconButton(
+            tooltip: large ? 'Smaller picture' : 'Larger picture',
+            onPressed: onToggleSize,
+            icon: Icon(large ? Icons.photo_size_select_small_rounded : Icons.photo_size_select_large_rounded),
+          ),
+        IconButton(
+          tooltip: above ? 'Preview below text' : 'Preview above text',
+          onPressed: onToggleAbove,
+          icon: Icon(above ? Icons.vertical_align_bottom_rounded : Icons.vertical_align_top_rounded),
+        ),
+        IconButton(
+          tooltip: 'Send without preview',
+          onPressed: onRemove,
+          icon: const Icon(Icons.close_rounded),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ContextStrip extends StatelessWidget {

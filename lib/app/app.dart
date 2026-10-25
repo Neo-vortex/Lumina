@@ -7,6 +7,7 @@ import '../core/storage/app_preferences.dart';
 import '../core/storage/secure_store.dart';
 import '../core/tdlib/td_client.dart';
 import '../core/tdlib/td_paths.dart';
+import '../core/telegram/custom_emoji_store.dart';
 import '../core/telegram/file_store.dart';
 import '../core/telegram/telegram_cache.dart';
 import '../core/theme/glow_theme.dart';
@@ -47,6 +48,7 @@ class LuminaApp extends StatelessWidget {
         RepositoryProvider<AppPreferences>.value(value: preferences),
         RepositoryProvider(create: (_) => TelegramCache(client), dispose: (c) => c.dispose()),
         RepositoryProvider(create: (_) => FileStore(client), dispose: (f) => f.dispose()),
+        RepositoryProvider(create: (_) => CustomEmojiStore(client)),
         RepositoryProvider(create: (c) => TdStreamServer(c.read<FileStore>()), dispose: (s) => s.stop()),
         RepositoryProvider(
           create: (_) => AuthRepository(client: client, secureStore: secure, paths: paths, settings: settings),
