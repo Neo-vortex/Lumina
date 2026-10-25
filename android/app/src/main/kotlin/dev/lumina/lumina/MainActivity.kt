@@ -18,6 +18,7 @@ import android.os.StatFs
 import android.provider.AlarmClock
 import android.provider.CalendarContract
 import android.provider.Settings
+import dev.lumina.calls.CallChannel
 import io.flutter.FlutterInjector
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -39,6 +40,7 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.lumina/system")
             .setMethodCallHandler { call, result -> handle(call, result) }
+        CallChannel(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
     }
 
     private fun handle(call: MethodCall, result: MethodChannel.Result) {
