@@ -192,6 +192,26 @@ class FfmpegService {
     return ok ? out : null;
   }
 
+  /// A music file's embedded cover art as a ≤ 320 px JPEG (what TDLib
+  /// accepts as a thumbnail), or null when it has none.
+  Future<String?> coverArt(String audio) async {
+    final out = await tempPath('jpg');
+    final ok = await run([
+      '-i',
+      audio,
+      '-map',
+      '0:v:0',
+      '-frames:v',
+      '1',
+      '-vf',
+      "scale='min(320,iw)':'min(320,ih)':force_original_aspect_ratio=decrease",
+      '-q:v',
+      '4',
+      out,
+    ]);
+    return ok ? out : null;
+  }
+
   /// Any audio → 16 kHz mono 16-bit WAV (Whisper input, spec §7.2/§7.4).
   Future<String?> toWhisperWav(String input) async {
     final out = await tempPath('wav');

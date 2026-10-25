@@ -152,7 +152,8 @@ does not copy Telegram's look.
   - `MediaPick.asFiles` / `.music` reach `SendMediaScreen.open`: "Send as
     file" starts on for the File tile and "Original quality", and Music
     sends `InputMessageAudio` (duration, and title/performer from container
-    tags via `FfmpegService.audioTags`, clipped to 64 characters). Audio
+    tags via `FfmpegService.audioTags`, clipped to 64 characters, plus the
+    embedded cover art as `albumCoverThumbnail`). Audio
     picked through File stays a document.
   - Long-pressing send on `SendMediaScreen` offers silent / schedule /
     when-online (`core/widgets/send_options_sheet.dart`, shared with the
@@ -184,8 +185,7 @@ does not copy Telegram's look.
       engine is gone, so nothing could send updates anyway.
   - Tests: tile order, `buildPoll`, music kind/tags/audio content, send
     options, schedule presets and `LiveLocationService`.
-- TODO:
-  1. Album cover thumbnails for music (`albumCoverThumbnail`) are not sent.
+- TODO: nothing left in A except the widget test below.
 - `ScheduledMessagesScreen` itself has no widget test yet. Scheduled
   updates no longer leak into the timeline.
 
