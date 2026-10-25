@@ -25,6 +25,9 @@ import '../features/voice/data/voice_recorder.dart';
 import '../features/media/data/media_sender.dart';
 import 'app_conversation_extensions.dart';
 import 'app_story_wiring.dart';
+import '../features/maintenance/data/storage_repository.dart';
+import '../features/maintenance/presentation/widgets/background_settings.dart';
+import '../features/maintenance/presentation/widgets/storage_settings.dart';
 import '../features/chats/presentation/widgets/chat_row_extensions.dart';
 import '../features/stories/data/stories_repository.dart';
 import '../features/chat_info/data/chat_info_repository.dart';
@@ -109,6 +112,13 @@ List<RepositoryProvider<Object>> featureProviders() => [
   RepositoryProvider<ChatInfoRepository>(
     create: (c) => ChatInfoRepository(client: c.read<TdClient>(), cache: c.read<TelegramCache>()),
   ),
+  RepositoryProvider<StorageRepository>(
+    create: (c) => StorageRepository(
+      client: c.read<TdClient>(),
+      prefs: c.read<AppPreferences>(),
+      ffmpeg: c.read<FfmpegService>(),
+    ),
+  ),
   RepositoryProvider<StoriesRepository>(
     lazy: false,
     create: (c) => StoriesRepository(
@@ -125,7 +135,13 @@ List<RepositoryProvider<Object>> featureProviders() => [
   RepositoryProvider<ComposeActions>(create: (c) => _composeActions(c.read<ComposeFlows>())),
   RepositoryProvider<SettingsEntries>(
     create: (_) => SettingsEntries(
-      (context) => [const ConnectionSettings(), const SearchSettings(), const SpeechSettings()],
+      (context) => [
+        const ConnectionSettings(),
+        const StorageSettings(),
+        const SearchSettings(),
+        const SpeechSettings(),
+        const BackgroundSettings(),
+      ],
     ),
   ),
 ];

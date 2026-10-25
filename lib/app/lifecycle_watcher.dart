@@ -6,6 +6,10 @@ import '../core/storage/app_preferences.dart';
 import '../core/tdlib/td_client.dart';
 import '../features/auth/bloc/auth_bloc.dart';
 import '../features/auth/domain/auth_step.dart';
+import '../features/assistant/data/action_extractor.dart';
+import '../features/maintenance/data/storage_repository.dart';
+import '../features/transcription/data/whisper_service.dart';
+import '../features/maintenance/presentation/widgets/background_settings.dart';
 import '../features/search/data/message_indexer.dart';
 
 /// App lifecycle duties (spec §10.2):
@@ -22,7 +26,7 @@ class LifecycleWatcher extends StatefulWidget {
   State<LifecycleWatcher> createState() => _LifecycleWatcherState();
 }
 
-class _LifecycleWatcherState extends State<LifecycleWatcher> {
+class _LifecycleWatcherState extends State<LifecycleWatcher> with WidgetsBindingObserver {
   AppLifecycleListener? _listener;
   late final AppPreferences _prefs = context.read<AppPreferences>();
   var _foreground = true;
@@ -42,6 +46,14 @@ class _LifecycleWatcherState extends State<LifecycleWatcher> {
       },
     );
     _prefs.changes.addListener(_syncOnline);
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// Low-RAM devices (4 GB): give back the on-device models' memory first.
+  @override
+  void didHaveMemoryPressure() {
+    context.read<ActionExtractor>().releaseMemory().ignore();
+    context.read<WhisperService>().releaseMemory();
   }
 
   void _syncOnline() {
@@ -61,6 +73,7 @@ class _LifecycleWatcherState extends State<LifecycleWatcher> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _prefs.changes.removeListener(_syncOnline);
     _listener?.dispose();
     super.dispose();
@@ -75,6 +88,12 @@ class _LifecycleWatcherState extends State<LifecycleWatcher> {
         final step = state.step;
         if (step is AuthReady) {
           context.read<MessageIndexer>().activate(isBot: step.capabilities.isBot).ignore();
+          context.read<StorageRepository>().autoClean().catchError((_) {}).ignore();
+          maybeShowBatteryPrompt(
+            context,
+            alreadyShown: _prefs.batteryPromptShown,
+            markShown: () => _prefs.batteryPromptShown = true,
+          ).ignore();
         }
       },
       child: widget.child,

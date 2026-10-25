@@ -37,6 +37,7 @@ class ActionExtractor {
   LlamaEngine? _engine;
   Future<LlamaEngine>? _loading;
   Timer? _idle;
+  var _running = 0;
 
   Future<LlamaEngine> _ready() => _loading ??= () async {
     final path = await _models.ensure(BundledModel.actionModel);
@@ -50,6 +51,7 @@ class ActionExtractor {
 
   Future<ActionDraft> extract(String messageText, AssistantContext ctx) async {
     _idle?.cancel();
+    _running++;
     try {
       final engine = await _ready();
       final raw = await engine
@@ -75,8 +77,16 @@ class ActionExtractor {
       if (draft.kind == ActionKind.note && draft.notes.isEmpty) draft.notes = messageText;
       return draft;
     } finally {
+      _running--;
       _idle = Timer(const Duration(minutes: 2), unload);
     }
+  }
+
+  /// Frees the model unless a suggestion is being worked out right now.
+  Future<void> releaseMemory() async {
+    if (_running > 0) return;
+    _idle?.cancel();
+    await unload();
   }
 
   Future<void> unload() async {
