@@ -117,8 +117,18 @@ class MediaSender {
       );
     }
     if (media.kind == MediaKind.audio) {
+      // Embedded cover art shows up as a video stream.
+      final cover = media.probe?.hasVideo ?? false ? await _ffmpeg.coverArt(path) : null;
+      final coverProbe = cover == null ? null : await _ffmpeg.probe(cover);
       return td.InputMessageAudio(
         audio: td.InputFileLocal(path: path),
+        albumCoverThumbnail: cover == null
+            ? null
+            : td.InputThumbnail(
+                thumbnail: td.InputFileLocal(path: cover),
+                width: coverProbe?.width ?? 0,
+                height: coverProbe?.height ?? 0,
+              ),
         duration: media.probe?.duration.inSeconds ?? 0,
         title: _clip(trackTitle(media)),
         performer: _clip(media.probe?.performer ?? ''),
