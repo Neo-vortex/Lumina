@@ -302,6 +302,12 @@ chat info, stories, storage, the attach hub, polls, music, send options, live lo
 - `git lfs install` before cloning (the models are LFS).
 - Run: `flutter run --dart-define=TG_API_ID=… --dart-define=TG_API_HASH=…`
   (get them at my.telegram.org). Optionally add `--dart-define=TG_TEST_DC=true`.
+- **Local builds use `tool/flutter.sh`** (owner's choice): it reads the
+  api_id (digits) and api_hash (32 hex) from the git-ignored
+  `credential.txt` at the repo root and appends both defines to `run`,
+  `build`, `test`, `drive` and `attach` (other commands pass through).
+  `LUMINA_CREDENTIALS=<path>` points it at another file. Never commit or
+  print the file's contents.
 - ABI filter: arm64-v8a and x86_64.
 - **Licensing:** ffmpeg is the LGPL `ffmpeg_kit_flutter_new_full` build.
   Do not switch to the GPL variant, which would make the app GPL. H.264 and
