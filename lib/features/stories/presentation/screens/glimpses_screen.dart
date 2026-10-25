@@ -10,6 +10,7 @@ import '../../../../core/theme/glow_colors.dart';
 import '../../data/stories_repository.dart';
 import '../../domain/story_feed.dart';
 import '../widgets/story_halo.dart';
+import 'saved_stories_screen.dart';
 import 'story_viewer_screen.dart';
 
 /// "Glimpses": every active story as a vertical stream of tall preview
@@ -27,7 +28,16 @@ class GlimpsesScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final repo = context.read<StoriesRepository>();
     return Scaffold(
-      appBar: AppBar(title: const Text('Glimpses')),
+      appBar: AppBar(
+        title: const Text('Glimpses'),
+        actions: [
+          IconButton(
+            tooltip: 'Story history',
+            onPressed: () => Navigator.of(context).push(SavedStoriesScreen.route()),
+            icon: const Icon(Icons.bookmarks_rounded),
+          ),
+        ],
+      ),
       floatingActionButton: onPost == null
           ? null
           : FloatingActionButton.extended(

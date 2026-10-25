@@ -13,7 +13,10 @@ import '../../../../core/theme/motion.dart';
 import '../../../media/presentation/widgets/video_player_view.dart';
 import '../../data/stories_repository.dart';
 import '../../domain/story_feed.dart';
+import '../../data/saved_stories_store.dart';
+import '../widgets/story_areas_layer.dart';
 import '../widgets/story_halo.dart';
+import '../widgets/story_viewers_sheet.dart';
 
 /// Full-screen story viewer.
 ///
@@ -269,6 +272,12 @@ class _ChatStoriesState extends State<_ChatStories> with SingleTickerProviderSta
     }
   }
 
+  Future<void> _showViewers(td.Story story, td.Chat? chat) async {
+    _hold(true);
+    await showStoryViewers(context, story, asChat: chat != null && chat.type is td.ChatTypeSupergroup);
+    if (mounted) _hold(false);
+  }
+
   Future<void> _react(String? emoji) async {
     final s = _story;
     if (s == null) return;
@@ -323,7 +332,18 @@ class _ChatStoriesState extends State<_ChatStories> with SingleTickerProviderSta
           else if (story == null)
             const Center(child: CircularProgressIndicator(color: GlowColors.cyan))
           else
-            IgnorePointer(child: _content(story)),
+            Center(
+              child: AspectRatio(
+                aspectRatio: 9 / 16,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    IgnorePointer(child: _content(story)),
+                    StoryAreasLayer(story: story, onReact: _react, onBusy: _hold),
+                  ],
+                ),
+              ),
+            ),
           // Soft scrim so the caption and controls stay legible on bright media.
           const IgnorePointer(
             child: DecoratedBox(
@@ -471,7 +491,14 @@ class _ChatStoriesState extends State<_ChatStories> with SingleTickerProviderSta
                         ],
                       ),
                     ),
+                    if (story != null && mine)
+                      IconButton(
+                        tooltip: 'Viewers',
+                        onPressed: () => _showViewers(story, chat),
+                        icon: const Icon(Icons.visibility_rounded, color: Colors.white),
+                      ),
                     if (story != null && !mine) ...[
+                      _SaveButton(story: story, title: chat?.title ?? '', onBusy: _hold),
                       IconButton(
                         tooltip: chosen == null ? 'Like' : 'Remove reaction',
                         onPressed: () => _react(chosen == null ? '❤️' : null),
@@ -544,4 +571,57 @@ class _ChatStoriesState extends State<_ChatStories> with SingleTickerProviderSta
       ),
     ],
   );
+}
+
+/// "Save to history" for someone else's story (disabled when the poster
+/// turned saving off).
+class _SaveButton extends StatelessWidget {
+  const _SaveButton({required this.story, required this.title, required this.onBusy});
+
+  final td.Story story;
+  final String title;
+  final void Function(bool) onBusy;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.read<SavedStoriesStore>();
+    return ListenableBuilder(
+      listenable: store,
+      builder: (context, _) {
+        final saved = store.isSaved(story.senderChatId, story.id);
+        if (!story.canBeForwarded) {
+          return const IconButton(
+            tooltip: 'The poster turned off saving',
+            onPressed: null,
+            icon: Icon(Icons.bookmark_border_rounded, color: Colors.white24),
+          );
+        }
+        return IconButton(
+          tooltip: saved ? 'In your story history' : 'Save to history',
+          onPressed: saved
+              ? null
+              : () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  HapticFeedback.lightImpact();
+                  final r = await store.save(story, chatTitle: title);
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(switch (r) {
+                        SaveResult.saved => 'Saved to $title’s story history',
+                        SaveResult.alreadySaved => 'Already saved',
+                        SaveResult.protected => 'The poster turned off saving',
+                        SaveResult.unsupported => 'This story type can’t be saved',
+                        SaveResult.failed => 'Could not save the story',
+                      }),
+                    ),
+                  );
+                },
+          icon: Icon(
+            saved ? Icons.bookmark_rounded : Icons.bookmark_add_outlined,
+            color: saved ? GlowColors.amber : Colors.white,
+          ),
+        );
+      },
+    );
+  }
 }

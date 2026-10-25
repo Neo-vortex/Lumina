@@ -11,6 +11,7 @@ import '../../../../core/theme/glow_colors.dart';
 import '../../../../core/widgets/glow_background.dart';
 import '../../../chats/data/chats_repository.dart';
 import '../../data/chat_info_repository.dart';
+import '../chat_info_extensions.dart';
 import '../widgets/contact_picker.dart';
 import '../widgets/permissions_sheet.dart';
 
@@ -36,6 +37,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   late final ChatInfoRepository _repo = context.read<ChatInfoRepository>();
   late final TelegramCache _cache = context.read<TelegramCache>();
   ChatDetails? _details;
+  var _tab = 0;
   List<td.ChatMember> _members = const [];
   String? _error;
 
@@ -196,6 +198,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     final canInvite =
         isCreator || (rights?.canInviteUsers ?? false) || (isGroup && chat.permissions.canInviteUsers);
     final peer = _cache.peerUser(chat);
+    List<ChatInfoTab> tabs;
+    try {
+      tabs = context.read<ChatInfoExtensions>().tabs(context, chat);
+    } on ProviderNotFoundException {
+      tabs = const [];
+    }
 
     return Scaffold(
       body: GlowBackground(
@@ -236,70 +244,96 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
                       padding: const EdgeInsets.only(top: 4),
                       child: Text('@$u', style: const TextStyle(color: GlowColors.cyan)),
                     ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _Action(
-                        icon: chat.notificationSettings.muteFor > 0
-                            ? Icons.notifications_off_rounded
-                            : Icons.notifications_rounded,
-                        label: chat.notificationSettings.muteFor > 0 ? 'Unmute' : 'Mute',
-                        onTap: () => _run(
-                          () => context.read<ChatsRepository>().setMuted(
-                            chat.id,
-                            chat.notificationSettings.muteFor == 0,
+                  if (tabs.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: SegmentedButton<int>(
+                        segments: [
+                          const ButtonSegment(
+                            value: 0,
+                            icon: Icon(Icons.info_outline_rounded),
+                            label: Text('Info'),
                           ),
-                        ),
+                          for (var i = 0; i < tabs.length; i++)
+                            ButtonSegment(value: i + 1, icon: Icon(tabs[i].icon), label: Text(tabs[i].label)),
+                        ],
+                        selected: {_tab.clamp(0, tabs.length)},
+                        onSelectionChanged: (v) => setState(() => _tab = v.first),
                       ),
-                      if (chat.type is td.ChatTypeSupergroup && !_cache.isMember(chat))
-                        _Action(
-                          icon: Icons.login_rounded,
-                          label: 'Join',
-                          onTap: () => _run(() => _repo.join(chat), done: 'Joined'),
-                        ),
-                      if (isGroup && canInvite)
-                        _Action(
-                          icon: Icons.person_add_rounded,
-                          label: 'Add',
-                          onTap: () async {
-                            final ids = await ContactPickerScreen.pick(
-                              context,
-                              title: 'Add members',
-                              multiple: true,
-                              actionLabel: 'Add',
-                            );
-                            if (ids != null && ids.isNotEmpty) {
-                              await _run(() => _repo.addMembers(chat, ids), done: 'Added');
-                            }
-                          },
-                        ),
-                      if (isGroup && isAdmin)
-                        _Action(
-                          icon: Icons.tune_rounded,
-                          label: 'Permissions',
-                          onTap: () async {
-                            final r = await showPermissionsSheet(
-                              context,
-                              permissions: chat.permissions,
-                              slowMode: d?.slowModeDelay ?? 0,
-                              supportsSlowMode: chat.type is td.ChatTypeSupergroup,
-                            );
-                            if (r == null) return;
-                            await _run(() async {
-                              await _repo.setPermissions(chat, r.permissions);
-                              if (chat.type is td.ChatTypeSupergroup &&
-                                  r.slowMode != (d?.slowModeDelay ?? 0)) {
-                                await _repo.setSlowMode(chat, r.slowMode);
-                              }
-                            }, done: 'Saved');
-                          },
-                        ),
-                    ],
-                  ),
+                    ),
                 ],
               ),
             ),
+            if (_tab > 0 && _tab <= tabs.length)
+              ...tabs[_tab - 1].slivers(context)
+            else
+              SliverToBoxAdapter(
+                child: Column(
+                  children: [
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _Action(
+                          icon: chat.notificationSettings.muteFor > 0
+                              ? Icons.notifications_off_rounded
+                              : Icons.notifications_rounded,
+                          label: chat.notificationSettings.muteFor > 0 ? 'Unmute' : 'Mute',
+                          onTap: () => _run(
+                            () => context.read<ChatsRepository>().setMuted(
+                              chat.id,
+                              chat.notificationSettings.muteFor == 0,
+                            ),
+                          ),
+                        ),
+                        if (chat.type is td.ChatTypeSupergroup && !_cache.isMember(chat))
+                          _Action(
+                            icon: Icons.login_rounded,
+                            label: 'Join',
+                            onTap: () => _run(() => _repo.join(chat), done: 'Joined'),
+                          ),
+                        if (isGroup && canInvite)
+                          _Action(
+                            icon: Icons.person_add_rounded,
+                            label: 'Add',
+                            onTap: () async {
+                              final ids = await ContactPickerScreen.pick(
+                                context,
+                                title: 'Add members',
+                                multiple: true,
+                                actionLabel: 'Add',
+                              );
+                              if (ids != null && ids.isNotEmpty) {
+                                await _run(() => _repo.addMembers(chat, ids), done: 'Added');
+                              }
+                            },
+                          ),
+                        if (isGroup && isAdmin)
+                          _Action(
+                            icon: Icons.tune_rounded,
+                            label: 'Permissions',
+                            onTap: () async {
+                              final r = await showPermissionsSheet(
+                                context,
+                                permissions: chat.permissions,
+                                slowMode: d?.slowModeDelay ?? 0,
+                                supportsSlowMode: chat.type is td.ChatTypeSupergroup,
+                              );
+                              if (r == null) return;
+                              await _run(() async {
+                                await _repo.setPermissions(chat, r.permissions);
+                                if (chat.type is td.ChatTypeSupergroup &&
+                                    r.slowMode != (d?.slowModeDelay ?? 0)) {
+                                  await _repo.setSlowMode(chat, r.slowMode);
+                                }
+                              }, done: 'Saved');
+                            },
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             if (_error != null)
               SliverToBoxAdapter(
                 child: Padding(

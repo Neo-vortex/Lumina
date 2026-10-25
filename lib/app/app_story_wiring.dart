@@ -6,7 +6,9 @@ import '../core/storage/app_preferences.dart';
 import '../features/auth/bloc/auth_bloc.dart';
 import '../features/auth/domain/auth_step.dart';
 import '../features/chat_info/data/chat_info_repository.dart';
+import '../features/chat_info/presentation/chat_info_extensions.dart';
 import '../features/chats/presentation/widgets/chat_row_extensions.dart';
+import '../features/stories/presentation/screens/saved_stories_screen.dart';
 import '../features/stories/data/stories_repository.dart';
 import '../features/stories/domain/story_feed.dart';
 import '../features/stories/presentation/screens/glimpses_screen.dart';
@@ -62,3 +64,32 @@ void openGlimpses(BuildContext context) =>
     Navigator.of(context).push(GlimpsesScreen.route(onPost: postStoryAsMe));
 
 bool storiesVisible(BuildContext context) => !context.read<AppPreferences>().hideStories;
+
+/// Chat info → "Story history" for people and channels.
+class AppChatInfoExtensions extends ChatInfoExtensions {
+  const AppChatInfoExtensions({required this.prefs});
+
+  final AppPreferences prefs;
+
+  @override
+  List<ChatInfoTab> tabs(BuildContext context, td.Chat chat) {
+    if (prefs.hideStories) return const [];
+    final self = switch (context.read<AuthBloc>().state.step) {
+      AuthReady(:final me) => me.id,
+      _ => null,
+    };
+    final eligible = switch (chat.type) {
+      td.ChatTypePrivate(:final userId) => userId != self,
+      td.ChatTypeSupergroup() => true,
+      _ => false,
+    };
+    if (!eligible) return const [];
+    return [
+      ChatInfoTab(
+        label: 'Story history',
+        icon: Icons.bookmarks_rounded,
+        slivers: (context) => savedHistorySlivers(context, chat.id),
+      ),
+    ];
+  }
+}

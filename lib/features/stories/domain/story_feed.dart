@@ -22,17 +22,28 @@ abstract final class StoryFeed {
 /// The ffmpeg arguments that turn picked media into what Telegram stories
 /// accept: 1080×1920 photos and 720×1280 H.264 video at most 60 s long,
 /// letterboxed rather than cropped so nothing the user framed is lost.
+/// [overlay] is a transparent PNG of the burned-in stickers, drawn over the
+/// whole 9:16 frame.
 abstract final class StoryMedia {
   static const maxVideo = Duration(seconds: 60);
 
   static String _fit(int w, int h) =>
       'scale=$w:$h:force_original_aspect_ratio=decrease,pad=$w:$h:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1';
 
-  static List<String> photoArgs(String input, String output) => [
+  static List<String> _filter(int w, int h, String? overlay, String tail) => overlay == null
+      ? ['-vf', '${_fit(w, h)}$tail']
+      : [
+          '-filter_complex',
+          '[0:v]${_fit(w, h)}[b];[1:v]scale=$w:$h[o];[b][o]overlay=0:0$tail[v]',
+          '-map',
+          '[v]',
+        ];
+
+  static List<String> photoArgs(String input, String output, {String? overlay}) => [
     '-i',
     input,
-    '-vf',
-    _fit(1080, 1920),
+    if (overlay != null) ...['-i', overlay],
+    ..._filter(1080, 1920, overlay, ''),
     '-frames:v',
     '1',
     '-q:v',
@@ -45,16 +56,17 @@ abstract final class StoryMedia {
     String output, {
     required bool hasAudio,
     String encoder = 'h264_mediacodec',
+    String? overlay,
   }) => [
     '-i',
     input,
+    if (overlay != null) ...['-loop', '1', '-i', overlay],
     '-t',
     '${maxVideo.inSeconds}',
-    '-map',
-    '0:v:0',
+    if (overlay == null) ...['-map', '0:v:0'],
     if (hasAudio) ...['-map', '0:a:0?'],
-    '-vf',
-    '${_fit(720, 1280)},fps=30,format=yuv420p',
+    ..._filter(720, 1280, overlay, ',fps=30,format=yuv420p'),
+    if (overlay != null) '-shortest',
     '-c:v',
     encoder,
     '-b:v',

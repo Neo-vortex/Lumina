@@ -30,6 +30,8 @@ import '../features/maintenance/presentation/widgets/background_settings.dart';
 import '../features/maintenance/presentation/widgets/storage_settings.dart';
 import '../features/chats/presentation/widgets/chat_row_extensions.dart';
 import '../features/stories/data/stories_repository.dart';
+import '../features/stories/data/saved_stories_store.dart';
+import '../features/chat_info/presentation/chat_info_extensions.dart';
 import '../features/chat_info/data/chat_info_repository.dart';
 import '../features/chat_info/presentation/compose_flows.dart';
 import '../features/conversation/presentation/screens/conversation_screen.dart';
@@ -127,6 +129,20 @@ List<RepositoryProvider<Object>> featureProviders() => [
       ffmpeg: c.read<FfmpegService>(),
     ),
     dispose: (r) => r.dispose(),
+  ),
+  RepositoryProvider<SavedStoriesStore>(
+    lazy: false,
+    create: (c) => SavedStoriesStore(
+      client: c.read<TdClient>(),
+      stories: c.read<StoriesRepository>(),
+      cache: c.read<TelegramCache>(),
+      files: c.read<FileStore>(),
+      ffmpeg: c.read<FfmpegService>(),
+    ),
+    dispose: (s) => s.dispose(),
+  ),
+  RepositoryProvider<ChatInfoExtensions>(
+    create: (c) => AppChatInfoExtensions(prefs: c.read<AppPreferences>()),
   ),
   RepositoryProvider<ChatRowExtensions>(
     create: (c) =>
