@@ -151,11 +151,47 @@ Future<void> copyMessageText(BuildContext context, td.Message m) async {
   }
 }
 
-/// Free text selection inside one message (user request).
-Future<void> showSelectText(BuildContext context, td.Message m) {
+/// The quote for [selected] text inside [message], or null when the
+/// selection can't be found in it. Only the entity types TDLib allows in
+/// quotes are kept (and must be), clipped to the quoted range. [maxLength]
+/// is TDLib's default `message_reply_quote_length_max`.
+td.InputTextQuote? quoteFromSelection(td.FormattedText message, String selected, {int maxLength = 1024}) {
+  final trimmed = selected.trim();
+  if (trimmed.isEmpty) return null;
+  final start = message.text.indexOf(trimmed);
+  if (start < 0) return null;
+  final end = start + (trimmed.length > maxLength ? maxLength : trimmed.length);
+  final entities = <td.TextEntity>[
+    for (final e in message.entities)
+      if (e.type
+          case td.TextEntityTypeBold() ||
+              td.TextEntityTypeItalic() ||
+              td.TextEntityTypeUnderline() ||
+              td.TextEntityTypeStrikethrough() ||
+              td.TextEntityTypeSpoiler() ||
+              td.TextEntityTypeCustomEmoji()
+          when e.offset < end && e.offset + e.length > start)
+        td.TextEntity(
+          offset: (e.offset < start ? start : e.offset) - start,
+          length:
+              ((e.offset + e.length > end ? end : e.offset + e.length) -
+              (e.offset < start ? start : e.offset)),
+          type: e.type,
+        ),
+  ];
+  return td.InputTextQuote(
+    text: td.FormattedText(text: message.text.substring(start, end), entities: entities),
+    position: start,
+  );
+}
+
+/// Free text selection inside one message (user request). With
+/// [canQuote], a "Quote" button returns the selected passage to reply with.
+Future<td.InputTextQuote?> showSelectText(BuildContext context, td.Message m, {bool canQuote = false}) {
   final text = _plainText(m);
   if (text == null) return Future.value();
-  return showModalBottomSheet<void>(
+  var selected = '';
+  return showModalBottomSheet<td.InputTextQuote>(
     context: context,
     backgroundColor: GlowColors.surfaceHigh,
     isScrollControlled: true,
@@ -163,8 +199,52 @@ Future<void> showSelectText(BuildContext context, td.Message m) {
     builder: (context) => SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-        child: SelectionArea(
-          child: FormattedTextView(text, style: const TextStyle(fontSize: 17, height: 1.45)),
+        child: StatefulBuilder(
+          builder: (context, setState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Flexible(
+                child: SingleChildScrollView(
+                  child: SelectionArea(
+                    onSelectionChanged: canQuote
+                        ? (c) {
+                            final next = c?.plainText ?? '';
+                            if (next.trim().isEmpty != selected.trim().isEmpty) {
+                              setState(() => selected = next);
+                            } else {
+                              selected = next;
+                            }
+                          }
+                        : null,
+                    child: FormattedTextView(text, style: const TextStyle(fontSize: 17, height: 1.45)),
+                  ),
+                ),
+              ),
+              if (canQuote) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.icon(
+                    onPressed: selected.trim().isEmpty
+                        ? null
+                        : () {
+                            final quote = quoteFromSelection(text, selected);
+                            if (quote == null) {
+                              ScaffoldMessenger.of(
+                                context,
+                              ).showSnackBar(const SnackBar(content: Text("Couldn't quote that selection")));
+                              return;
+                            }
+                            Navigator.pop(context, quote);
+                          },
+                    icon: const Icon(Icons.format_quote_rounded),
+                    label: const Text('Quote'),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     ),

@@ -238,7 +238,18 @@ class ConversationCubit extends Cubit<ConversationState> {
 
   // ---- Composer --------------------------------------------------------------
 
-  void startReply(td.Message message) => emit(state.copyWith(replyTo: () => message, editing: () => null));
+  /// Reply to [message], optionally quoting part of its text.
+  void startReply(td.Message message, {td.InputTextQuote? quote}) =>
+      emit(state.copyWith(replyTo: () => message, replyQuote: () => quote, editing: () => null));
+
+  /// Brings back the reply (and quote) a saved draft points at.
+  Future<void> restoreDraftReply(td.InputMessageReplyTo? replyTo) async {
+    if (replyTo is! td.InputMessageReplyToMessage || state.replyTo != null) return;
+    final m = await messageById(replyTo.messageId);
+    if (m != null && !isClosed && state.replyTo == null && state.editing == null) {
+      startReply(m, quote: replyTo.quote);
+    }
+  }
 
   void startEdit(td.Message message) => emit(state.copyWith(editing: () => message, replyTo: () => null));
 
@@ -271,6 +282,7 @@ class ConversationCubit extends Cubit<ConversationState> {
           f.text,
           entities: f.entities,
           replyToMessageId: replyTo?.id,
+          quote: state.replyQuote,
           options: options,
           linkPreviewOptions: linkPreview,
         );
@@ -294,6 +306,7 @@ class ConversationCubit extends Cubit<ConversationState> {
         chatId,
         content,
         replyToMessageId: state.replyTo?.id,
+        quote: state.replyQuote,
         options: options,
       );
       onSent?.call(pending);
@@ -310,7 +323,13 @@ class ConversationCubit extends Cubit<ConversationState> {
   }) async {
     try {
       if (state.hasNewer) await _loadLatest(scroll: true);
-      await _repository.sendAlbum(chatId, contents, replyToMessageId: state.replyTo?.id, options: options);
+      await _repository.sendAlbum(
+        chatId,
+        contents,
+        replyToMessageId: state.replyTo?.id,
+        quote: state.replyQuote,
+        options: options,
+      );
       emit(state.copyWith(replyTo: () => null));
       return null;
     } on TdException catch (e) {
@@ -330,7 +349,13 @@ class ConversationCubit extends Cubit<ConversationState> {
   void chatAction(td.ChatAction? action) => _repository.sendAction(chatId, action).ignore();
 
   Future<void> saveDraft(String text, {List<td.TextEntity> entities = const []}) => _repository
-      .saveDraft(chatId, text, entities: entities, replyToMessageId: state.replyTo?.id)
+      .saveDraft(
+        chatId,
+        text,
+        entities: entities,
+        replyToMessageId: state.replyTo?.id,
+        quote: state.replyQuote,
+      )
       .catchError((_) {});
 
   Future<td.LinkPreview?> linkPreview(td.FormattedText text) => _repository.linkPreview(text);

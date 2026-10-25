@@ -209,8 +209,15 @@ does not copy Telegram's look.
 **D. Rich text leftovers**
 - Animated custom emoji (TGS/WebM) show their static thumbnail. TGS needs
   a Lottie renderer.
-- Drafts keep formatting, but reply-quote (`InputTextQuote`) is not
-  supported.
+- Done: reply quotes. "Select text" has a Quote button
+  (`quoteFromSelection` in `message_menu.dart` keeps only the entity types
+  TDLib allows, clipped). `ConversationState.replyQuote` goes out with
+  sends, albums and drafts, and drafts bring back their reply and quote
+  (`restoreDraftReply`). The composer strip shows the passage, and
+  received replies show a manual quote instead of the message preview.
+  The quote is located by the first match of the selected text, so a
+  repeated phrase may get the wrong `position` (TDLib treats it as
+  approximate).
 - Instant View: `PageBlockEmbedded` HTML is not executed (it shows the
   poster and links out). Collages are a simple PageView.
 
@@ -253,9 +260,9 @@ does not copy Telegram's look.
 | Rich text (code blocks, quotes, custom emoji, card numbers, media timestamps), composer formatting menu, link previews (receive + compose with size/position/remove), Instant View reader, Custom Tab links | ✅ | `core/telegram/entity_edit.dart`, `formatted_text_view.dart`, `conversation/.../formatting_controller.dart`, `link_preview_card.dart`, `instant_view_screen.dart` |
 | Hardening (cache/optimizeStorage, battery prompt, 16 KB check) | ✅ | `lib/features/maintenance/` (StorageRepository: usage by kind, clear, keep-media auto clean; Background settings + one-time battery prompt in `LifecycleWatcher`); memory pressure frees the LLM and Whisper; `tool/check_16kb.py <apk>` |
 
-Tests: `flutter test`, 143 tests covering routing, auth FSM (bloc_test),
+Tests: `flutter test`, 149 tests covering routing, auth FSM (bloc_test),
 error mapping, cache ordering, row grouping, video presets, search, assistant,
-chat info, stories, storage, the attach hub, polls, music, send options, live locations and the scheduled list. Run
+chat info, stories, storage, the attach hub, polls, music, send options, live locations, the scheduled list and reply quotes. Run
 `flutter analyze` too; it must stay at zero issues.
 
 ## 4. Environment & build

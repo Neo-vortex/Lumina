@@ -16,6 +16,9 @@ class MessagesRepository {
   final TdClient _client;
   final AppPreferences _prefs;
 
+  static td.InputMessageReplyTo? _replyTo(int? messageId, td.InputTextQuote? quote) =>
+      messageId == null ? null : td.InputMessageReplyToMessage(messageId: messageId, quote: quote);
+
   Future<void> openChat(int chatId) => _client.invoke<td.Ok>(td.OpenChat(chatId: chatId));
 
   Future<void> closeChat(int chatId) => _client.invoke<td.Ok>(td.CloseChat(chatId: chatId));
@@ -80,6 +83,7 @@ class MessagesRepository {
     String text, {
     List<td.TextEntity> entities = const [],
     int? replyToMessageId,
+    td.InputTextQuote? quote,
     SendOptions options = const SendOptions(),
     bool disableLinkPreview = false,
     td.LinkPreviewOptions? linkPreviewOptions,
@@ -89,7 +93,7 @@ class MessagesRepository {
       td.SendMessage(
         chatId: chatId,
         messageThreadId: 0,
-        replyTo: replyToMessageId == null ? null : td.InputMessageReplyToMessage(messageId: replyToMessageId),
+        replyTo: _replyTo(replyToMessageId, quote),
         options: options.toTd(),
         inputMessageContent: td.InputMessageText(
           text: formatted,
@@ -115,12 +119,13 @@ class MessagesRepository {
     int chatId,
     td.InputMessageContent content, {
     int? replyToMessageId,
+    td.InputTextQuote? quote,
     SendOptions options = const SendOptions(),
   }) => _client.invoke<td.Message>(
     td.SendMessage(
       chatId: chatId,
       messageThreadId: 0,
-      replyTo: replyToMessageId == null ? null : td.InputMessageReplyToMessage(messageId: replyToMessageId),
+      replyTo: _replyTo(replyToMessageId, quote),
       options: options.toTd(),
       inputMessageContent: content,
     ),
@@ -130,12 +135,13 @@ class MessagesRepository {
     int chatId,
     List<td.InputMessageContent> contents, {
     int? replyToMessageId,
+    td.InputTextQuote? quote,
     SendOptions options = const SendOptions(),
   }) => _client.invoke<td.Messages>(
     td.SendMessageAlbum(
       chatId: chatId,
       messageThreadId: 0,
-      replyTo: replyToMessageId == null ? null : td.InputMessageReplyToMessage(messageId: replyToMessageId),
+      replyTo: _replyTo(replyToMessageId, quote),
       options: options.toTd(),
       inputMessageContents: contents,
     ),
@@ -268,6 +274,7 @@ class MessagesRepository {
     String text, {
     List<td.TextEntity> entities = const [],
     int? replyToMessageId,
+    td.InputTextQuote? quote,
   }) => _client.invoke<td.Ok>(
     td.SetChatDraftMessage(
       chatId: chatId,
@@ -275,9 +282,7 @@ class MessagesRepository {
       draftMessage: text.trim().isEmpty && replyToMessageId == null
           ? null
           : td.DraftMessage(
-              replyTo: replyToMessageId == null
-                  ? null
-                  : td.InputMessageReplyToMessage(messageId: replyToMessageId),
+              replyTo: _replyTo(replyToMessageId, quote),
               date: DateTime.now().millisecondsSinceEpoch ~/ 1000,
               inputMessageText: td.InputMessageText(
                 text: td.FormattedText(text: text, entities: entities),

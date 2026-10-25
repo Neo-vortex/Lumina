@@ -22,6 +22,7 @@ class Composer extends StatefulWidget {
     super.key,
     required this.controller,
     required this.replyTo,
+    this.replyQuote,
     required this.editing,
     required this.onSend,
     required this.onCancelMode,
@@ -37,6 +38,9 @@ class Composer extends StatefulWidget {
 
   final TextEditingController controller;
   final td.Message? replyTo;
+
+  /// The quoted passage of [replyTo], shown instead of its preview.
+  final td.InputTextQuote? replyQuote;
   final td.Message? editing;
 
   /// [preview] says how to attach (or not) the link preview.
@@ -191,6 +195,7 @@ class _ComposerState extends State<Composer> {
                   : _ContextStrip(
                       message: contextMessage,
                       editing: widget.editing != null,
+                      quote: widget.editing == null ? widget.replyQuote : null,
                       onCancel: widget.onCancelMode,
                     ),
             ),
@@ -338,10 +343,11 @@ class _PreviewStrip extends StatelessWidget {
 }
 
 class _ContextStrip extends StatelessWidget {
-  const _ContextStrip({required this.message, required this.editing, required this.onCancel});
+  const _ContextStrip({required this.message, required this.editing, required this.onCancel, this.quote});
 
   final td.Message message;
   final bool editing;
+  final td.InputTextQuote? quote;
   final VoidCallback onCancel;
 
   @override
@@ -352,7 +358,15 @@ class _ContextStrip extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 8, 4, 0),
       child: Row(
         children: [
-          Icon(editing ? Icons.edit_rounded : Icons.reply_rounded, color: accent, size: 20),
+          Icon(
+            editing
+                ? Icons.edit_rounded
+                : quote != null
+                ? Icons.format_quote_rounded
+                : Icons.reply_rounded,
+            color: accent,
+            size: 20,
+          ),
           const SizedBox(width: 10),
           Container(width: 2, height: 32, color: accent),
           const SizedBox(width: 8),
@@ -363,11 +377,11 @@ class _ContextStrip extends StatelessWidget {
                 Text(
                   editing
                       ? 'Editing'
-                      : 'Reply to ${message.isOutgoing ? 'yourself' : Display.senderName(cache, message.senderId)}',
+                      : '${quote != null ? 'Quote' : 'Reply to'} ${message.isOutgoing ? 'yourself' : Display.senderName(cache, message.senderId)}',
                   style: TextStyle(color: accent, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
                 Text(
-                  Display.preview(cache, message),
+                  quote != null ? '“${quote!.text.text}”' : Display.preview(cache, message),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13, color: GlowColors.textMuted),
