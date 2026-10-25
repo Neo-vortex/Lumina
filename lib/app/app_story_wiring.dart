@@ -60,3 +60,5 @@ Future<void> postStoryAsMe(BuildContext context) async {
 
 void openGlimpses(BuildContext context) =>
     Navigator.of(context).push(GlimpsesScreen.route(onPost: postStoryAsMe));
+
+bool storiesVisible(BuildContext context) => !context.read<AppPreferences>().hideStories;

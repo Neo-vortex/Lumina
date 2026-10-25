@@ -16,6 +16,7 @@ class ComposeAction {
     required this.label,
     required this.onSelected,
     this.botAllowed = false,
+    this.visible,
   });
 
   final IconData icon;
@@ -24,6 +25,9 @@ class ComposeAction {
 
   /// Shown for bot accounts too.
   final bool botAllowed;
+
+  /// Hides the entry when it returns false (e.g. stories turned off).
+  final bool Function(BuildContext context)? visible;
 }
 
 /// Compose actions contributed by features, provided by the composition root.
@@ -54,7 +58,7 @@ class _ComposeOrbState extends State<ComposeOrb> {
     } on ProviderNotFoundException {
       actions = const [];
     }
-    actions = actions.where((a) => !isBot || a.botAllowed).toList();
+    actions = actions.where((a) => (!isBot || a.botAllowed) && (a.visible?.call(context) ?? true)).toList();
     if (actions.isEmpty) return;
     final box = context.findRenderObject() as RenderBox;
     final center = box.localToGlobal(box.size.center(Offset.zero));
