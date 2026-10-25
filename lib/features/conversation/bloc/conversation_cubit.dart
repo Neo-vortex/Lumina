@@ -282,13 +282,21 @@ class ConversationCubit extends Cubit<ConversationState> {
     }
   }
 
+  /// [onSent] gets the pending message (temporary id until TDLib confirms).
   Future<String?> sendContent(
     td.InputMessageContent content, {
     SendOptions options = const SendOptions(),
+    void Function(td.Message pending)? onSent,
   }) async {
     try {
       if (state.hasNewer) await _loadLatest(scroll: true);
-      await _repository.sendContent(chatId, content, replyToMessageId: state.replyTo?.id, options: options);
+      final pending = await _repository.sendContent(
+        chatId,
+        content,
+        replyToMessageId: state.replyTo?.id,
+        options: options,
+      );
+      onSent?.call(pending);
       emit(state.copyWith(replyTo: () => null));
       return null;
     } on TdException catch (e) {

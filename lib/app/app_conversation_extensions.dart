@@ -22,6 +22,7 @@ import '../features/conversation/data/messages_repository.dart';
 import '../features/conversation/presentation/screens/scheduled_messages_screen.dart';
 import '../features/conversation/presentation/widgets/conversation_extensions.dart';
 import '../features/conversation/presentation/widgets/message_menu.dart';
+import '../features/media/data/live_location_service.dart';
 import '../features/media/presentation/screens/send_media_screen.dart';
 import '../features/conversation/presentation/widgets/send_orb.dart';
 import '../features/media/presentation/widgets/attach_sheet.dart';
@@ -41,12 +42,14 @@ class AppConversationExtensions extends ConversationExtensions {
     required this.transcripts,
     required this.prefs,
     required this.flows,
+    required this.liveLocations,
   });
 
   final VoiceRecorder recorder;
   final TranscriptionCenter transcripts;
   final AppPreferences prefs;
   final ComposeFlows flows;
+  final LiveLocationService liveLocations;
 
   @override
   void openChatInfo(BuildContext context, td.Chat chat) =>
@@ -252,9 +255,20 @@ class AppConversationExtensions extends ConversationExtensions {
         final note = await VideoNoteRecorderScreen.open(context);
         if (note != null) await sendOne(note);
         return;
+      case ContentPick(:final content, liveLocationSeconds: final live) when live > 0:
+        if (!await liveLocations.prepare()) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context)
+                .showSnackBar(const SnackBar(content: Text('Live location needs location access')));
+          }
+          return;
+        }
+        final error = await cubit.sendContent(content, onSent: (m) => liveLocations.track(m, live));
+        if (error != null && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+        }
+        return;
       case ContentPick(:final content):
-        // TODO(handoff §2.3): live locations are sent but not yet kept
-        // updated (LiveLocationService not written).
         await sendOne(content);
         return;
       case ContactPick():

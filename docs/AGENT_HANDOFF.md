@@ -165,18 +165,27 @@ does not copy Telegram's look.
     answer was a row index, but TDLib wants the index among non-empty
     options, and removing a row above it didn't shift it.
   - Picker research recorded as UX-34…37.
+  - Live locations stay updated: `media/data/live_location_service.dart`
+    (`LiveLocationService`, provided non-lazily in `feature_wiring.dart`).
+    - `prepare()` asks for precise location + notifications and starts the
+      native `LiveLocationService.kt` foreground service (type `location`);
+      `track()` gets the pending message from
+      `ConversationCubit.sendContent(onSent:)`.
+    - The temporary id is swapped on `updateMessageSendSucceeded`; failed
+      sends are dropped. Every 60 s a fix from
+      `SystemChannel.currentPosition()` (GPS when precise, never prompts)
+      goes out via `editMessageLiveLocation` if it moved ≥ 20 m or 5 min
+      passed.
+    - Stops at expiry, on `expiresIn == 0` (the bubble's "Stop sharing" or
+      another device), on deletion and on logout. Shares are saved in prefs
+      (`live.shares`) and resume, without prompting, the next time the app
+      starts after the process was killed.
+    - Swiping the task away stops the service (`onTaskRemoved`): the Flutter
+      engine is gone, so nothing could send updates anyway.
   - Tests: tile order, `buildPoll`, music kind/tags/audio content, send
-    options and schedule presets.
+    options, schedule presets and `LiveLocationService`.
 - TODO:
-  1. **Live location updater**: write `media/data/live_location_service.dart`.
-     - Every ~60 s while sharing, get `SystemChannel.currentLocation()`
-       and call `editMessageLiveLocation`.
-     - Swap the temporary id on `updateMessageSendSucceeded`. Stop at
-       expiry, or when the message shows `expiresIn == 0`.
-     - Needs a foreground service to keep going in the background, plus
-       `ACCESS_FINE_LOCATION` if wanted.
-     - Today the live message is only sent once.
-  2. Album cover thumbnails for music (`albumCoverThumbnail`) are not sent.
+  1. Album cover thumbnails for music (`albumCoverThumbnail`) are not sent.
 - `ScheduledMessagesScreen` itself has no widget test yet. Scheduled
   updates no longer leak into the timeline.
 
@@ -238,9 +247,9 @@ does not copy Telegram's look.
 | Rich text (code blocks, quotes, custom emoji, card numbers, media timestamps), composer formatting menu, link previews (receive + compose with size/position/remove), Instant View reader, Custom Tab links | ✅ | `core/telegram/entity_edit.dart`, `formatted_text_view.dart`, `conversation/.../formatting_controller.dart`, `link_preview_card.dart`, `instant_view_screen.dart` |
 | Hardening (cache/optimizeStorage, battery prompt, 16 KB check) | ✅ | `lib/features/maintenance/` (StorageRepository: usage by kind, clear, keep-media auto clean; Background settings + one-time battery prompt in `LifecycleWatcher`); memory pressure frees the LLM and Whisper; `tool/check_16kb.py <apk>` |
 
-Tests: `flutter test`, 130 tests covering routing, auth FSM (bloc_test),
+Tests: `flutter test`, 137 tests covering routing, auth FSM (bloc_test),
 error mapping, cache ordering, row grouping, video presets, search, assistant,
-chat info, stories, storage, the attach hub, polls, music and send options. Run
+chat info, stories, storage, the attach hub, polls, music, send options and live locations. Run
 `flutter analyze` too; it must stay at zero issues.
 
 ## 4. Environment & build
@@ -543,6 +552,9 @@ chat info, stories, storage, the attach hub, polls, music and send options. Run
 - Streaming: VLC and ExoPlayer seeking through the loopback server, and
   two concurrent range requests on one file.
 - `h264_mediacodec` encoding on several SoCs (the fallback is `mpeg4`).
+- Live location in the background on Android 14+ (foreground service type
+  `location` with while-in-use permission), on Android 7–10
+  (`requestSingleUpdate` path), and the notification on Android 13+.
 - Bots and `loadChats`: confirm the error code (currently 400, treated as
   silent).
 - A TalkBack pass, and a 16 KB page-size emulator image (VLC, ffmpeg,
