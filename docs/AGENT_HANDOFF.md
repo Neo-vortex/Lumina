@@ -119,8 +119,8 @@ does not copy Telegram's look.
 | Chat list (timeline ribbon, search, actions) | ✅ | `lib/features/chats/` |
 | Conversation (bubbles, reply/edit/forward/pin/react/select, search, drafts, typing, schedule) | ✅ | `lib/features/conversation/` |
 | Ghost mode, ads toggle, sponsored messages | ✅ | prefs + settings + conversation |
-| Home shell (nav bar, compose orb radial menu) | ✅ (menu has no actions yet) | `lib/features/home/` |
-| Settings (privacy, stories, media, channels) | ✅ partial | `lib/features/settings/` |
+| Home shell (nav bar, compose orb radial menu) | ✅ (new message/group/channel/secret chat, Glimpses, post story) | `lib/features/home/` |
+| Settings (privacy, stories, media, channels, connection, storage, search, speech, background) | ✅ | `lib/features/settings/` |
 | Media: photos, videos, GIFs, albums (cluster), documents, stickers, viewer, VLC player, attach + review, converter | ✅ (APK builds; verify on device) | `lib/features/media/`, `conversation/.../content/` |
 | Voice notes (record, Opus, waveform, playback 0.5–4×), video notes (play + record), music | ✅ | `lib/features/voice/`, `core/media/audio_playback.dart` |
 | Whisper (bundled model, transcribe, translate, dictation, chunking) | ✅ | `lib/features/transcription/`, `core/models/` |
@@ -131,8 +131,9 @@ does not copy Telegram's look.
 | Stories | ✅ | `lib/features/stories/` (StoriesRepository, halos via `ChatRowExtensions`, viewer with bottom-left ring, Glimpses grid, post with ffmpeg 1080×1920 / 720×1280 prep); wired in `app/app_story_wiring.dart` |
 | Hardening (cache/optimizeStorage, battery prompt, 16 KB check) | ✅ | `lib/features/maintenance/` (StorageRepository: usage by kind, clear, keep-media auto clean; Background settings + one-time battery prompt in `LifecycleWatcher`); memory pressure frees the LLM and Whisper; `tool/check_16kb.py <apk>` |
 
-Tests: `flutter test`, 52+ tests covering routing, auth FSM (bloc_test),
-error mapping, cache ordering, row grouping and video presets. Run
+Tests: `flutter test`, 99 tests covering routing, auth FSM (bloc_test),
+error mapping, cache ordering, row grouping, video presets, search, assistant,
+chat info, stories and storage. Run
 `flutter analyze` too; it must stay at zero issues.
 
 ## 4. Environment & build

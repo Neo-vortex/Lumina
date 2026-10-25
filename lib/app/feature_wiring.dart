@@ -151,6 +151,16 @@ ComposeActions _composeActions(ComposeFlows flows) => ComposeActions([
   ComposeAction(icon: Icons.group_add_rounded, label: 'New group', onSelected: flows.newGroup),
   ComposeAction(icon: Icons.campaign_rounded, label: 'New channel', onSelected: flows.newChannel),
   ComposeAction(icon: Icons.lock_rounded, label: 'Secret chat', onSelected: flows.newSecretChat),
-  const ComposeAction(icon: Icons.blur_on_rounded, label: 'Glimpses', onSelected: openGlimpses),
-  const ComposeAction(icon: Icons.add_a_photo_rounded, label: 'Post story', onSelected: postStoryAsMe),
+  const ComposeAction(
+    icon: Icons.blur_on_rounded,
+    label: 'Glimpses',
+    onSelected: openGlimpses,
+    visible: storiesVisible,
+  ),
+  const ComposeAction(
+    icon: Icons.add_a_photo_rounded,
+    label: 'Post story',
+    onSelected: postStoryAsMe,
+    visible: storiesVisible,
+  ),
 ]);
