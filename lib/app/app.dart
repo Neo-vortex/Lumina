@@ -9,6 +9,7 @@ import '../core/tdlib/td_client.dart';
 import '../core/tdlib/td_paths.dart';
 import '../core/telegram/custom_emoji_store.dart';
 import '../core/telegram/file_store.dart';
+import '../core/telegram/display.dart';
 import '../core/telegram/telegram_cache.dart';
 import '../core/theme/glow_theme.dart';
 import '../features/auth/bloc/auth_bloc.dart';
@@ -74,8 +75,17 @@ class LuminaApp extends StatelessWidget {
           // App-wide and not lazy: incoming calls ring wherever the user is.
           BlocProvider(
             lazy: false,
-            create: (context) =>
-                CallCubit(repository: context.read<CallsRepository>(), engine: context.read<CallEngine>()),
+            create: (context) {
+              final engine = context.read<CallEngine>();
+              final cache = context.read<TelegramCache>();
+              return CallCubit(
+                repository: context.read<CallsRepository>(),
+                engine: engine,
+                system: engine is CallSystem ? engine as CallSystem : null,
+                nameOf: (id) => Display.userName(cache.users[id]),
+                useCallingAccount: () => preferences.callsUseCallingAccount,
+              );
+            },
           ),
         ],
         child: MaterialApp(

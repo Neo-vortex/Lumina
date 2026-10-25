@@ -136,6 +136,12 @@ class AppPreferences {
   String get attachUsage => _string('attach.usage') ?? '{}';
   set attachUsage(String v) => _set('attach.usage', v);
 
+  /// Calls show in the Phone app's own in-call screen through Lumina's
+  /// calling account (owner item 21). Off: Lumina's call screen, with
+  /// Telecom still knowing about the call.
+  bool get callsUseCallingAccount => _bool('calls.callingAccount', false);
+  set callsUseCallingAccount(bool v) => _set('calls.callingAccount', v);
+
   /// Active outgoing live locations (JSON), resumed after process death.
   String get liveLocations => _string('live.shares') ?? '[]';
   set liveLocations(String v) => _set('live.shares', v);

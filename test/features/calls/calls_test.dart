@@ -91,6 +91,8 @@ td.Call call(int id, td.CallState state, {bool outgoing = true, bool video = fal
     td.Call(id: id, userId: 42, isOutgoing: outgoing, isVideo: video, state: state);
 
 void main() {
+  systemTests();
+
   group('engine parameters', () {
     test('reflectors are numbered by id and authenticate with their peer tag', () {
       final p = engineParamsFor(
@@ -291,6 +293,252 @@ void main() {
     test('without the engine, calling explains why', () async {
       engine.isAvailable = false;
       expect(await cubit.startCall(42), contains('not available'));
+      expect(client.sentOf<td.CreateCall>(), isEmpty);
+    });
+  });
+}
+
+class FakeSystem implements CallSystem {
+  final log = <String>[];
+  var telecomTakesCalls = true;
+  String? dialed;
+  var micGranted = true;
+
+  @override
+  Future<bool> registerTelecom({required bool provider}) async {
+    log.add('register provider=$provider');
+    return true;
+  }
+
+  @override
+  Future<bool> callingAccountEnabled() async => false;
+
+  @override
+  Future<void> openCallingAccounts() async {}
+
+  @override
+  Future<bool> reportIncoming({
+    required int callId,
+    required String name,
+    required bool video,
+    required bool provider,
+  }) async {
+    log.add('incoming $callId $name');
+    return telecomTakesCalls;
+  }
+
+  @override
+  Future<bool> reportOutgoing({
+    required int callId,
+    required String name,
+    required bool video,
+    required bool provider,
+  }) async {
+    log.add('outgoing $callId $name');
+    return true;
+  }
+
+  @override
+  Future<void> setTelecomState(String state, {String? reason}) async =>
+      log.add(reason == null ? 'state $state' : 'state $state $reason');
+
+  @override
+  Future<void> ring({required String name, required bool video}) async => log.add('ring $name');
+
+  @override
+  Future<void> stopRinging() async => log.add('stopRinging');
+
+  @override
+  Future<void> showOngoing({required String title, required String text, required bool video}) async =>
+      log.add('ongoing $title');
+
+  @override
+  Future<void> hideOngoing() async => log.add('hideOngoing');
+
+  @override
+  Future<void> setSpeaker(bool on) async => log.add('speaker $on');
+
+  @override
+  Future<String?> takeDialerCall() async {
+    final d = dialed;
+    dialed = null;
+    return d;
+  }
+
+  @override
+  Future<Map<String, bool>> requestPermissions(List<String> names) async => {
+    for (final n in names) n: n != 'microphone' || micGranted,
+  };
+}
+
+void systemTests() {
+  group('CallCubit with the phone system', () {
+    late FakeTdClient client;
+    late FakeEngine engine;
+    late FakeSystem system;
+    CallCubit? cubit;
+
+    CallCubit make() => cubit = CallCubit(
+      repository: CallsRepository(client),
+      engine: engine,
+      system: system,
+      nameOf: (id) => 'Ana',
+      useCallingAccount: () => false,
+    );
+
+    setUp(() {
+      client = FakeTdClient()
+        ..respond = (f) => switch (f) {
+          td.CreateCall() => const td.CallId(id: 5),
+          td.GetOption() => const td.OptionValueInteger(value: 20000),
+          td.GetAuthorizationState() => const td.AuthorizationStateReady(),
+          td.SearchUserByPhoneNumber() => fakeUser().copyWith(id: 42),
+          _ => const td.Ok(),
+        };
+      engine = FakeEngine();
+      system = FakeSystem();
+    });
+
+    tearDown(() => cubit?.close());
+
+    Future<void> settle() async {
+      for (var i = 0; i < 5; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+    }
+
+    test('incoming calls go to Telecom; our ringer only when Telecom asks or refuses', () async {
+      make();
+      await settle();
+      expect(system.log.first, 'register provider=false');
+      client.emitUpdate(
+        td.UpdateCall(
+          call: call(8, const td.CallStatePending(isCreated: true, isReceived: true), outgoing: false),
+        ),
+      );
+      await settle();
+      expect(system.log, contains('incoming 8 Ana'));
+      expect(system.log, isNot(contains('ring Ana')));
+      engine.emit(const EngineShowIncomingUi());
+      await settle();
+      expect(system.log, contains('ring Ana'));
+
+      // Answer from a Bluetooth headset / the notification.
+      engine.emit(const EngineSystemAction('accept'));
+      await settle();
+      expect(client.sentOf<td.AcceptCall>(), hasLength(1));
+      expect(system.log, contains('stopRinging'));
+    });
+
+    test('when Telecom refuses, the notification rings', () async {
+      system.telecomTakesCalls = false;
+      make();
+      client.emitUpdate(
+        td.UpdateCall(
+          call: call(8, const td.CallStatePending(isCreated: true, isReceived: true), outgoing: false),
+        ),
+      );
+      await settle();
+      expect(system.log, contains('ring Ana'));
+    });
+
+    test('outgoing: reported to Telecom, ongoing service, active, local hang-up', () async {
+      make();
+      await cubit!.startCall(42);
+      await settle();
+      expect(system.log, contains('outgoing 5 Ana'));
+      client.emitUpdate(td.UpdateCall(call: call(5, ready())));
+      await settle();
+      expect(system.log, contains('ongoing Ana'));
+      engine.emit(const EngineStateChanged(EngineConnection.established));
+      await settle();
+      expect(system.log, contains('state active'));
+      await cubit!.hangUp();
+      client.emitUpdate(
+        td.UpdateCall(
+          call: call(
+            5,
+            const td.CallStateDiscarded(
+              reason: td.CallDiscardReasonHungUp(),
+              needRating: false,
+              needDebugInformation: false,
+              needLog: false,
+            ),
+          ),
+        ),
+      );
+      await settle();
+      expect(system.log, containsAll(['hideOngoing', 'state ended local']));
+    });
+
+    test('declining an incoming call tells Telecom it was rejected', () async {
+      make();
+      client.emitUpdate(
+        td.UpdateCall(
+          call: call(8, const td.CallStatePending(isCreated: true, isReceived: true), outgoing: false),
+        ),
+      );
+      await settle();
+      await cubit!.hangUp();
+      client.emitUpdate(
+        td.UpdateCall(
+          call: call(
+            8,
+            const td.CallStateDiscarded(
+              reason: td.CallDiscardReasonDeclined(),
+              needRating: false,
+              needDebugInformation: false,
+              needLog: false,
+            ),
+            outgoing: false,
+          ),
+        ),
+      );
+      await settle();
+      expect(system.log, contains('state ended rejected'));
+    });
+
+    test('a number dialed in the Phone app while Lumina was starting becomes a call', () async {
+      system.dialed = '+1 (555) 010-0042';
+      make();
+      await settle();
+      final search = client.sentOf<td.SearchUserByPhoneNumber>().single;
+      expect(search.phoneNumber, '+15550100042');
+      expect(client.sentOf<td.CreateCall>().single.userId, 42);
+      expect(system.log.where((l) => l.startsWith('outgoing')), isEmpty, reason: 'connection exists');
+    });
+
+    test('a dialed number that is not on Telegram ends the Phone-app call', () async {
+      client.respond = (f) => switch (f) {
+        td.GetAuthorizationState() => const td.AuthorizationStateReady(),
+        td.SearchUserByPhoneNumber() => const td.TdError(code: 404, message: 'USER_NOT_FOUND'),
+        _ => const td.Ok(),
+      };
+      system.dialed = '+15550100000';
+      make();
+      await settle();
+      expect(system.log, contains('state ended error'));
+      expect(cubit!.state.error, contains('not on Telegram'));
+    });
+
+    test('hold mutes the engine; unhold restores the user\'s choice', () async {
+      make();
+      await cubit!.startCall(42);
+      client.emitUpdate(td.UpdateCall(call: call(5, ready())));
+      await settle();
+      engine.emit(const EngineSystemAction('hold'));
+      await settle();
+      expect(cubit!.state.held, isTrue);
+      expect(engine.mutes.last, isTrue);
+      engine.emit(const EngineSystemAction('unhold'));
+      await settle();
+      expect(engine.mutes.last, isFalse);
+    });
+
+    test('no microphone, no call', () async {
+      system.micGranted = false;
+      make();
+      expect(await cubit!.startCall(42), contains('microphone'));
       expect(client.sentOf<td.CreateCall>(), isEmpty);
     });
   });

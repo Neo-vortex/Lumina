@@ -62,6 +62,34 @@ class CallsRepository {
     td.SendCallRating(callId: callId, rating: rating, comment: comment, problems: problems),
   );
 
+  /// The Telegram user with this phone number (dialed in the Phone app), or
+  /// null. Waits up to [wait] for TDLib to be logged in, since a dialer
+  /// call can start Lumina from cold.
+  Future<int?> userIdByPhone(String number, {Duration wait = const Duration(seconds: 30)}) async {
+    final digits = number.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (digits.isEmpty) return null;
+    final deadline = DateTime.now().add(wait);
+    while (true) {
+      try {
+        final state = await _client.invoke<td.AuthorizationState>(const td.GetAuthorizationState());
+        if (state is td.AuthorizationStateReady) break;
+        if (state is td.AuthorizationStateWaitPhoneNumber || state is td.AuthorizationStateClosed) {
+          return null;
+        }
+      } catch (_) {}
+      if (DateTime.now().isAfter(deadline)) return null;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    try {
+      final user = await _client.invoke<td.User>(
+        td.SearchUserByPhoneNumber(phoneNumber: digits, onlyLocal: false),
+      );
+      return user.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Server timeouts for the engine (TDLib options, with Telegram's
   /// defaults when missing).
   Future<({Duration connect, Duration packet})> timeouts() async {

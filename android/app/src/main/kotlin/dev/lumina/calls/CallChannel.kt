@@ -1,11 +1,18 @@
 package dev.lumina.calls
 
 import android.Manifest
+import android.app.NotificationManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.Ringtone
+import android.media.RingtoneManager
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
 import android.net.ConnectivityManager
@@ -13,6 +20,8 @@ import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
@@ -25,13 +34,27 @@ import java.io.File
  * call_engine.dart) over [NativeCall]. One call at a time. While a call
  * runs, audio is in communication mode with focus held.
  */
-class CallChannel(private val context: Context, messenger: BinaryMessenger) : NativeCall.Listener {
+class CallChannel(private val context: Context, messenger: BinaryMessenger) : NativeCall.Listener, CallTelecom.Listener {
     private val main = Handler(Looper.getMainLooper())
     private val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private var events: EventChannel.EventSink? = null
     private var call: NativeCall? = null
     private var focus: AudioFocusRequest? = null
     private var previousMode = AudioManager.MODE_NORMAL
+    private var ringtone: Ringtone? = null
+    private var vibrating = false
+
+    /** A notification action that arrived before Dart listened. */
+    private var pendingAction: String? = null
+
+    private val receiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, intent: Intent) {
+            when (intent.action) {
+                CallService.ACTION_HANG_UP -> onNotificationAction("hangup")
+                CallService.ACTION_DECLINE -> onNotificationAction("decline")
+            }
+        }
+    }
 
     // Video frames are dropped until the video phase adds renderers.
     private val noVideo = VideoSink { }
@@ -41,13 +64,50 @@ class CallChannel(private val context: Context, messenger: BinaryMessenger) : Na
         EventChannel(messenger, "dev.lumina/calls/events").setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, sink: EventChannel.EventSink) {
                 events = sink
+                pendingAction?.let { sink.success(mapOf("type" to "systemAction", "action" to it)) }
+                pendingAction = null
             }
 
             override fun onCancel(arguments: Any?) {
                 events = null
             }
         })
+        val filter = IntentFilter().apply {
+            addAction(CallService.ACTION_HANG_UP)
+            addAction(CallService.ACTION_DECLINE)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            context.registerReceiver(receiver, filter)
+        }
     }
+
+    /** "open", "accept", "decline" or "hangup", from a call notification. */
+    fun onNotificationAction(action: String) {
+        if (action == "decline" || action == "accept") stopRinging()
+        val sink = events
+        if (sink == null) pendingAction = action else sink.success(mapOf("type" to "systemAction", "action" to action))
+    }
+
+    // ---- Telecom (CallTelecom) ----------------------------------------------
+
+    private val telecomSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+
+    override fun onTelecomAction(action: String) {
+        main.post { onNotificationAction(action) }
+    }
+
+    override fun onShowIncomingUi() {
+        main.post { emit(mapOf("type" to "showIncomingUi")) }
+    }
+
+    override fun onDialerCall(number: String) = emit(mapOf("type" to "dialerCall", "number" to number))
+
+    override fun onAudioRoute(route: String) = emit(mapOf("type" to "audioRoute", "route" to route))
+
+    private fun telecomConnected() = telecomSupported && CallTelecom.connection != null
 
     private fun handle(c: MethodCall, r: MethodChannel.Result) {
         when (c.method) {
@@ -75,6 +135,72 @@ class CallChannel(private val context: Context, messenger: BinaryMessenger) : Na
             }
             "setMuted" -> {
                 call?.setMuted(c.arguments as Boolean)
+                r.success(null)
+            }
+            "telecomRegister" -> {
+                if (telecomSupported) {
+                    CallTelecom.listener = this
+                    CallTelecom.register(context, c.argument<Boolean>("provider") ?: false)
+                }
+                r.success(telecomSupported)
+            }
+            // A number the Phone app dialed before Dart was up (headless start).
+            "takeDialerCall" -> {
+                val number = if (telecomSupported) CallTelecom.pendingDialerNumber else null
+                if (telecomSupported) CallTelecom.pendingDialerNumber = null
+                r.success(number)
+            }
+            "telecomProviderEnabled" -> r.success(telecomSupported && CallTelecom.providerEnabled(context))
+            // Opens the Phone app's calling accounts settings (to turn Lumina's on).
+            "openCallingAccounts" -> r.success(
+                try {
+                    context.startActivity(
+                        Intent(android.telecom.TelecomManager.ACTION_CHANGE_PHONE_ACCOUNTS)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                    true
+                } catch (e: Exception) {
+                    false
+                },
+            )
+            "telecomReportIncoming", "telecomReportOutgoing" -> {
+                if (!telecomSupported) return r.success(false)
+                val callId = (c.argument<Number>("callId") ?: 0).toLong()
+                val name = c.argument<String>("name") ?: "Call"
+                val video = c.argument<Boolean>("video") ?: false
+                val provider = c.argument<Boolean>("provider") ?: false
+                r.success(
+                    if (c.method == "telecomReportIncoming") CallTelecom.reportIncoming(context, callId, name, video, provider)
+                    else CallTelecom.reportOutgoing(context, callId, name, video, provider),
+                )
+            }
+            "telecomState" -> {
+                if (telecomSupported) CallTelecom.setState(c.argument<String>("state") ?: "", c.argument<String>("reason"))
+                r.success(null)
+            }
+            "ring" -> {
+                ring(c.argument<String>("title") ?: "Call", c.argument<Boolean>("video") ?: false)
+                r.success(null)
+            }
+            "stopRinging" -> {
+                stopRinging()
+                r.success(null)
+            }
+            // The ongoing-call notification and foreground service.
+            "showOngoing" -> r.success(
+                CallService.start(
+                    context,
+                    c.argument<String>("title") ?: "Call",
+                    c.argument<String>("text") ?: "Ongoing call",
+                    c.argument<Boolean>("video") ?: false,
+                ),
+            )
+            "hideOngoing" -> {
+                CallService.stop(context)
+                r.success(null)
+            }
+            "setSpeaker" -> {
+                setSpeaker(c.arguments as Boolean)
                 r.success(null)
             }
             "stop" -> {
@@ -154,9 +280,64 @@ class CallChannel(private val context: Context, messenger: BinaryMessenger) : Na
     }
 
     @Suppress("DEPRECATION")
+    private fun ring(title: String, video: Boolean) {
+        stopRinging()
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(CallService.INCOMING_ID, CallService.incoming(context, title, video))
+        if (audio.ringerMode == AudioManager.RINGER_MODE_NORMAL) {
+            ringtone = RingtoneManager.getRingtone(context, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE))?.apply {
+                audioAttributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) isLooping = true
+                play()
+            }
+        }
+        if (audio.ringerMode != AudioManager.RINGER_MODE_SILENT) {
+            val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+            val pattern = longArrayOf(0, 700, 1000)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0))
+            } else {
+                vibrator.vibrate(pattern, 0)
+            }
+            vibrating = true
+        }
+    }
+
+    private fun stopRinging() {
+        ringtone?.stop()
+        ringtone = null
+        if (vibrating) {
+            (context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator).cancel()
+            vibrating = false
+        }
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(CallService.INCOMING_ID)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun setSpeaker(on: Boolean) {
+        // With a Telecom connection, Telecom owns the route.
+        if (telecomConnected() && CallTelecom.setRoute(if (on) "speaker" else "earpiece")) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (on) {
+                audio.availableCommunicationDevices
+                    .firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                    ?.let { audio.setCommunicationDevice(it) }
+            } else {
+                audio.clearCommunicationDevice()
+            }
+        } else {
+            audio.isSpeakerphoneOn = on
+        }
+    }
+
+    @Suppress("DEPRECATION")
     private fun enterCallAudio() {
         previousMode = audio.mode
-        audio.mode = AudioManager.MODE_IN_COMMUNICATION
+        // Telecom sets the mode for its (VoIP) connections.
+        if (!telecomConnected()) audio.mode = AudioManager.MODE_IN_COMMUNICATION
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
                 .setAudioAttributes(
@@ -180,6 +361,7 @@ class CallChannel(private val context: Context, messenger: BinaryMessenger) : Na
         } else {
             audio.abandonAudioFocus(null)
         }
+        setSpeaker(false)
         audio.mode = previousMode
     }
 
@@ -211,7 +393,13 @@ class CallChannel(private val context: Context, messenger: BinaryMessenger) : Na
         main.post {
             call = null
             leaveCallAudio()
+            CallService.stop(context)
             events?.success(mapOf("type" to "stopped", "debugLog" to debugLog, "ratingSuggested" to ratingSuggested))
         }
+    }
+
+    companion object {
+        /** Intent extra on MainActivity: which call notification opened it. */
+        const val EXTRA_CALL_ACTION = "lumina.callAction"
     }
 }

@@ -45,6 +45,30 @@ final class EngineStopped extends EngineEvent {
   final bool ratingSuggested;
 }
 
+/// The system asked for something: accept, decline, hangup, hold, unhold
+/// (Telecom, Bluetooth, a notification button) or open (notification tap).
+final class EngineSystemAction extends EngineEvent {
+  const EngineSystemAction(this.action);
+  final String action;
+}
+
+/// Telecom wants Lumina's own ringing UI (self-managed incoming call).
+final class EngineShowIncomingUi extends EngineEvent {
+  const EngineShowIncomingUi();
+}
+
+/// The Phone app dialed [number] with Lumina's calling account.
+final class EngineDialerCall extends EngineEvent {
+  const EngineDialerCall(this.number);
+  final String number;
+}
+
+/// Telecom changed the audio route: speaker, earpiece, bluetooth, headset.
+final class EngineAudioRoute extends EngineEvent {
+  const EngineAudioRoute(this.route);
+  final String route;
+}
+
 enum EngineConnection { waitInit, waitInitAck, established, failed, reconnecting }
 
 typedef EngineCapabilities = ({List<String> versions, int maxLayer, bool deviceAec, bool deviceNs});
@@ -68,8 +92,51 @@ abstract interface class CallEngine {
   Stream<EngineEvent> get events;
 }
 
-/// [CallEngine] over the "dev.lumina/calls" channels (CallChannel.kt).
-class ChannelCallEngine implements CallEngine {
+/// The phone around a call: Telecom, notifications, ringing, the in-call
+/// foreground service, audio route and permissions.
+abstract interface class CallSystem {
+  /// Registers Lumina with Telecom ([provider]: the Phone-app calling account
+  /// too). False below Android 8, where only notifications are used.
+  Future<bool> registerTelecom({required bool provider});
+
+  /// True when the user enabled Lumina's calling account in the Phone app.
+  Future<bool> callingAccountEnabled();
+  Future<void> openCallingAccounts();
+
+  /// False when Telecom refused; ring with [ring] instead.
+  Future<bool> reportIncoming({
+    required int callId,
+    required String name,
+    required bool video,
+    required bool provider,
+  });
+  Future<bool> reportOutgoing({
+    required int callId,
+    required String name,
+    required bool video,
+    required bool provider,
+  });
+
+  /// dialing, ringing, active, held, ended (+ reason: local, remote,
+  /// missed, rejected, busy, error).
+  Future<void> setTelecomState(String state, {String? reason});
+
+  Future<void> ring({required String name, required bool video});
+  Future<void> stopRinging();
+  Future<void> showOngoing({required String title, required String text, required bool video});
+  Future<void> hideOngoing();
+  Future<void> setSpeaker(bool on);
+
+  /// A number the Phone app dialed before Dart was running.
+  Future<String?> takeDialerCall();
+
+  /// microphone, camera, notifications → granted.
+  Future<Map<String, bool>> requestPermissions(List<String> names);
+}
+
+/// [CallEngine] and [CallSystem] over the "dev.lumina/calls" channels
+/// (CallChannel.kt); permissions go through "dev.lumina/system".
+class ChannelCallEngine implements CallEngine, CallSystem {
   ChannelCallEngine();
 
   static const _methods = MethodChannel('dev.lumina/calls');
@@ -117,6 +184,90 @@ class ChannelCallEngine implements CallEngine {
 
   @override
   Stream<EngineEvent> get events => _stream;
+
+  static const _system = MethodChannel('dev.lumina/system');
+
+  Future<T?> _call<T>(String method, [Object? args]) async {
+    try {
+      return await _methods.invokeMethod<T>(method, args);
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  @override
+  Future<bool> registerTelecom({required bool provider}) async =>
+      await _call<bool>('telecomRegister', {'provider': provider}) ?? false;
+
+  @override
+  Future<bool> callingAccountEnabled() async => await _call<bool>('telecomProviderEnabled') ?? false;
+
+  @override
+  Future<void> openCallingAccounts() => _call('openCallingAccounts');
+
+  @override
+  Future<bool> reportIncoming({
+    required int callId,
+    required String name,
+    required bool video,
+    required bool provider,
+  }) async =>
+      await _call<bool>('telecomReportIncoming', {
+        'callId': callId,
+        'name': name,
+        'video': video,
+        'provider': provider,
+      }) ??
+      false;
+
+  @override
+  Future<bool> reportOutgoing({
+    required int callId,
+    required String name,
+    required bool video,
+    required bool provider,
+  }) async =>
+      await _call<bool>('telecomReportOutgoing', {
+        'callId': callId,
+        'name': name,
+        'video': video,
+        'provider': provider,
+      }) ??
+      false;
+
+  @override
+  Future<void> setTelecomState(String state, {String? reason}) =>
+      _call('telecomState', {'state': state, 'reason': reason});
+
+  @override
+  Future<void> ring({required String name, required bool video}) =>
+      _call('ring', {'title': name, 'video': video});
+
+  @override
+  Future<void> stopRinging() => _call('stopRinging');
+
+  @override
+  Future<void> showOngoing({required String title, required String text, required bool video}) =>
+      _call('showOngoing', {'title': title, 'text': text, 'video': video});
+
+  @override
+  Future<void> hideOngoing() => _call('hideOngoing');
+
+  @override
+  Future<void> setSpeaker(bool on) => _call('setSpeaker', on);
+
+  @override
+  Future<String?> takeDialerCall() => _call<String>('takeDialerCall');
+
+  @override
+  Future<Map<String, bool>> requestPermissions(List<String> names) async {
+    try {
+      final r = await _system.invokeMapMethod<String, bool>('requestPermissions', names);
+      return r ?? {for (final n in names) n: false};
+    } on MissingPluginException {
+      return {for (final n in names) n: false};
+    }
+  }
 }
 
 /// Decodes one event map sent by CallChannel.kt; null for unknown types.
@@ -133,6 +284,10 @@ EngineEvent? parseEngineEvent(Map<Object?, Object?> e) => switch (e['type']) {
   // tgcalls AudioState 0 = muted; VideoState 2 = active.
   'remoteMedia' => EngineRemoteMedia(muted: e['audio'] == 0, videoOn: e['video'] == 2),
   'signaling' => EngineSignaling(e['data'] as Uint8List),
+  'systemAction' => EngineSystemAction(e['action'] as String),
+  'showIncomingUi' => const EngineShowIncomingUi(),
+  'dialerCall' => EngineDialerCall(e['number'] as String),
+  'audioRoute' => EngineAudioRoute(e['route'] as String),
   'stopped' => EngineStopped(
     debugLog: e['debugLog'] as String? ?? '',
     ratingSuggested: e['ratingSuggested'] == true,

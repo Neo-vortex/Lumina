@@ -124,6 +124,12 @@ does not copy Telegram's look.
     documents, video, images, files…) but more intuitive and modern.
     Research first. Partly done, see §2.3.
 21. **Calls, full support:**
+    - (2026-10-25) **Phone app integration, both modes:** self-managed
+      Telecom calls by default (Bluetooth/car/watch, audio routing, hold,
+      Phone-app call history), plus an opt-in managed calling account so
+      Google Phone shows its own in-call UI and can dial Lumina calls,
+      **also when Lumina isn't running** (the ConnectionService boots the
+      engine headless).
     - Voice and video calls.
     - **"Use proxy for calls"** option, as in official Telegram.
     - Video: **front camera, back camera (switch while in the call), and
@@ -132,6 +138,12 @@ does not copy Telegram's look.
       chooses to share the front camera, the outgoing video is the screen
       with a small **picture-in-picture camera bubble** composited on it.
     In progress (license decided: GPL-3.0-or-later), see §2.3 and §5.7.
+22. **No Firebase: Lumina's own background worker for notifications**
+    (2026-10-25). Default: a small keep-alive foreground service holding
+    the headless engine so TDLib stays connected (messages and calls in
+    real time). Battery saver: periodic WorkManager sync (messages only).
+    Notifications from TDLib's notification API. Optional later:
+    UnifiedPush. See §2.3 G.
 - **Declined:** "keep disposable (view-once / self-destructing) pictures
   and mark them as kept." The sender chose for them to disappear, so this
   must not be built (§5.4).
@@ -230,10 +242,38 @@ does not copy Telegram's look.
     sends debug info when TDLib asks, rating).
   - Incoming calls only ring while the app process runs (Lumina has no
     push notifications).
-- Next: phase 4, the call UI: call buttons (conversation header, chat
-  info), in-call / incoming screen driven by `CallCubit`, microphone
-  permission, a `phoneCall|microphone` foreground service and incoming-call
-  notification.
+- Phase 4 system side (written, not yet device-tested):
+  - `LuminaEngine.kt`: the process-wide cached FlutterEngine (Dart + TDLib)
+    that `MainActivity` attaches to (`provideFlutterEngine`,
+    `shouldDestroyEngineWithHost = false`). Anything can boot it headless.
+  - `CallTelecom.kt`: self-managed PhoneAccount (always; logs to the Phone
+    app's history on Android 11+) and the opt-in managed calling account
+    (`SelfManagedCallService`, `CallProviderService`). `LuminaConnection`
+    maps answer / reject / disconnect / hold / audio route to Dart. A
+    `tel:` number dialed in the Phone app with Lumina's account boots the
+    engine if needed (`pendingDialerNumber` → `takeDialerCall`), then
+    `CallsRepository.userIdByPhone` (waits for TDLib login) →
+    `startCall(fromDialer: true)`.
+  - `CallService.kt`: in-call foreground service (microphone|camera) with
+    Hang up; incoming notification (full-screen intent, Answer/Decline),
+    ringtone + vibration by ringer mode, all in `CallChannel`.
+  - `CallSystem` (Dart, implemented by `ChannelCallEngine`): `CallCubit`
+    reports calls to Telecom, rings itself only when Telecom asks
+    (`onShowIncomingCallUi`) or refuses, maps end reasons to
+    `DisconnectCause`, handles hold, speaker, permissions.
+  - Pref `calls.callingAccount` (`AppPreferences.callsUseCallingAccount`).
+- Next: the call UI (Dart): call buttons via a `ConversationExtensions`
+  hook, call screen + "return to call" pill, Settings → Calls (calling
+  account toggle + "Open Phone settings"), rating sheet.
+
+**G. Background notifications without Firebase (owner item 22), not started**
+- `LuminaEngine` (process-wide cached FlutterEngine, written with the calls
+  Telecom work) is the base: a keep-alive service starts it headless.
+- To do: keep-alive foreground service (opt-out), boot/app-update
+  receivers, WorkManager periodic sync for battery saver, TDLib
+  notification API (`updateActiveNotifications`,
+  `updateNotificationGroup`) → Android notifications with reply / mark
+  read, settings.
 
 **C. CI / release**
 - Confirm a green run of `.github/workflows/android.yml`:
@@ -302,7 +342,7 @@ does not copy Telegram's look.
 | Rich text (code blocks, quotes, custom emoji, card numbers, media timestamps), composer formatting menu, link previews (receive + compose with size/position/remove), Instant View reader, Custom Tab links | ✅ | `core/telegram/entity_edit.dart`, `formatted_text_view.dart`, `conversation/.../formatting_controller.dart`, `link_preview_card.dart`, `instant_view_screen.dart` |
 | Hardening (cache/optimizeStorage, battery prompt, 16 KB check) | ✅ | `lib/features/maintenance/` (StorageRepository: usage by kind, clear, keep-media auto clean; Background settings + one-time battery prompt in `LifecycleWatcher`); memory pressure frees the LLM and Whisper; `tool/check_16kb.py <apk>` |
 
-Tests: `flutter test`, 161 tests covering routing, auth FSM (bloc_test),
+Tests: `flutter test`, 169 tests covering routing, auth FSM (bloc_test),
 error mapping, cache ordering, row grouping, video presets, search, assistant,
 chat info, stories, storage, the attach hub, polls, music, send options, live locations, the scheduled list, reply quotes and calls signaling. Run
 `flutter analyze` too; it must stay at zero issues.
