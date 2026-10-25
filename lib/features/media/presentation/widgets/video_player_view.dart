@@ -30,6 +30,7 @@ class VideoPlayerView extends StatefulWidget {
     this.prefs,
     this.paused = false,
     this.onProgress,
+    this.onControlsVisibilityChanged,
   });
 
   final String source;
@@ -45,6 +46,10 @@ class VideoPlayerView extends StatefulWidget {
 
   /// Playback position reports, for callers drawing their own progress.
   final void Function(Duration position, Duration duration, bool ended)? onProgress;
+
+  /// Controls shown or hidden (tap, auto-hide), so the host can show or
+  /// hide its own overlay (title, caption) with them.
+  final ValueChanged<bool>? onControlsVisibilityChanged;
 
   @override
   State<VideoPlayerView> createState() => _VideoPlayerViewState();
@@ -126,7 +131,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   void _scheduleHide() {
     _hideTimer?.cancel();
     _hideTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted && _vlc.value.isPlaying) setState(() => _controlsVisible = false);
+      if (mounted && _vlc.value.isPlaying) _setControlsVisible(false);
     });
   }
 
@@ -148,9 +153,15 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
     _showToast('${delta.isNegative ? '−' : '+'}${delta.inSeconds.abs()} s');
   }
 
+  void _setControlsVisible(bool visible) {
+    if (_controlsVisible == visible) return;
+    setState(() => _controlsVisible = visible);
+    widget.onControlsVisibilityChanged?.call(visible);
+  }
+
   void _togglePlay() {
     _vlc.value.isPlaying ? _vlc.pause() : _vlc.play();
-    setState(() => _controlsVisible = true);
+    _setControlsVisible(true);
     _scheduleHide();
   }
 
@@ -214,7 +225,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () {
-              setState(() => _controlsVisible = !_controlsVisible);
+              _setControlsVisible(!_controlsVisible);
               if (_controlsVisible) _scheduleHide();
             },
             onDoubleTapDown: (d) =>
