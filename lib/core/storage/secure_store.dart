@@ -27,6 +27,11 @@ class SecureStore {
     return key;
   }
 
+  Future<String?> readSecret(String key) => _storage.read(key: 'secret.$key');
+
+  Future<void> writeSecret(String key, String? value) =>
+      value == null ? _storage.delete(key: 'secret.$key') : _storage.write(key: 'secret.$key', value: value);
+
   /// Forgets the database key; call only after the database itself is gone.
   Future<void> discardDatabaseEncryptionKey() => _storage.delete(key: _dbKey);
 }

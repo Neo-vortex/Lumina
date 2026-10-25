@@ -63,6 +63,15 @@ class FakeSecureStore extends SecureStore {
     key = null;
     discards++;
   }
+
+  final secrets = <String, String>{};
+
+  @override
+  Future<String?> readSecret(String key) async => secrets[key];
+
+  @override
+  Future<void> writeSecret(String key, String? value) async =>
+      value == null ? secrets.remove(key) : secrets[key] = value;
 }
 
 class FakePaths extends TdPaths {
