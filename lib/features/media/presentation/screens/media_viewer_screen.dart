@@ -106,6 +106,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
                 message: widget.messages[i],
                 zoom: _zoom,
                 onTap: () => setState(() => _chrome = !_chrome),
+                onChrome: (visible) => setState(() => _chrome = visible),
               ),
             ),
             AnimatedOpacity(
@@ -178,11 +179,14 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
 }
 
 class _Page extends StatelessWidget {
-  const _Page({required this.message, required this.zoom, required this.onTap});
+  const _Page({required this.message, required this.zoom, required this.onTap, required this.onChrome});
 
   final td.Message message;
   final TransformationController zoom;
   final VoidCallback onTap;
+
+  /// Videos handle their own taps; they report their controls' visibility.
+  final ValueChanged<bool> onChrome;
 
   @override
   Widget build(BuildContext context) {
@@ -223,7 +227,13 @@ class _Page extends StatelessWidget {
           ),
         );
       case td.MessageVideo(:final video):
-        return _VideoPage(file: video.video, mime: video.mimeType, width: video.width, height: video.height);
+        return _VideoPage(
+          file: video.video,
+          mime: video.mimeType,
+          width: video.width,
+          height: video.height,
+          onChrome: onChrome,
+        );
       case td.MessageAnimation(:final animation):
         return _VideoPage(
           file: animation.animation,
@@ -231,6 +241,7 @@ class _Page extends StatelessWidget {
           width: animation.width,
           height: animation.height,
           loop: true,
+          onChrome: onChrome,
         );
       default:
         return const SizedBox.shrink();
@@ -245,6 +256,7 @@ class _VideoPage extends StatefulWidget {
     required this.mime,
     required this.width,
     required this.height,
+    required this.onChrome,
     this.loop = false,
   });
 
@@ -252,6 +264,7 @@ class _VideoPage extends StatefulWidget {
   final String mime;
   final int width;
   final int height;
+  final ValueChanged<bool> onChrome;
   final bool loop;
 
   @override
@@ -292,6 +305,7 @@ class _VideoPageState extends State<_VideoPage> {
       aspectRatio: widget.height == 0 ? null : widget.width / widget.height,
       loop: widget.loop,
       prefs: context.read<AppPreferences>(),
+      onControlsVisibilityChanged: widget.onChrome,
     );
   }
 }
