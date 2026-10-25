@@ -61,7 +61,11 @@ class AppConversationExtensions extends ConversationExtensions {
   @override
   List<ExtraMenuEntry> menuEntries(td.Message message) => [
     if (messageText(message) != null)
-      const ExtraMenuEntry(MessageAction.aiAction, Icons.auto_awesome_rounded, 'AI action: event, alarm, note'),
+      const ExtraMenuEntry(
+        MessageAction.aiAction,
+        Icons.auto_awesome_rounded,
+        'AI action: event, alarm, note',
+      ),
   ];
 
   @override
@@ -100,7 +104,8 @@ class AppConversationExtensions extends ConversationExtensions {
   }
 
   @override
-  void onDictate(BuildContext context, td.Chat chat, TextEditingController text) => _dictate(context, chat, text);
+  void onDictate(BuildContext context, td.Chat chat, TextEditingController text) =>
+      _dictate(context, chat, text);
 
   Future<void> _dictate(BuildContext context, td.Chat chat, TextEditingController text) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -253,7 +258,9 @@ class AppConversationExtensions extends ConversationExtensions {
       parseCaption: messages.parseMarkdown,
     );
     if (request == null) return;
-    final error = request.asAlbum ? await cubit.sendAlbum(request.contents) : await _sendEach(cubit, request.contents);
+    final error = request.asAlbum
+        ? await cubit.sendAlbum(request.contents)
+        : await _sendEach(cubit, request.contents);
     if (error != null && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
     }

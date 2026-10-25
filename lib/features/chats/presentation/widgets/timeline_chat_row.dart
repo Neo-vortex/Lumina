@@ -9,6 +9,7 @@ import '../../../../core/telegram/telegram_cache.dart';
 import '../../../../core/telegram/widgets/chat_avatar.dart';
 import '../../../../core/theme/glow_colors.dart';
 import '../../../../core/theme/motion.dart';
+import 'chat_row_extensions.dart';
 
 /// One chat on the timeline ribbon: a glowing node on a vertical thread,
 /// then avatar, title, preview, time and unread count.
@@ -156,8 +157,12 @@ class _TimelineChatRowState extends State<TimelineChatRow> with SingleTickerProv
                   ),
                 ),
               ),
-              ChatAvatar.chat(chat, size: 50, glowIntensity: unread > 0 ? 0.35 : 0, online: online),
-              const SizedBox(width: 14),
+              _decoratedAvatar(
+                context,
+                chat,
+                ChatAvatar.chat(chat, size: 50, glowIntensity: unread > 0 ? 0.35 : 0, online: online),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -258,6 +263,21 @@ class _TimelineChatRowState extends State<TimelineChatRow> with SingleTickerProv
 
 /// Read state as an edge-glow shift plus a shape change (UX-04): a hollow
 /// ring while delivered, a filled glowing dot once read.
+Widget _decoratedAvatar(BuildContext context, td.Chat chat, Widget avatar) {
+  ChatRowExtensions ext;
+  try {
+    ext = context.read<ChatRowExtensions>();
+  } on ProviderNotFoundException {
+    ext = const ChatRowExtensions();
+  }
+  final listenable = ext.listenable;
+  if (listenable == null) return ext.avatar(context, chat, avatar, 50);
+  return ListenableBuilder(
+    listenable: listenable,
+    builder: (context, _) => ext.avatar(context, chat, avatar, 50),
+  );
+}
+
 class _ReadMark extends StatelessWidget {
   const _ReadMark({required this.read});
 

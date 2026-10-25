@@ -128,7 +128,7 @@ does not copy Telegram's look.
 | Tiny LLM actions (SmolLM2-360M bundled, llama.cpp on CPU, label + guardrails + date resolver, editable sheet, system intents) | ✅ (75% held-out; measured) | `lib/features/assistant/`, DECISIONS D13 |
 | Proxy (list, toggle, add/edit, paste link, test, share, login-screen access, encrypted restore after wipe) | ✅ | `lib/features/proxy/` |
 | Groups/channels admin, chat info, secret chats, contacts, new chat/group/channel | ✅ | `lib/features/chat_info/` (repository, ChatInfoScreen, contact picker, permissions sheet, `ComposeFlows`); wired in `app/feature_wiring.dart` |
-| Stories | ⬜ | planned `lib/features/stories/` |
+| Stories | ✅ | `lib/features/stories/` (StoriesRepository, halos via `ChatRowExtensions`, viewer with bottom-left ring, Glimpses grid, post with ffmpeg 1080×1920 / 720×1280 prep); wired in `app/app_story_wiring.dart` |
 | Hardening (cache/optimizeStorage, battery prompt, 16 KB check) | ⬜ | settings + app |
 
 Tests: `flutter test`, 52+ tests covering routing, auth FSM (bloc_test),
@@ -239,6 +239,14 @@ error mapping, cache ordering, row grouping and video presets. Run
   `updateChatActiveStories`, `openStory`/`closeStory`, `setStoryReaction`,
   and `sendStory` (photo/video plus privacy: everyone, contacts, close
   friends).
+- **Done.** The chat list knows nothing about stories: `ChatRowExtensions`
+  (chats feature) decorates avatars and `AppChatRowExtensions` adds the
+  halo. Swipe sideways in the viewer to move between people. Posting uses
+  `canSendStory` first; videos are cut to 60 s and letterboxed
+  (`StoryMedia`, tested), with an mpeg4 fallback. Active period is fixed
+  at 24 h (other periods need Premium). Not done yet: story viewers list,
+  channel stories posting (pass a channel chat id to `PostStoryScreen`),
+  stickers/areas.
 
 ### 5.5 Proxy (phase 7)
 - `lib/features/proxy/`: a list from `getProxies` with enable switches, an

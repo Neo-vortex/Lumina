@@ -24,6 +24,9 @@ import '../features/transcription/presentation/widgets/speech_settings.dart';
 import '../features/voice/data/voice_recorder.dart';
 import '../features/media/data/media_sender.dart';
 import 'app_conversation_extensions.dart';
+import 'app_story_wiring.dart';
+import '../features/chats/presentation/widgets/chat_row_extensions.dart';
+import '../features/stories/data/stories_repository.dart';
 import '../features/chat_info/data/chat_info_repository.dart';
 import '../features/chat_info/presentation/compose_flows.dart';
 import '../features/conversation/presentation/screens/conversation_screen.dart';
@@ -41,15 +44,24 @@ List<RepositoryProvider<Object>> featureProviders() => [
   RepositoryProvider<FfmpegService>(create: (_) => FfmpegService()..purgeTemp().ignore()),
   RepositoryProvider<MediaSender>(create: (c) => MediaSender(c.read<FfmpegService>())),
   RepositoryProvider<AudioPlayback>(
-    create: (c) =>
-        AudioPlayback(files: c.read<FileStore>(), stream: c.read<TdStreamServer>(), prefs: c.read<AppPreferences>()),
+    create: (c) => AudioPlayback(
+      files: c.read<FileStore>(),
+      stream: c.read<TdStreamServer>(),
+      prefs: c.read<AppPreferences>(),
+    ),
     dispose: (p) => p.dispose(),
   ),
-  RepositoryProvider<VoiceRecorder>(create: (c) => VoiceRecorder(c.read<FfmpegService>()), dispose: (r) => r.dispose()),
+  RepositoryProvider<VoiceRecorder>(
+    create: (c) => VoiceRecorder(c.read<FfmpegService>()),
+    dispose: (r) => r.dispose(),
+  ),
   RepositoryProvider<ProxyRepository>(
     lazy: false,
-    create: (c) =>
-        ProxyRepository(client: c.read<TdClient>(), prefs: c.read<AppPreferences>(), secure: c.read<SecureStore>()),
+    create: (c) => ProxyRepository(
+      client: c.read<TdClient>(),
+      prefs: c.read<AppPreferences>(),
+      secure: c.read<SecureStore>(),
+    ),
     dispose: (r) => r.dispose(),
   ),
   RepositoryProvider<AuthExtras>(
@@ -83,7 +95,8 @@ List<RepositoryProvider<Object>> featureProviders() => [
     ),
   ),
   RepositoryProvider<ComposeFlows>(
-    create: (_) => ComposeFlows((context, chatId) => Navigator.of(context).push(ConversationScreen.route(chatId))),
+    create: (_) =>
+        ComposeFlows((context, chatId) => Navigator.of(context).push(ConversationScreen.route(chatId))),
   ),
   RepositoryProvider<ConversationExtensions>(
     create: (c) => AppConversationExtensions(
@@ -96,10 +109,24 @@ List<RepositoryProvider<Object>> featureProviders() => [
   RepositoryProvider<ChatInfoRepository>(
     create: (c) => ChatInfoRepository(client: c.read<TdClient>(), cache: c.read<TelegramCache>()),
   ),
+  RepositoryProvider<StoriesRepository>(
+    lazy: false,
+    create: (c) => StoriesRepository(
+      client: c.read<TdClient>(),
+      prefs: c.read<AppPreferences>(),
+      ffmpeg: c.read<FfmpegService>(),
+    ),
+    dispose: (r) => r.dispose(),
+  ),
+  RepositoryProvider<ChatRowExtensions>(
+    create: (c) =>
+        AppChatRowExtensions(stories: c.read<StoriesRepository>(), prefs: c.read<AppPreferences>()),
+  ),
   RepositoryProvider<ComposeActions>(create: (c) => _composeActions(c.read<ComposeFlows>())),
   RepositoryProvider<SettingsEntries>(
-    create: (_) =>
-        SettingsEntries((context) => [const ConnectionSettings(), const SearchSettings(), const SpeechSettings()]),
+    create: (_) => SettingsEntries(
+      (context) => [const ConnectionSettings(), const SearchSettings(), const SpeechSettings()],
+    ),
   ),
 ];
 
@@ -108,4 +135,6 @@ ComposeActions _composeActions(ComposeFlows flows) => ComposeActions([
   ComposeAction(icon: Icons.group_add_rounded, label: 'New group', onSelected: flows.newGroup),
   ComposeAction(icon: Icons.campaign_rounded, label: 'New channel', onSelected: flows.newChannel),
   ComposeAction(icon: Icons.lock_rounded, label: 'Secret chat', onSelected: flows.newSecretChat),
+  const ComposeAction(icon: Icons.blur_on_rounded, label: 'Glimpses', onSelected: openGlimpses),
+  const ComposeAction(icon: Icons.add_a_photo_rounded, label: 'Post story', onSelected: postStoryAsMe),
 ]);

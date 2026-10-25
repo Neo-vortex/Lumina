@@ -26,6 +26,8 @@ class FakeTdClient implements TdClient {
   void emit(td.AuthorizationState state) =>
       _updates.add(td.UpdateAuthorizationState(authorizationState: state));
 
+  void emitUpdate(td.Update update) => _updates.add(update);
+
   List<T> sentOf<T extends td.TdFunction>() => sent.whereType<T>().toList();
 
   @override
