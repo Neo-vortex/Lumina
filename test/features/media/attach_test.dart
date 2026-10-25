@@ -64,6 +64,11 @@ void main() {
       expect(buildPoll(question: 'Q', rows: ['a', 'b'], quiz: true, correctRow: 5), isNull);
     });
 
+    test('regular polls let voters change their vote; quizzes don\'t', () {
+      expect(buildPoll(question: 'Q', rows: ['a', 'b'])!.allowsRevoting, isTrue);
+      expect(buildPoll(question: 'Q', rows: ['a', 'b'], quiz: true, correctRow: 0)!.allowsRevoting, isFalse);
+    });
+
     test('multiple answers only for regular polls', () {
       final poll = buildPoll(question: 'Q', rows: ['a', 'b'], multiple: true, anonymous: false)!;
       expect(poll.type, isA<td.InputPollTypeRegular>());

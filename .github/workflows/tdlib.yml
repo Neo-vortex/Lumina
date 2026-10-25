@@ -29,7 +29,10 @@ jobs:
         run: |
           key=$(tool/tdlib_key.sh)
           echo "key=$key" >> "$GITHUB_OUTPUT"
-          if gh release view "tdlib-$key" >/dev/null 2>&1; then
+          # Only a release with every asset counts; a half-published one is rebuilt.
+          if gh release view "tdlib-$key" --json assets \
+              --jq '[.assets[].name] | contains(["libtdjson-arm64-v8a.so", "libtdjson-x86_64.so", "SHA256SUMS.txt"])' \
+              2>/dev/null | grep -qx true; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "TDLib $key already published"
           else
@@ -53,11 +56,13 @@ jobs:
             "ndk;28.2.13676358" "cmake;3.22.1" > /dev/null
           sudo apt-get install -y gperf ninja-build ccache php-cli > /dev/null
 
-      - name: ccache
-        uses: actions/cache@v4
+      # Restore and save separately so a cancelled or failed build still keeps
+      # its compiled objects for the next run.
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
         with:
           path: ~/.cache/ccache
-          key: tdlib-ccache-${{ matrix.abi }}-${{ needs.key.outputs.key }}
+          key: tdlib-ccache-${{ matrix.abi }}-${{ needs.key.outputs.key }}-${{ github.run_id }}
           restore-keys: tdlib-ccache-${{ matrix.abi }}-
 
       - name: Build
@@ -73,6 +78,13 @@ jobs:
           ccache -s | tail -n 5
           mkdir -p dist
           cp "build/tdlib/out/${{ matrix.abi }}/libtdjson.so" "dist/libtdjson-${{ matrix.abi }}.so"
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ccache
+          key: tdlib-ccache-${{ matrix.abi }}-${{ needs.key.outputs.key }}-${{ github.run_id }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -97,9 +109,10 @@ jobs:
           version=$(sed -n 's/^version=//p' packages/lumina_tdlib/schema/VERSION)
           commit=$(sed -n 's/^commit=//p' packages/lumina_tdlib/schema/VERSION)
           (cd dist && sha256sum *.so > SHA256SUMS.txt && ls -l)
+          # A release left half-published by an earlier run would hide the build.
+          gh release delete "tdlib-$KEY" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
           gh release create "tdlib-$KEY" --repo "$GITHUB_REPOSITORY" \
             --prerelease --target "$GITHUB_SHA" \
             --title "TDLib $version ($KEY)" \
             --notes "libtdjson.so for arm64-v8a and x86_64: TDLib $version at tdlib/td@${commit::9} (BSL-1.0), built by tool/build_tdlib.sh from ${GITHUB_SHA::7}. Used by the app builds; not an app release." \
-            dist/*.so dist/SHA256SUMS.txt \
-            || gh release view "tdlib-$KEY" --repo "$GITHUB_REPOSITORY" > /dev/null
+            dist/*.so dist/SHA256SUMS.txt
