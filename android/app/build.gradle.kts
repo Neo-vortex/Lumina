@@ -82,4 +82,8 @@ flutter {
 dependencies {
     // The vendored org.webrtc sources use its annotations.
     implementation("androidx.annotation:annotation:1.9.1")
+    // Message notifications (MessagingStyle, inline reply) and the
+    // battery-saver sync (no Firebase; see docs/AGENT_HANDOFF.md §2.3 G).
+    implementation("androidx.core:core:1.16.0")
+    implementation("androidx.work:work-runtime:2.10.5")
 }

@@ -273,14 +273,29 @@ does not copy Telegram's look.
 - Next: verify on a device (audio call end to end, Telecom both modes,
   dialing from the Phone app with Lumina closed); then phase 5 (video).
 
-**G. Background notifications without Firebase (owner item 22), not started**
-- `LuminaEngine` (process-wide cached FlutterEngine, written with the calls
-  Telecom work) is the base: a keep-alive service starts it headless.
-- To do: keep-alive foreground service (opt-out), boot/app-update
-  receivers, WorkManager periodic sync for battery saver, TDLib
-  notification API (`updateActiveNotifications`,
-  `updateNotificationGroup`) → Android notifications with reply / mark
-  read, settings.
+**G. Background notifications without Firebase (owner item 22), written, device test pending**
+- Native `android/app/src/main/kotlin/dev/lumina/background/`:
+  - `Background.kt`: modes `connected` (default) / `saver` / `off`, kept
+    in native prefs so boot can act before Dart. `KeepAliveService`
+    (foreground type `specialUse`, min-importance notification, boots
+    `LuminaEngine`, START_STICKY), `SyncWorker` (WorkManager, 15 min,
+    boots the engine and waits 60 s), `BootReceiver` (boot / app update).
+    `MainActivity` resumes the stored mode on start.
+  - `MessageNotifications.kt` ("dev.lumina/notifications"): MessagingStyle
+    per TDLib group with Reply (RemoteInput) and Mark as read;
+    `ActionReceiver` boots the engine and queues actions until Dart
+    listens; taps open the chat (`EXTRA_OPEN_CHAT`).
+- Dart `features/notifications/`: `NotificationCenter` (non-lazy) turns on
+  TDLib's notification groups (`notification_group_count_max` 25, size 10),
+  mirrors `updateActiveNotifications` / `updateNotificationGroup` /
+  `updateNotification`, posts nothing while in the foreground, skips call
+  groups, replies with `sendMessage` + `viewMessages(forceRead)`.
+  Settings → Notifications picks the mode.
+- Verify on a device: headless start really builds the providers (the
+  warm-up frame) and TDLib connects; the keep-alive service survives Doze
+  with battery optimisation off; boot start on Android 14/15.
+- Later: UnifiedPush (TDLib `registerDevice` with a web-push token) as a
+  no-persistent-notification option.
 
 **C. CI / release**
 - Confirm a green run of `.github/workflows/android.yml`:
@@ -349,9 +364,9 @@ does not copy Telegram's look.
 | Rich text (code blocks, quotes, custom emoji, card numbers, media timestamps), composer formatting menu, link previews (receive + compose with size/position/remove), Instant View reader, Custom Tab links | ✅ | `core/telegram/entity_edit.dart`, `formatted_text_view.dart`, `conversation/.../formatting_controller.dart`, `link_preview_card.dart`, `instant_view_screen.dart` |
 | Hardening (cache/optimizeStorage, battery prompt, 16 KB check) | ✅ | `lib/features/maintenance/` (StorageRepository: usage by kind, clear, keep-media auto clean; Background settings + one-time battery prompt in `LifecycleWatcher`); memory pressure frees the LLM and Whisper; `tool/check_16kb.py <apk>` |
 
-Tests: `flutter test`, 172 tests covering routing, auth FSM (bloc_test),
+Tests: `flutter test`, 179 tests covering routing, auth FSM (bloc_test),
 error mapping, cache ordering, row grouping, video presets, search, assistant,
-chat info, stories, storage, the attach hub, polls, music, send options, live locations, the scheduled list, reply quotes and calls signaling. Run
+chat info, stories, storage, the attach hub, polls, music, send options, live locations, the scheduled list, reply quotes, calls and notifications. Run
 `flutter analyze` too; it must stay at zero issues.
 
 ## 4. Environment & build

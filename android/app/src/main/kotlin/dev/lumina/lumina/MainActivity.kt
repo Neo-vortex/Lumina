@@ -18,6 +18,7 @@ import android.os.StatFs
 import android.provider.AlarmClock
 import android.provider.CalendarContract
 import android.provider.Settings
+import dev.lumina.background.MessageNotifications
 import dev.lumina.calls.CallChannel
 import io.flutter.FlutterInjector
 import io.flutter.embedding.android.FlutterActivity
@@ -57,6 +58,11 @@ class MainActivity : FlutterActivity() {
 
     /** Opened from a call notification: show over the lock screen and pass on Accept / Decline. */
     private fun handleCallIntent(intent: Intent?) {
+        val chat = intent?.getLongExtra(MessageNotifications.EXTRA_OPEN_CHAT, 0) ?: 0
+        if (chat != 0L) {
+            intent?.removeExtra(MessageNotifications.EXTRA_OPEN_CHAT)
+            MessageNotifications.openChat(chat)
+        }
         val action = intent?.getStringExtra(CallChannel.EXTRA_CALL_ACTION) ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
@@ -72,6 +78,8 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result -> handle(call, result) }
         calls = LuminaEngine.calls
         handleCallIntent(intent)
+        // Settings → Background decides; the default is "connected".
+        dev.lumina.background.Background.resume(applicationContext)
     }
 
     private fun handle(call: MethodCall, result: MethodChannel.Result) {

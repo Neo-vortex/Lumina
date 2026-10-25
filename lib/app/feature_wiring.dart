@@ -25,6 +25,8 @@ import '../features/voice/data/voice_recorder.dart';
 import '../features/calls/data/call_engine.dart';
 import '../features/calls/data/calls_repository.dart';
 import '../features/calls/presentation/call_settings.dart';
+import '../features/notifications/data/notification_center.dart';
+import '../features/notifications/presentation/connection_mode_settings.dart';
 import '../features/media/data/live_location_service.dart';
 import '../features/media/data/media_sender.dart';
 import 'app_conversation_extensions.dart';
@@ -46,6 +48,9 @@ import 'package:flutter/material.dart' show Icons;
 import '../features/conversation/presentation/widgets/conversation_extensions.dart';
 import '../features/home/presentation/widgets/compose_orb.dart';
 import '../features/settings/presentation/screens/settings_screen.dart';
+
+/// The app's navigator (call screen, opening a chat from a notification).
+final appNavigatorKey = GlobalKey<NavigatorState>();
 
 /// Cross-feature hooks: what each feature contributes to the conversation
 /// screen, compose menu and settings. Kept in one place so features stay
@@ -114,6 +119,18 @@ List<RepositoryProvider<Object>> featureProviders() => [
     create: (_) =>
         ComposeFlows((context, chatId) => Navigator.of(context).push(ConversationScreen.route(chatId))),
   ),
+  // Not lazy: posts notifications from the moment TDLib is up, also when the
+  // engine was started without UI by the background worker.
+  RepositoryProvider<NotificationCenter>(
+    lazy: false,
+    create: (c) => NotificationCenter(
+      client: c.read<TdClient>(),
+      cache: c.read<TelegramCache>(),
+      sink: ChannelNotificationSink(),
+      openChat: (chatId) => appNavigatorKey.currentState?.push(ConversationScreen.route(chatId)),
+    ),
+    dispose: (n) => n.dispose(),
+  ),
   RepositoryProvider<CallsRepository>(create: (c) => CallsRepository(c.read<TdClient>())),
   RepositoryProvider<CallEngine>(create: (_) => ChannelCallEngine()),
   // Not lazy: shares saved before the process died resume at launch.
@@ -172,6 +189,7 @@ List<RepositoryProvider<Object>> featureProviders() => [
   RepositoryProvider<SettingsEntries>(
     create: (_) => SettingsEntries(
       (context) => [
+        const ConnectionModeSettings(),
         const CallSettings(),
         const ConnectionSettings(),
         const StorageSettings(),

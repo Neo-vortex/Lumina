@@ -42,8 +42,6 @@ class LuminaApp extends StatelessWidget {
   final SecureStore? secureStore;
   final TdSettings settings;
 
-  static final _navigatorKey = GlobalKey<NavigatorState>();
-
   @override
   Widget build(BuildContext context) {
     final secure = secureStore ?? SecureStore();
@@ -96,9 +94,9 @@ class LuminaApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           theme: buildGlowTheme(),
           themeMode: ThemeMode.dark,
-          navigatorKey: _navigatorKey,
+          navigatorKey: appNavigatorKey,
           builder: (context, child) =>
-              CallHost(navigatorKey: _navigatorKey, child: child ?? const SizedBox.shrink()),
+              CallHost(navigatorKey: appNavigatorKey, child: child ?? const SizedBox.shrink()),
           home: const LifecycleWatcher(child: AuthGate()),
         ),
       ),
