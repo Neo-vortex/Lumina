@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/config/native_licenses.dart';
 import '../../../../core/storage/app_preferences.dart';
 import '../../../../core/telegram/display.dart';
 import '../../../../core/telegram/widgets/chat_avatar.dart';
@@ -169,6 +170,16 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
               ...extras,
+              ListTile(
+                leading: const Icon(Icons.info_outline_rounded),
+                title: const Text('About & licenses'),
+                subtitle: const Text('Free software under the GNU GPL v3'),
+                onTap: () => showLicensePage(
+                  context: context,
+                  applicationName: 'Lumina',
+                  applicationLegalese: luminaLegalese,
+                ),
+              ),
               const SizedBox(height: 28),
               GlowButton.warm(label: 'Log out', onPressed: () => _confirmLogout(context)),
             ],

@@ -44,6 +44,14 @@ android {
         }
     }
 
+    sourceSets {
+        getByName("main") {
+            // Calls engine Java side (Telegram-Android's org.webrtc, GPL; see
+            // docs/DECISIONS.md D14) and stand-ins for the Telegram helpers it uses.
+            java.srcDirs("../calls-engine/java", "../calls-engine/java-shims")
+        }
+    }
+
     androidResources {
         // Bundled models are already incompressible; storing them uncompressed
         // makes first-use extraction a straight copy.
@@ -55,6 +63,8 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // JNI-bound classes of the calls engine.
+            proguardFiles("calls-rules.pro")
         }
     }
 }
@@ -67,4 +77,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // The vendored org.webrtc sources use its annotations.
+    implementation("androidx.annotation:annotation:1.9.1")
 }

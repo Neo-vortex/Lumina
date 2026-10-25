@@ -78,6 +78,8 @@ flutter:
     # Git LFS. Whisper base (speech-to-text) and SmolLM2-360M-Instruct (AI actions).
     - assets/models/ggml-base-q5_1.bin
     - assets/models/SmolLM2-360M-Instruct-Q4_0.gguf
+    # Third-party notices for the calls engine (tool/fetch_calls_engine.sh).
+    - assets/licenses/calls_engine.txt
 
   # To add assets to your application, add an assets section, like this:
   # assets:

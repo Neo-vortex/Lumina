@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 
 import 'app/app.dart';
+import 'core/config/native_licenses.dart';
 import 'core/storage/app_preferences.dart';
 import 'core/tdlib/td_isolate_client.dart';
 import 'core/tdlib/td_paths.dart';
@@ -12,6 +13,7 @@ Future<void> main() async {
   // RepositoryProvider and listened to explicitly (ListenableBuilder), never
   // via context.watch; the provider package's debug check doesn't apply.
   Provider.debugCheckInvalidValueType = null;
+  registerNativeLicenses();
   final (paths, preferences) = await (TdPaths.resolve(), AppPreferences.load()).wait;
   // One TdClient per process. After Android kills the process this simply
   // runs again; TDLib reloads the session from its database and goes
