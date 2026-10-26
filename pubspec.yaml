@@ -64,6 +64,11 @@ dependencies:
 dependency_overrides:
   flutter_vlc_player_platform_interface:
     path: packages/flutter_vlc_player_platform_interface
+  # Vendored too: its Android side drew through a TextureView inside a
+  # platform view (choppy under Impeller); it now renders into a Flutter
+  # SurfaceProducer texture.
+  flutter_vlc_player:
+    path: packages/flutter_vlc_player
 
 dev_dependencies:
   flutter_test:

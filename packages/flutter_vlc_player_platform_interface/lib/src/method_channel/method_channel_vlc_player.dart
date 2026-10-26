@@ -68,6 +68,11 @@ class MethodChannelVlcPlayer extends VlcPlayerPlatform {
   }) {
     const viewType = 'flutter_video_plugin/getVideoView';
     if (Platform.isAndroid) {
+      // Lumina: frames go to a Flutter texture; the platform view is only a
+      // 1x1 placeholder that creates the player.
+      return _VlcTextureView(onPlatformViewCreated: onPlatformViewCreated);
+    }
+    if (Platform.isAndroid) {
       return virtualDisplay
           ? AndroidView(
             viewType: viewType,
@@ -493,4 +498,44 @@ class MethodChannelVlcPlayer extends VlcPlayerPlatform {
   Future<bool> stopRecording(int viewId) {
     return _api.stopRecording(viewId);
   }
+}
+
+/// Shows the texture an Android player renders into.
+class _VlcTextureView extends StatefulWidget {
+  const _VlcTextureView({required this.onPlatformViewCreated});
+
+  final PlatformViewCreatedCallback onPlatformViewCreated;
+
+  @override
+  State<_VlcTextureView> createState() => _VlcTextureViewState();
+}
+
+class _VlcTextureViewState extends State<_VlcTextureView> {
+  static const _channel = MethodChannel('lumina/vlc_texture');
+  int? _textureId;
+
+  Future<void> _created(int viewId) async {
+    widget.onPlatformViewCreated(viewId);
+    final id = await _channel.invokeMethod<int>('textureId', viewId);
+    if (mounted) setState(() => _textureId = id);
+  }
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      Positioned(
+        left: 0,
+        top: 0,
+        width: 1,
+        height: 1,
+        child: AndroidView(
+          viewType: 'flutter_video_plugin/getVideoView',
+          onPlatformViewCreated: _created,
+          creationParamsCodec: const StandardMessageCodec(),
+        ),
+      ),
+      if (_textureId != null) Texture(textureId: _textureId!, filterQuality: FilterQuality.medium),
+    ],
+  );
 }
