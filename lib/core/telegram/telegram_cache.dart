@@ -43,6 +43,20 @@ final class ConnectionChanged extends CacheEvent {
   const ConnectionChanged();
 }
 
+/// The folder list, its order or the tags switch changed.
+final class FoldersChanged extends CacheEvent {
+  const FoldersChanged();
+}
+
+/// TDLib's unread counters for [list] changed.
+final class UnreadCountChanged extends CacheEvent {
+  const UnreadCountChanged(this.list);
+  final td.ChatList list;
+}
+
+/// Unread chats in a list, and how many of them are not muted.
+typedef UnreadCount = ({int chats, int unmuted});
+
 /// App-wide mirror of the TDLib entities that many screens need: chats,
 /// users, groups, secret chats, chat actions and the connection state.
 ///
@@ -66,6 +80,17 @@ class TelegramCache {
   final basicGroups = <int, td.BasicGroup>{};
   final supergroups = <int, td.Supergroup>{};
   final secretChats = <int, td.SecretChat>{};
+
+  /// Chat folders in the user's order (`updateChatFolders`).
+  List<td.ChatFolderInfo> chatFolders = const [];
+
+  /// Where "All chats" sits among [chatFolders] (Premium can move it).
+  int mainListPosition = 0;
+
+  /// Premium "folder tags" on chat rows.
+  bool folderTagsEnabled = false;
+
+  final _unread = <String, UnreadCount>{};
 
   /// Default mute duration per chat type (private, group, channel), for
   /// chats whose settings say "use the default".
@@ -157,6 +182,14 @@ class TelegramCache {
       case td.UpdateConnectionState(:final state):
         connectionState = state;
         _emit(const ConnectionChanged());
+      case td.UpdateChatFolders(:final chatFolders, :final mainChatListPosition, :final areTagsEnabled):
+        this.chatFolders = chatFolders;
+        mainListPosition = mainChatListPosition;
+        folderTagsEnabled = areTagsEnabled;
+        _emit(const FoldersChanged());
+      case td.UpdateUnreadChatCount(:final chatList, :final unreadCount, :final unreadUnmutedCount):
+        _unread[listKey(chatList)] = (chats: unreadCount, unmuted: unreadUnmutedCount);
+        _emit(UnreadCountChanged(chatList));
       default:
         break;
     }
@@ -188,6 +221,20 @@ class TelegramCache {
     }
     return null;
   }
+
+  UnreadCount unreadIn(td.ChatList list) => _unread[listKey(list)] ?? (chats: 0, unmuted: 0);
+
+  /// Folder ids [chat] is listed in.
+  List<int> foldersOf(td.Chat chat) => [
+    for (final p in chat.positions)
+      if (p.list case td.ChatListFolder(:final chatFolderId) when p.order != 0) chatFolderId,
+  ];
+
+  static String listKey(td.ChatList list) => switch (list) {
+    td.ChatListMain() => 'main',
+    td.ChatListArchive() => 'archive',
+    td.ChatListFolder(:final chatFolderId) => 'folder:$chatFolderId',
+  };
 
   /// Senders currently performing an action in [chatId] (typing, recording…).
   List<({td.MessageSender sender, td.ChatAction action})> actionsIn(int chatId) => [
@@ -239,6 +286,10 @@ class TelegramCache {
   void clear() {
     chats.clear();
     _scopeMuteFor.clear();
+    chatFolders = const [];
+    mainListPosition = 0;
+    folderTagsEnabled = false;
+    _unread.clear();
     users.clear();
     basicGroups.clear();
     supergroups.clear();
