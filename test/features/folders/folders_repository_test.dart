@@ -111,6 +111,7 @@ void main() {
   test('reorder sends the folder order and where All chats goes', () async {
     await repo.reorder(const [5, 3], 1);
     final r = client.sentOf<td.ReorderChatFolders>().single;
-    expect((r.chatFolderIds, r.mainChatListPosition), (const [5, 3], 1));
+    expect(r.chatFolderIds, [5, 3]);
+    expect(r.mainChatListPosition, 1);
   });
 }
