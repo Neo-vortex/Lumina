@@ -8,6 +8,7 @@ import 'package:lumina_tdlib/api.dart' as td;
 import '../../../../../core/telegram/display.dart';
 import '../../../../../core/telegram/widgets/file_progress.dart';
 import '../../../../../core/telegram/widgets/formatted_text_view.dart';
+import '../../../../../core/telegram/widgets/looping_gif.dart';
 import '../../../../../core/telegram/widgets/td_file_image.dart';
 import '../../../../../core/theme/glow_colors.dart';
 import '../../../../media/presentation/screens/media_viewer_screen.dart';
@@ -154,7 +155,11 @@ class _MediaTileState extends State<MediaTile> {
     if (v == null) return const SizedBox.shrink();
     final viewOnce = m.selfDestructType != null;
     final covered = (viewOnce || _hasSpoiler(m.content)) && !_revealed;
-    final image = v.file != null
+    // GIFs loop silently in place, like Telegram; no big player.
+    final gif = m.content is td.MessageAnimation && !covered;
+    final image = gif
+        ? LoopingGif(file: v.media!, thumbnail: v.file, minithumbnail: v.mini)
+        : v.file != null
         ? TdFileImage(
             file: v.file!,
             placeholderBytes: Display.minithumbnail(v.mini),
@@ -168,7 +173,7 @@ class _MediaTileState extends State<MediaTile> {
       onTap: () {
         if (covered && !viewOnce) {
           setState(() => _revealed = true);
-        } else {
+        } else if (!gif) {
           widget.onTap();
         }
       },
