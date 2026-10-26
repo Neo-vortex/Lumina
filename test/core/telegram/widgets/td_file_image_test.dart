@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,7 +20,12 @@ td.File downloaded() => downloading(size: 100).copyWith(
 );
 
 void main() {
-  Future<StateSetter> pump(WidgetTester tester, td.File file, {bool fullResolution = false}) async {
+  Future<StateSetter> pump(
+    WidgetTester tester,
+    td.File file, {
+    bool fullResolution = false,
+    Uint8List? placeholder,
+  }) async {
     late StateSetter rebuild;
     await tester.pumpWidget(
       RepositoryProvider(
@@ -29,7 +37,12 @@ void main() {
             child: StatefulBuilder(
               builder: (context, setState) {
                 rebuild = setState;
-                return TdFileImage(file: file, autoDownload: false, fullResolution: fullResolution);
+                return TdFileImage(
+                  file: file,
+                  autoDownload: false,
+                  fullResolution: fullResolution,
+                  placeholderBytes: placeholder,
+                );
               },
             ),
           ),
@@ -61,4 +74,13 @@ void main() {
     await pump(tester, downloaded(), fullResolution: true);
     expect(tester.widget<Image>(find.byType(Image)).image, isNot(isA<ResizeImage>()));
   });
+
+  testWidgets('the placeholder is smoothed by upscaling, not a per-frame blur layer', (tester) async {
+    await pump(tester, downloading(size: 100), placeholder: base64Decode(_png1x1));
+    expect(find.byType(ImageFiltered), findsNothing);
+    expect(tester.widget<Image>(find.byType(Image)).filterQuality, FilterQuality.medium);
+  });
 }
+
+const _png1x1 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';

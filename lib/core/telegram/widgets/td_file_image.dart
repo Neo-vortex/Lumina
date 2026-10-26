@@ -1,4 +1,3 @@
-import 'dart:ui' show ImageFilter;
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -82,15 +81,13 @@ class _TdFileImageState extends State<TdFileImage> {
                 widget.placeholderBytes!,
                 fit: widget.fit,
                 gaplessPlayback: true,
-                filterQuality: FilterQuality.low,
+                // Upscaling the tiny minithumbnail smooths it; a blur layer
+                // here cost a saveLayer and blur pass per tile per frame.
+                filterQuality: FilterQuality.medium,
               )
             : const SizedBox.expand();
         if (!f.local.isDownloadingCompleted || f.local.path.isEmpty) {
-          return Semantics(
-            label: widget.semanticLabel,
-            image: true,
-            child: ImageFiltered(imageFilter: _blur, child: placeholder),
-          );
+          return Semantics(label: widget.semanticLabel, image: true, child: placeholder);
         }
         Widget image(int? cacheWidth) => Image.file(
           File(f.local.path),
@@ -118,5 +115,3 @@ class _TdFileImageState extends State<TdFileImage> {
     );
   }
 }
-
-final _blur = ImageFilter.blur(sigmaX: 6, sigmaY: 6);
