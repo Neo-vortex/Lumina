@@ -461,7 +461,7 @@ class _CustomEmojiState extends State<_CustomEmoji> {
     if (s != null && s.format is td.StickerFormatTgs && _animate) {
       return Semantics(
         label: s.emoji,
-        child: AnimatedSticker(sticker: s, size: widget.size),
+        child: AnimatedSticker(sticker: s, size: widget.size, repeat: true),
       );
     }
     final file = switch (s?.format) {

@@ -54,6 +54,11 @@ void main() {
   testWidgets('a TGS custom emoji animates in text', (tester) async {
     await pump(tester, AppPreferences.inMemory());
     expect(find.byType(LottieBuilder), findsOneWidget);
+    expect(
+      tester.widget<LottieBuilder>(find.byType(LottieBuilder)).repeat,
+      isTrue,
+      reason: 'loops like Telegram',
+    );
   });
 
   testWidgets('with animations off it shows its static image', (tester) async {
