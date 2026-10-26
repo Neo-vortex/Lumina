@@ -7,6 +7,7 @@ import 'package:lumina_tdlib/api.dart' as td;
 import '../../../core/tdlib/td_errors.dart';
 import '../../../core/telegram/telegram_cache.dart';
 import '../../../core/telegram/entity_edit.dart';
+import '../../../core/telegram/permissions.dart';
 import '../data/messages_repository.dart';
 
 part 'conversation_state.dart';
@@ -358,7 +359,15 @@ class ConversationCubit extends Cubit<ConversationState> {
 
   void chatAction(td.ChatAction? action) => _repository.sendAction(chatId, action).ignore();
 
-  Future<void> saveDraft(String text, {List<td.TextEntity> entities = const []}) => _repository
+  /// Saves the composer as the chat's draft. Skipped where the account
+  /// can't post (channels it only reads): TDLib refuses those drafts.
+  Future<void> saveDraft(String text, {List<td.TextEntity> entities = const []}) async {
+    final chat = _cache.chats[chatId];
+    if (chat == null || !_cache.canPost(chat)) return;
+    return _saveDraft(text, entities);
+  }
+
+  Future<void> _saveDraft(String text, List<td.TextEntity> entities) => _repository
       .saveDraft(
         chatId,
         text,
