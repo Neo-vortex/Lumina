@@ -124,8 +124,15 @@ class ActionExtractor {
       final raw = await engine
           .create(
             [
-              LlamaChatMessage.fromText(role: LlamaChatRole.system, text: writingSystemPrompt(tool)),
-              LlamaChatMessage.fromText(role: LlamaChatRole.user, text: text),
+              for (final (role, content) in writingTurns(tool, text))
+                LlamaChatMessage.fromText(
+                  role: switch (role) {
+                    'system' => LlamaChatRole.system,
+                    'assistant' => LlamaChatRole.assistant,
+                    _ => LlamaChatRole.user,
+                  },
+                  text: content,
+                ),
             ],
             params: GenerationParams(
               maxTokens: (text.length ~/ 2 + 64).clamp(64, 512),
