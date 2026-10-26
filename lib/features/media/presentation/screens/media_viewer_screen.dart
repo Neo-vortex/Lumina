@@ -306,6 +306,7 @@ class _VideoPageState extends State<_VideoPage> {
       loop: widget.loop,
       prefs: context.read<AppPreferences>(),
       onControlsVisibilityChanged: widget.onChrome,
+      fileId: widget.file.id,
     );
   }
 }

@@ -787,7 +787,13 @@ class _IvVideoState extends State<_IvVideo> {
       child: AspectRatio(
         aspectRatio: ratio,
         child: s != null
-            ? VideoPlayerView(source: s.source, isLocalFile: s.local, aspectRatio: ratio, loop: widget.loop)
+            ? VideoPlayerView(
+                source: s.source,
+                isLocalFile: s.local,
+                aspectRatio: ratio,
+                loop: widget.loop,
+                fileId: widget.file.id,
+              )
             : GestureDetector(
                 onTap: _play,
                 child: Stack(
