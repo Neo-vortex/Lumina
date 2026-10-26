@@ -49,7 +49,7 @@ Future<void> showChatActions(
           ListTile(
             leading: Icon(unread ? Icons.mark_chat_read_rounded : Icons.mark_chat_unread_rounded),
             title: Text(unread ? 'Mark as read' : 'Mark as unread'),
-            onTap: () => run(() => repo.setMarkedUnread(chat.id, !unread)),
+            onTap: () => run(() => unread ? repo.markRead(chat) : repo.setMarkedUnread(chat.id, true)),
           ),
           ListTile(
             leading: Icon(muted ? Icons.notifications_rounded : Icons.notifications_off_rounded),
