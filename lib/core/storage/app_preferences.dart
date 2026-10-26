@@ -81,6 +81,14 @@ class AppPreferences {
   bool get aiReactionSuggestion => _bool('reactions.ai', true);
   set aiReactionSuggestion(bool v) => _set('reactions.ai', v);
 
+  /// Map thumbnails (from Telegram) on location messages.
+  bool get mapPreviews => _bool('maps.previews', true);
+  set mapPreviews(bool v) => _set('maps.previews', v);
+
+  /// Which app opens a location: 'ask' (the system chooser), 'google' or 'osm'.
+  String get mapApp => _string('maps.app') ?? 'ask';
+  set mapApp(String v) => _set('maps.app', v);
+
   /// Play animated emoji, reactions and custom emoji; off shows them static.
   bool get animatedEmoji => _bool('emoji.animated', true);
   set animatedEmoji(bool v) => _set('emoji.animated', v);

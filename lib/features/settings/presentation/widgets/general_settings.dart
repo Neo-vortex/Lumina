@@ -226,6 +226,58 @@ class ReactionSettings extends StatelessWidget {
   }
 }
 
+/// Location messages: map previews and which app opens them.
+class MapSettings extends StatelessWidget {
+  const MapSettings({super.key});
+
+  static const apps = {'ask': 'Ask each time', 'google': 'Google Maps', 'osm': 'OpenStreetMap'};
+
+  @override
+  Widget build(BuildContext context) {
+    final prefs = context.read<AppPreferences>();
+    return ListenableBuilder(
+      listenable: prefs.changes,
+      builder: (context, _) => SettingsSection(
+        title: 'Maps',
+        children: [
+          SwitchListTile(
+            value: prefs.mapPreviews,
+            onChanged: (v) => prefs.mapPreviews = v,
+            title: const Text('Map previews'),
+            subtitle: const Text('A map on location messages, rendered by Telegram (no third party)'),
+          ),
+          ListTile(
+            title: const Text('Open locations in'),
+            subtitle: Text(apps[prefs.mapApp] ?? apps['ask']!),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () async {
+              final pick = await showGlowSheet<String>(
+                context,
+                title: 'Open locations in',
+                builder: (context) => Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final e in apps.entries)
+                      ListTile(
+                        title: Text(e.value),
+                        trailing: e.key == prefs.mapApp
+                            ? const Icon(Icons.check_rounded, color: GlowColors.violet)
+                            : null,
+                        onTap: () => Navigator.pop(context, e.key),
+                      ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              );
+              if (pick != null) prefs.mapApp = pick;
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class LinkSettings extends StatelessWidget {
   const LinkSettings({super.key});
 

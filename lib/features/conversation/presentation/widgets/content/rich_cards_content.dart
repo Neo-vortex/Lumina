@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
+import '../../../../../core/storage/app_preferences.dart';
 import '../../../../../core/tdlib/td_client.dart';
 import '../../../../../core/tdlib/td_errors.dart';
 import '../../../../../core/telegram/link_opener.dart';
 import '../../../../../core/telegram/widgets/formatted_text_view.dart';
+import '../../../../../core/telegram/widgets/td_file_image.dart';
 import '../../../../../core/theme/glow_colors.dart';
 import '../../../../../core/theme/motion.dart';
 import '../../screens/conversation_screen.dart';
@@ -15,8 +17,87 @@ import '../../screens/conversation_screen.dart';
 void _snack(BuildContext context, String text) =>
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(text)));
 
-String _geo(td.Location l, String label) =>
-    'geo:${l.latitude},${l.longitude}?q=${l.latitude},${l.longitude}(${Uri.encodeComponent(label)})';
+/// Where "open location" goes (Settings → Chats → Maps).
+enum MapApp { ask, google, osm }
+
+String mapLink(td.Location l, String label, MapApp app) => switch (app) {
+  MapApp.google => 'https://www.google.com/maps/search/?api=1&query=${l.latitude},${l.longitude}',
+  MapApp.osm =>
+    'https://www.openstreetmap.org/?mlat=${l.latitude}&mlon=${l.longitude}#map=16/${l.latitude}/${l.longitude}',
+  MapApp.ask =>
+    'geo:${l.latitude},${l.longitude}?q=${l.latitude},${l.longitude}(${Uri.encodeComponent(label)})',
+};
+
+MapApp _mapApp(BuildContext context) {
+  try {
+    return MapApp.values.firstWhere(
+      (a) => a.name == context.read<AppPreferences>().mapApp,
+      orElse: () => MapApp.ask,
+    );
+  } on ProviderNotFoundException {
+    return MapApp.ask;
+  }
+}
+
+bool _mapPreviews(BuildContext context) {
+  try {
+    return context.read<AppPreferences>().mapPreviews;
+  } on ProviderNotFoundException {
+    return false;
+  }
+}
+
+/// A map thumbnail rendered by Telegram (no API key; the coordinates go
+/// nowhere new), with a pin in the middle.
+class _MapPreview extends StatefulWidget {
+  const _MapPreview({required this.location, required this.chatId});
+
+  final td.Location location;
+  final int chatId;
+
+  @override
+  State<_MapPreview> createState() => _MapPreviewState();
+}
+
+class _MapPreviewState extends State<_MapPreview> {
+  late final Future<td.File> _file = context.read<TdClient>().invoke<td.File>(
+    td.GetMapThumbnailFile(
+      location: widget.location,
+      zoom: 15,
+      width: 240,
+      height: 130,
+      scale: 2,
+      chatId: widget.chatId,
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+    child: SizedBox(
+      width: 240,
+      height: 130,
+      child: FutureBuilder<td.File>(
+        future: _file,
+        builder: (context, snap) => Stack(
+          fit: StackFit.expand,
+          children: [
+            if (snap.data case final f?)
+              TdFileImage(file: f, priority: 6, semanticLabel: 'Map')
+            else
+              const ColoredBox(color: GlowColors.surfaceHigh),
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.only(bottom: 18),
+                child: Icon(Icons.place_rounded, color: GlowColors.coral, size: 34),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
 /// Location, live location and venue messages: a place card with "Open in
 /// maps"; live ones show time left and, for the sender, "Stop sharing".
@@ -59,20 +140,29 @@ class LocationContent extends StatelessWidget {
       _ => (const td.Location(latitude: 0, longitude: 0, horizontalAccuracy: 0), 'Location', '', 0, 0),
     };
     final isLive = live > 0 && expiresIn > 0;
+    final preview = _mapPreviews(context);
+    void open() => openLink(context, mapLink(location, title, _mapApp(context)));
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (preview)
+            GestureDetector(
+              onTap: open,
+              child: _MapPreview(location: location, chatId: message.chatId),
+            ),
           InkWell(
             borderRadius: BorderRadius.circular(14),
-            onTap: () => openLink(context, _geo(location, title)),
+            onTap: open,
             child: Container(
               width: 240,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: preview
+                    ? const BorderRadius.vertical(bottom: Radius.circular(14))
+                    : BorderRadius.circular(14),
                 gradient: LinearGradient(
                   colors: [
                     GlowColors.coral.withValues(alpha: 0.30),
