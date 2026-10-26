@@ -99,6 +99,7 @@ class ConversationCubit extends Cubit<ConversationState> {
           anchor: scroll && messages.isNotEmpty ? () => _anchorFor(messages.first.id) : null,
         ),
       );
+      await _fillPage();
     } on TdException catch (e) {
       emit(state.copyWith(initialLoading: false, error: () => e.message));
     }
@@ -133,8 +134,21 @@ class ConversationCubit extends Cubit<ConversationState> {
         ),
       );
       if (highlight) _clearHighlightLater();
+      await _fillPage();
     } on TdException catch (e) {
       emit(state.copyWith(initialLoading: false, error: () => e.message));
+    }
+  }
+
+  /// TDLib may answer the first requests from its local cache only (often
+  /// just the last message), and a list that short can't scroll to ask for
+  /// more, which left the loading row spinning forever. Keep loading older
+  /// pages until one page is full or TDLib has nothing older.
+  Future<void> _fillPage() async {
+    while (!isClosed && state.hasOlder && state.messages.length < _page) {
+      final before = state.messages.length;
+      await loadOlder();
+      if (state.messages.length == before) break;
     }
   }
 
