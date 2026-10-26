@@ -13,7 +13,6 @@ import '../../../../core/telegram/permissions.dart';
 import '../../../../core/telegram/telegram_cache.dart';
 import '../../../../core/theme/glow_colors.dart';
 import '../../../../core/theme/motion.dart';
-import '../../../../core/widgets/glow_background.dart';
 import '../../../auth/bloc/auth_bloc.dart';
 import '../../../auth/domain/auth_step.dart';
 import '../../../chat_info/data/chat_info_repository.dart';
@@ -408,8 +407,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       ),
                     ],
                   ),
-            body: GlowBackground(
-              child: Column(
+            body: extensions.backdrop(
+              context,
+              chat,
+              Column(
                 children: [
                   if (state.pinned != null)
                     PinnedBanner(

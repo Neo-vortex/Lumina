@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
+import '../../../../core/widgets/glow_background.dart';
 import 'message_menu.dart';
 import 'send_orb.dart';
 
@@ -42,6 +43,9 @@ class ConversationExtensions {
     BuildContext context,
     td.Chat chat,
   ) => null;
+
+  /// The chat's backdrop behind [child] (its background, or the default).
+  Widget backdrop(BuildContext context, td.Chat chat, Widget child) => GlowBackground(child: child);
 
   /// The AI's suggested reaction for [message]; null when off or unavailable.
   Future<String?>? aiReaction(BuildContext context, td.Message message) => null;

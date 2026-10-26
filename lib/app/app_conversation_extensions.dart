@@ -14,6 +14,8 @@ import '../features/profile/presentation/user_profile_screen.dart';
 import '../features/folders/presentation/screens/folder_qr_screen.dart';
 import '../features/calls/bloc/call_cubit.dart';
 import '../features/assistant/data/action_extractor.dart';
+import '../features/backgrounds/domain/chat_backdrop.dart';
+import '../features/backgrounds/presentation/chat_backdrop_view.dart';
 import '../features/media_panel/presentation/media_panel.dart';
 import '../features/assistant/presentation/action_sheet.dart';
 import '../features/assistant/presentation/writing_sheet.dart';
@@ -161,6 +163,12 @@ class AppConversationExtensions extends ConversationExtensions {
   ) =>
       (height, onEmoji, onSent) =>
           MediaPanel(chatId: chat.id, height: height, onEmoji: onEmoji, onSent: onSent);
+
+  @override
+  Widget backdrop(BuildContext context, td.Chat chat, Widget child) => ListenableBuilder(
+    listenable: prefs.changes,
+    builder: (context, _) => ChatBackdropView(backdrop: resolveBackdrop(chat, prefs), child: child),
+  );
 
   @override
   Future<String?>? aiReaction(BuildContext context, td.Message message) {
