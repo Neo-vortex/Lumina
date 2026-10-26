@@ -9,6 +9,7 @@ import '../../../../../core/tdlib/td_errors.dart';
 import '../../../../../core/telegram/link_opener.dart';
 import '../../../../../core/telegram/widgets/formatted_text_view.dart';
 import '../../../../../core/theme/glow_colors.dart';
+import '../../../../../core/theme/motion.dart';
 import '../../screens/conversation_screen.dart';
 
 void _snack(BuildContext context, String text) =>
@@ -81,7 +82,7 @@ class LocationContent extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  _Pulse(
+                  LivePulse(
                     active: isLive,
                     child: const Icon(Icons.place_rounded, color: Colors.white, size: 30),
                   ),
@@ -147,33 +148,42 @@ class LocationContent extends StatelessWidget {
   static String _left(int s) => s >= 3600 ? '${(s / 3600).ceil()} h' : '${(s / 60).ceil()} min';
 }
 
-class _Pulse extends StatefulWidget {
-  const _Pulse({required this.active, required this.child});
+/// The live-location dot: three pulses when sharing starts and after each
+/// update, then still (pulsing for the whole sharing period, up to hours,
+/// redrew the screen at the display rate). None under reduced motion.
+@visibleForTesting
+class LivePulse extends StatefulWidget {
+  const LivePulse({super.key, required this.active, required this.child});
 
   final bool active;
   final Widget child;
 
   @override
-  State<_Pulse> createState() => _PulseState();
+  State<LivePulse> createState() => _LivePulseState();
 }
 
-class _PulseState extends State<_Pulse> with SingleTickerProviderStateMixin {
+class _LivePulseState extends State<LivePulse> with SingleTickerProviderStateMixin {
   late final _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600));
 
   @override
-  void initState() {
-    super.initState();
-    if (widget.active) _c.repeat();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _pulse();
   }
 
   @override
-  void didUpdateWidget(_Pulse old) {
+  void didUpdateWidget(LivePulse old) {
     super.didUpdateWidget(old);
-    if (!widget.active) {
+    _pulse();
+  }
+
+  void _pulse() {
+    if (!widget.active || !Motion.ambientEnabled(context)) {
       _c.stop();
-    } else if (!_c.isAnimating) {
-      _c.repeat();
+      _c.value = 0;
+      return;
     }
+    if (!_c.isAnimating) _c.repeat(count: 3).whenCompleteOrCancel(() => _c.value = 0);
   }
 
   @override
