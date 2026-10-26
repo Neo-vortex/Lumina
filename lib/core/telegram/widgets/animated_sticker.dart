@@ -18,11 +18,20 @@ Future<LottieComposition?> decodeTgs(List<int> bytes) => LottieComposition.fromB
 /// "animated emoji" switched off in Settings show the static thumbnail or
 /// the plain emoji.
 class AnimatedSticker extends StatelessWidget {
-  const AnimatedSticker({super.key, required this.sticker, required this.size, this.repeat = false});
+  const AnimatedSticker({
+    super.key,
+    required this.sticker,
+    required this.size,
+    this.repeat = false,
+    this.autoplay = true,
+  });
 
   final td.Sticker sticker;
   final double size;
   final bool repeat;
+
+  /// Off: hold the first frame (emoji-only messages play when tapped).
+  final bool autoplay;
 
   @override
   Widget build(BuildContext context) {
@@ -52,6 +61,7 @@ class AnimatedSticker extends StatelessWidget {
                   File(f.local.path),
                   decoder: decodeTgs,
                   repeat: repeat,
+                  animate: autoplay,
                   width: size,
                   height: size,
                   frameBuilder: (context, child, composition) => composition == null ? fallback : child,

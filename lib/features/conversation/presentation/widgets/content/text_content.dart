@@ -4,6 +4,7 @@ import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../../core/telegram/widgets/animated_sticker.dart';
 import '../../../../../core/storage/app_preferences.dart';
+import '../../../../../core/tdlib/td_client.dart';
 import '../link_preview_card.dart';
 
 import '../../../../../core/telegram/widgets/formatted_text_view.dart';
@@ -78,32 +79,91 @@ class TextContent extends StatelessWidget {
 }
 
 /// A lone emoji, shown large without a bubble feel.
-/// A single emoji sent on its own: big and animated (Telegram's animated
-/// emoji), standing alone without a bubble.
-class BigEmojiContent extends StatelessWidget {
-  const BigEmojiContent({super.key, required this.emoji, required this.footer, this.sticker});
+/// A single emoji sent on its own: big, standing alone without a bubble.
+/// Still until tapped, like Telegram: a tap plays it; tapping again also
+/// plays Telegram's effect animation over it (and Telegram shows the other
+/// side the interaction too).
+class BigEmojiContent extends StatefulWidget {
+  const BigEmojiContent({super.key, required this.emoji, required this.footer, this.sticker, this.message});
 
   final String emoji;
   final td.Sticker? sticker;
+  final td.Message? message;
   final Widget footer;
 
   @override
+  State<BigEmojiContent> createState() => _BigEmojiContentState();
+}
+
+class _BigEmojiContentState extends State<BigEmojiContent> {
+  var _plays = 0;
+  OverlayEntry? _effect;
+
+  @override
+  void dispose() {
+    _effect?.remove();
+    super.dispose();
+  }
+
+  Future<void> _tap() async {
+    setState(() => _plays++);
+    final m = widget.message;
+    if (_plays < 2 || m == null) return;
+    try {
+      final effect = await context.read<TdClient>().invoke<td.Sticker>(
+        td.ClickAnimatedEmojiMessage(chatId: m.chatId, messageId: m.id),
+      );
+      if (mounted) _showEffect(effect);
+    } catch (_) {
+      // No effect for this emoji; the emoji itself played.
+    }
+  }
+
+  void _showEffect(td.Sticker effect) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final center = box.localToGlobal(box.size.center(Offset.zero));
+    const size = 300.0;
+    _effect?.remove();
+    _effect = OverlayEntry(
+      builder: (_) => Positioned(
+        left: center.dx - size / 2,
+        top: center.dy - size / 2,
+        child: IgnorePointer(
+          child: AnimatedSticker(key: const ValueKey('emoji-effect'), sticker: effect, size: size),
+        ),
+      ),
+    );
+    Overlay.of(context).insert(_effect!);
+    Future<void>.delayed(const Duration(seconds: 3), () {
+      _effect?.remove();
+      _effect = null;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (sticker case final s?)
-            AnimatedSticker(sticker: s, size: 140)
-          else
-            Text(emoji, style: const TextStyle(fontSize: 52)),
-          DecoratedBox(
-            decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(10)),
-            child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), child: footer),
-          ),
-        ],
+    return GestureDetector(
+      onTap: widget.sticker == null ? null : _tap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.sticker case final s?)
+              AnimatedSticker(key: ValueKey(_plays), sticker: s, size: 140, autoplay: _plays > 0)
+            else
+              Text(widget.emoji, style: const TextStyle(fontSize: 52)),
+            DecoratedBox(
+              decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(10)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                child: widget.footer,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

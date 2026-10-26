@@ -115,6 +115,7 @@ class MessageContentView extends StatelessWidget {
       td.MessageAnimatedEmoji(:final emoji, :final animatedEmoji) => BigEmojiContent(
         emoji: emoji,
         sticker: animatedEmoji.sticker,
+        message: m,
         footer: overlayFooter,
       ),
       td.MessageExpiredPhoto() ||
