@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
-import '../../../core/telegram/display.dart';
 import '../../../core/telegram/widgets/animated_sticker.dart';
+import '../../../core/telegram/widgets/looping_gif.dart';
 import '../../../core/telegram/widgets/td_file_image.dart';
 import '../../../core/theme/glow_colors.dart';
 import '../data/emoji_data.dart';
@@ -363,7 +363,8 @@ class _GifTabState extends State<_GifTab> {
     widget.onSent();
   }
 
-  Widget _cell(td.File? thumb, td.Minithumbnail? mini, VoidCallback onTap) => Semantics(
+  // GIFs loop silently in the grid, like Telegram.
+  Widget _cell(td.Animation gif, VoidCallback onTap) => Semantics(
     button: true,
     label: 'GIF',
     excludeSemantics: true,
@@ -371,9 +372,11 @@ class _GifTabState extends State<_GifTab> {
       onTap: onTap,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: thumb == null
-            ? const ColoredBox(color: GlowColors.surfaceHigh)
-            : TdFileImage(file: thumb, placeholderBytes: Display.minithumbnail(mini)),
+        child: LoopingGif(
+          file: gif.animation,
+          thumbnail: gif.thumbnail?.file,
+          minithumbnail: gif.minithumbnail,
+        ),
       ),
     ),
   );
@@ -408,8 +411,7 @@ class _GifTabState extends State<_GifTab> {
                   return _grid(
                     gifs.length,
                     (i) => _cell(
-                      gifs[i].animation.thumbnail?.file,
-                      gifs[i].animation.minithumbnail,
+                      gifs[i].animation,
                       () => _sent(_repo.sendInlineResult(widget.chatId, r.inlineQueryId, gifs[i].id)),
                     ),
                   );
@@ -431,11 +433,7 @@ class _GifTabState extends State<_GifTab> {
                     onRefresh: () async => setState(() => _saved = _repo.savedGifs()),
                     child: _grid(
                       list.length,
-                      (i) => _cell(
-                        list[i].thumbnail?.file,
-                        list[i].minithumbnail,
-                        () => _sent(_repo.sendGif(widget.chatId, list[i])),
-                      ),
+                      (i) => _cell(list[i], () => _sent(_repo.sendGif(widget.chatId, list[i]))),
                     ),
                   );
                 },
