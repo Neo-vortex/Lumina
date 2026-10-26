@@ -5,9 +5,10 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/glow_colors.dart';
 import '../../../../core/theme/motion.dart';
 
-/// A ring around an avatar that marks active stories: a slowly turning
-/// violet→cyan sweep that breathes while stories are unseen, and a quiet
-/// outline once they have all been watched.
+/// A ring around an avatar that marks active stories: a violet→cyan sweep
+/// that turns twice when unseen stories appear, then rests (an endless spin
+/// kept the chat list redrawing at the display rate), and a quiet outline
+/// once they have all been watched.
 class StoryHalo extends StatefulWidget {
   const StoryHalo({super.key, required this.child, required this.size, required this.unseen, this.onTap});
 
@@ -23,27 +24,28 @@ class StoryHalo extends StatefulWidget {
 }
 
 class _StoryHaloState extends State<StoryHalo> with SingleTickerProviderStateMixin {
-  late final _spin = AnimationController(vsync: this, duration: Motion.drift ~/ 4);
+  /// Two turns, then still.
+  late final _spin = AnimationController(vsync: this, duration: Motion.drift ~/ 8);
+  var _spun = false;
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
     _sync();
   }
 
   @override
   void didUpdateWidget(StoryHalo oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.unseen && !oldWidget.unseen) _spun = false;
     _sync();
   }
 
   void _sync() {
-    final animate =
-        widget.unseen &&
-        !(WidgetsBinding.instance.platformDispatcher.accessibilityFeatures.disableAnimations);
-    if (animate && !_spin.isAnimating) {
-      _spin.repeat();
-    } else if (!animate) {
+    if (widget.unseen && !_spun && Motion.ambientEnabled(context)) {
+      _spun = true;
+      _spin.forward(from: 0);
+    } else if (!widget.unseen || !Motion.ambientEnabled(context)) {
       _spin.stop();
     }
   }
@@ -68,7 +70,7 @@ class _StoryHaloState extends State<StoryHalo> with SingleTickerProviderStateMix
           child: AnimatedBuilder(
             animation: _spin,
             builder: (context, child) => CustomPaint(
-              painter: _HaloPainter(turn: _spin.value, unseen: widget.unseen),
+              painter: _HaloPainter(turn: _spin.value * 2, unseen: widget.unseen),
               child: child,
             ),
             child: Center(child: widget.child),
