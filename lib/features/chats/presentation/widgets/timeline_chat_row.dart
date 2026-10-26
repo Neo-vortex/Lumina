@@ -9,6 +9,7 @@ import '../../../../core/telegram/telegram_cache.dart';
 import '../../../../core/telegram/widgets/chat_avatar.dart';
 import '../../../../core/theme/glow_colors.dart';
 import '../../../../core/theme/motion.dart';
+import 'chat_list_extensions.dart';
 import 'chat_row_extensions.dart';
 
 /// One chat on the timeline ribbon: a glowing node on a vertical thread,
@@ -25,6 +26,7 @@ class TimelineChatRow extends StatefulWidget {
     required this.onTap,
     this.onLongPress,
     this.showPresence = true,
+    this.tint,
   });
 
   final td.Chat chat;
@@ -33,6 +35,9 @@ class TimelineChatRow extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
   final bool showPresence;
+
+  /// The lens colour; null keeps the default violet/teal ribbon.
+  final Color? tint;
 
   @override
   State<TimelineChatRow> createState() => _TimelineChatRowState();
@@ -76,7 +81,8 @@ class _TimelineChatRowState extends State<TimelineChatRow> with SingleTickerProv
     final ageHours = lastDate == null ? 1e9 : now.difference(lastDate).inMinutes / 60;
     final recency = (1 - (math.log(1 + ageHours) / math.log(1 + 24 * 7))).clamp(0.0, 1.0);
     final nodeSize = 8.0 + 10.0 * (math.min(unread, 20) / 20);
-    final accent = unread > 0 && !muted ? GlowColors.cyan : GlowColors.violet;
+    final tint = widget.tint;
+    final accent = unread > 0 && !muted ? (tint ?? GlowColors.cyan) : (tint ?? GlowColors.violet);
 
     final draft = chat.draftMessage;
     final Widget preview;
@@ -150,6 +156,7 @@ class _TimelineChatRowState extends State<TimelineChatRow> with SingleTickerProv
                   builder: (context, _) => CustomPaint(
                     size: const Size(36, 76),
                     painter: _RibbonPainter(
+                      tint: tint,
                       nodeSize: nodeSize * (1 + 0.5 * math.sin(_pulse.value * math.pi)),
                       glow: math.max(recency, _pulse.value == 0 ? 0 : 1 - _pulse.value),
                       color: accent,
@@ -186,6 +193,7 @@ class _TimelineChatRowState extends State<TimelineChatRow> with SingleTickerProv
                           ),
                         ),
                         if (sponsored) const _SponsorTag(),
+                        ...ChatListExtensions.of(context).folderTags(context, chat),
                         if (muted)
                           const Padding(
                             padding: EdgeInsets.only(left: 4),
@@ -356,6 +364,7 @@ class _RibbonPainter extends CustomPainter {
     required this.color,
     required this.isFirst,
     required this.isLast,
+    required this.tint,
   });
 
   final double nodeSize;
@@ -363,6 +372,7 @@ class _RibbonPainter extends CustomPainter {
   final Color color;
   final bool isFirst;
   final bool isLast;
+  final Color? tint;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -372,7 +382,9 @@ class _RibbonPainter extends CustomPainter {
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [GlowColors.violet.withValues(alpha: 0.35), GlowColors.teal.withValues(alpha: 0.35)],
+        colors: tint == null
+            ? [GlowColors.violet.withValues(alpha: 0.35), GlowColors.teal.withValues(alpha: 0.35)]
+            : [tint!.withValues(alpha: 0.45), tint!.withValues(alpha: 0.2)],
       ).createShader(Offset.zero & size);
     canvas.drawLine(Offset(cx, isFirst ? cy : 0), Offset(cx, isLast ? cy : size.height), thread);
     if (glow > 0.05) {
@@ -396,6 +408,7 @@ class _RibbonPainter extends CustomPainter {
       old.nodeSize != nodeSize ||
       old.glow != glow ||
       old.color != color ||
+      old.tint != tint ||
       old.isFirst != isFirst ||
       old.isLast != isLast;
 }
