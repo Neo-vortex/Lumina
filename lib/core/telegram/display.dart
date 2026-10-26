@@ -48,7 +48,18 @@ abstract final class Display {
     return palette[id.abs() % palette.length];
   }
 
-  static Uint8List? minithumbnail(td.Minithumbnail? m) => m == null ? null : base64Decode(m.data);
+  /// Decoded once per distinct thumbnail: `Image.memory` keys its cache on
+  /// the bytes' identity, so a fresh decode each build re-decoded the JPEG.
+  static Uint8List? minithumbnail(td.Minithumbnail? m) {
+    if (m == null) return null;
+    final hit = _minithumbs.remove(m.data);
+    final bytes = hit ?? base64Decode(m.data);
+    _minithumbs[m.data] = bytes; // re-insert: most recent last
+    if (_minithumbs.length > 300) _minithumbs.remove(_minithumbs.keys.first);
+    return bytes;
+  }
+
+  static final _minithumbs = <String, Uint8List>{};
 
   /// "online", "last seen 14:02", "last seen recently"…
   static String status(td.User? user, {DateTime? now}) {
