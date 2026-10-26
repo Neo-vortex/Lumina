@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -5,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../core/platform/system_channel.dart';
 import '../../../core/theme/glow_colors.dart';
 import '../../../core/theme/motion.dart';
+import '../../../core/widgets/glow_button.dart';
 import '../data/action_extractor.dart';
 import '../domain/assistant_action.dart';
 
@@ -46,6 +49,7 @@ class _ActionSheet extends StatefulWidget {
 class _ActionSheetState extends State<_ActionSheet> {
   ActionDraft? _draft;
   String? _error;
+  var _stage = ExtractStage.reading;
   final _title = TextEditingController();
   final _location = TextEditingController();
   final _notes = TextEditingController();
@@ -67,14 +71,26 @@ class _ActionSheetState extends State<_ActionSheet> {
 
   Future<void> _extract() async {
     try {
-      final d = await widget.extractor.extract(widget.messageText, widget.ctx);
+      final d = await widget.extractor.extract(
+        widget.messageText,
+        widget.ctx,
+        onStage: (stage) {
+          if (mounted) setState(() => _stage = stage);
+        },
+      );
       if (!mounted) return;
       _title.text = d.title;
       _location.text = d.location;
       _notes.text = d.notes;
       setState(() => _draft = d);
     } catch (e) {
-      if (mounted) setState(() => _error = 'The on-device model could not read this message ($e).');
+      if (mounted) {
+        setState(
+          () => _error = e is TimeoutException
+              ? 'The on-device model took too long to start.'
+              : 'The on-device model could not read this message ($e).',
+        );
+      }
     }
   }
 
@@ -171,9 +187,21 @@ class _ActionSheetState extends State<_ActionSheet> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           child: _error != null
-              ? _Message(icon: Icons.error_outline_rounded, text: _error!)
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _Message(icon: Icons.error_outline_rounded, text: _error!),
+                    GlowButton(
+                      label: 'Try again',
+                      onPressed: () {
+                        setState(() => _error = null);
+                        _extract();
+                      },
+                    ),
+                  ],
+                )
               : d == null
-              ? const _Thinking()
+              ? _Thinking(stage: _stage)
               : SingleChildScrollView(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -320,19 +348,25 @@ class _ActionSheetState extends State<_ActionSheet> {
 }
 
 class _Thinking extends StatelessWidget {
-  const _Thinking();
+  const _Thinking({required this.stage});
+
+  final ExtractStage stage;
 
   @override
-  Widget build(BuildContext context) => const Padding(
-    padding: EdgeInsets.symmetric(vertical: 28),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 28),
     child: Column(
       children: [
-        SizedBox.square(
+        const SizedBox.square(
           dimension: 36,
           child: CircularProgressIndicator(color: GlowColors.cyan, strokeWidth: 2.6),
         ),
-        SizedBox(height: 16),
-        Text('Reading the message on your phone…', style: TextStyle(color: GlowColors.textMuted)),
+        const SizedBox(height: 16),
+        Text(switch (stage) {
+          ExtractStage.preparing => 'Preparing the on-device model (first time only)…',
+          ExtractStage.loading => 'Starting the on-device model…',
+          ExtractStage.reading => 'Reading the message on your phone…',
+        }, style: const TextStyle(color: GlowColors.textMuted)),
       ],
     ),
   );

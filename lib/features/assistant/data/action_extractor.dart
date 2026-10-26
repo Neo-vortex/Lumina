@@ -8,6 +8,9 @@ import '../domain/action_guardrails.dart';
 import '../domain/assistant_action.dart';
 import 'assistant_prompt.dart';
 
+/// Where a suggestion is, for the sheet's status line.
+enum ExtractStage { preparing, loading, reading }
+
 /// Who is asking, so the model can tell "me" from the sender.
 class AssistantContext {
   const AssistantContext({
@@ -31,29 +34,56 @@ class AssistantContext {
 /// [ActionGuardrails] settle unambiguous phrasing and [DateResolver] works
 /// out dates and times.
 class ActionExtractor {
-  ActionExtractor(this._models);
+  ActionExtractor(
+    this._models, {
+    Future<LlamaEngine> Function(String path)? loadEngine,
+    this.prepareTimeout = const Duration(minutes: 2),
+    this.loadTimeout = const Duration(seconds: 45),
+  }) : _loadEngine = loadEngine ?? _llama;
 
   final ModelInstaller _models;
+  final Future<LlamaEngine> Function(String path) _loadEngine;
+
+  /// First use copies the ~230 MB model out of the APK.
+  final Duration prepareTimeout;
+  final Duration loadTimeout;
+
   LlamaEngine? _engine;
   Future<LlamaEngine>? _loading;
   Timer? _idle;
   var _running = 0;
 
-  Future<LlamaEngine> _ready() => _loading ??= () async {
-    final path = await _models.ensure(BundledModel.actionModel);
+  static Future<LlamaEngine> _llama(String path) async {
     final engine = LlamaEngine(LlamaBackend());
     await engine.setModel(
       LlamaModel(ModelSource.path(path)),
       params: const ModelParams(contextSize: 2048, device: ComputeDevice.cpu),
     );
-    return _engine = engine;
-  }();
+    return engine;
+  }
 
-  Future<ActionDraft> extract(String messageText, AssistantContext ctx) async {
+  Future<LlamaEngine> _ready(void Function(ExtractStage)? onStage) {
+    if (_engine case final engine?) return Future.value(engine);
+    // A load that failed or timed out must not stay cached, or every later
+    // attempt would wait on it forever.
+    return _loading ??= () async {
+      onStage?.call(ExtractStage.preparing);
+      final path = await _models.ensure(BundledModel.actionModel).timeout(prepareTimeout);
+      onStage?.call(ExtractStage.loading);
+      return _engine = await _loadEngine(path).timeout(loadTimeout);
+    }().whenComplete(() => _loading = null);
+  }
+
+  Future<ActionDraft> extract(
+    String messageText,
+    AssistantContext ctx, {
+    void Function(ExtractStage stage)? onStage,
+  }) async {
     _idle?.cancel();
     _running++;
     try {
-      final engine = await _ready();
+      final engine = await _ready(onStage);
+      onStage?.call(ExtractStage.reading);
       final raw = await engine
           .create(
             labelPrompt(messageText, userName: ctx.userName, senderName: ctx.senderName),
