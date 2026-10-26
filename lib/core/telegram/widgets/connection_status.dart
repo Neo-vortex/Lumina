@@ -21,6 +21,19 @@ class ConnectionAwareTitle extends StatefulWidget {
 
 class _ConnectionAwareTitleState extends State<ConnectionAwareTitle> {
   StreamSubscription<CacheEvent>? _sub;
+  Timer? _settle;
+
+  /// The spinner rests as a static icon after this long in one state, so a
+  /// slow proxy doesn't keep the screen producing frames for minutes.
+  bool _settled = false;
+
+  void _restartSettle() {
+    _settle?.cancel();
+    _settled = false;
+    _settle = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _settled = true);
+    });
+  }
 
   @override
   void didChangeDependencies() {
@@ -29,12 +42,14 @@ class _ConnectionAwareTitleState extends State<ConnectionAwareTitle> {
         .read<TelegramCache>()
         .events
         .where((e) => e is ConnectionChanged)
-        .listen((_) => setState(() {}));
+        .listen((_) => setState(_restartSettle));
+    if (_settle == null) _restartSettle();
   }
 
   @override
   void dispose() {
     _sub?.cancel();
+    _settle?.cancel();
     super.dispose();
   }
 
@@ -68,9 +83,11 @@ class _ConnectionAwareTitleState extends State<ConnectionAwareTitle> {
                 key: ValueKey(status),
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const SizedBox.square(
+                  SizedBox.square(
                     dimension: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: GlowColors.amber),
+                    child: _settled
+                        ? const Icon(Icons.cloud_sync_outlined, size: 14, color: GlowColors.amber)
+                        : const CircularProgressIndicator(strokeWidth: 2, color: GlowColors.amber),
                   ),
                   const SizedBox(width: 10),
                   Text(status, style: const TextStyle(fontSize: 17, color: GlowColors.amber)),
