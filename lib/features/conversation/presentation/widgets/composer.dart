@@ -9,6 +9,7 @@ import '../../../../core/telegram/telegram_cache.dart';
 import '../../../../core/theme/glow_colors.dart';
 import '../../../../core/theme/motion.dart';
 import '../../data/messages_repository.dart';
+import 'composer_selection_menu.dart';
 import 'formatting_controller.dart';
 import 'link_preview_card.dart';
 import '../../../../core/widgets/send_options_sheet.dart';
@@ -243,17 +244,8 @@ class _ComposerState extends State<Composer> {
                             maxLines: 6,
                             textCapitalization: TextCapitalization.sentences,
                             keyboardType: TextInputType.multiline,
-                            contextMenuBuilder: (context, state) {
-                              final c = widget.controller;
-                              return AdaptiveTextSelectionToolbar.buttonItems(
-                                anchors: state.contextMenuAnchors,
-                                buttonItems: [
-                                  ...state.contextMenuButtonItems,
-                                  if (c is FormattingController)
-                                    ...formattingMenuItems(context, c, hideToolbar: state.hideToolbar),
-                                ],
-                              );
-                            },
+                            contextMenuBuilder: (context, state) =>
+                                ComposerSelectionMenu(state: state, controller: widget.controller),
                             decoration: InputDecoration(
                               hintText: widget.editing != null ? 'Edit message' : 'Message',
                               hintStyle: const TextStyle(color: GlowColors.textMuted),

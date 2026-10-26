@@ -3,6 +3,8 @@ import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../core/telegram/entity_edit.dart';
 import '../../../../core/theme/glow_colors.dart';
+import '../../../../core/widgets/glow_button.dart';
+import '../../../../core/widgets/glow_sheet.dart';
 
 /// Composer text plus the formatting the user applied by hand (selection
 /// menu → Bold, Code block, Quote, Link…). Entity ranges follow edits, and
@@ -108,62 +110,35 @@ class FormattingController extends TextEditingController {
 }
 
 /// The formatting entries added to the composer's selection menu.
-List<ContextMenuButtonItem> formattingMenuItems(
-  BuildContext context,
-  FormattingController c, {
-  required VoidCallback hideToolbar,
-}) {
-  if (!c.hasSelection) return const [];
-  ContextMenuButtonItem item(String label, td.TextEntityType type) => ContextMenuButtonItem(
-    label: c.isApplied(type) ? '✓ $label' : label,
-    onPressed: () {
-      c.toggle(type);
-      hideToolbar();
-    },
-  );
-  return [
-    item('Bold', const td.TextEntityTypeBold()),
-    item('Italic', const td.TextEntityTypeItalic()),
-    item('Underline', const td.TextEntityTypeUnderline()),
-    item('Strikethrough', const td.TextEntityTypeStrikethrough()),
-    item('Spoiler', const td.TextEntityTypeSpoiler()),
-    item('Monospace', const td.TextEntityTypeCode()),
-    item('Code block', const td.TextEntityTypePre()),
-    item('Quote', const td.TextEntityTypeBlockQuote()),
-    item('Collapsible quote', const td.TextEntityTypeExpandableBlockQuote()),
-    ContextMenuButtonItem(
-      label: 'Link…',
-      onPressed: () async {
-        hideToolbar();
-        final url = await _askUrl(context);
-        if (url != null && url.isNotEmpty) c.toggle(td.TextEntityTypeTextUrl(url: url));
-      },
-    ),
-    ContextMenuButtonItem(
-      label: 'Clear formatting',
-      onPressed: () {
-        c.clearFormatting();
-        hideToolbar();
-      },
-    ),
-  ];
-}
-
-Future<String?> _askUrl(BuildContext context) async {
+/// Asks for a URL in a glow sheet and links the selection to it.
+Future<void> promptFormattingLink(BuildContext context, FormattingController c) async {
   final ctrl = TextEditingController(text: 'https://');
-  final url = await showDialog<String>(
-    context: context,
-    builder: (context) => AlertDialog(
-      backgroundColor: GlowColors.surfaceHigh,
-      title: const Text('Add link'),
-      content: TextField(controller: ctrl, autofocus: true, keyboardType: TextInputType.url),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        TextButton(onPressed: () => Navigator.pop(context, ctrl.text.trim()), child: const Text('Add')),
-      ],
+  final url = await showGlowSheet<String>(
+    context,
+    title: 'Add link',
+    accent: GlowColors.cyan,
+    builder: (context) => Padding(
+      padding: const EdgeInsets.fromLTRB(24, 4, 24, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: ctrl,
+            autofocus: true,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(prefixIcon: Icon(Icons.link_rounded)),
+            onSubmitted: (v) => Navigator.pop(context, v.trim()),
+          ),
+          const SizedBox(height: 16),
+          GlowButton(label: 'Add link', onPressed: () => Navigator.pop(context, ctrl.text.trim())),
+        ],
+      ),
     ),
   );
   ctrl.dispose();
-  if (url == null) return null;
-  return url.contains('://') || url.startsWith('tg:') ? url : 'https://$url';
+  if (url == null || url.isEmpty || url == 'https://') return;
+  c.toggle(
+    td.TextEntityTypeTextUrl(url: url.contains('://') || url.startsWith('tg:') ? url : 'https://$url'),
+  );
 }
