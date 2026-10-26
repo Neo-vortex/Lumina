@@ -38,6 +38,7 @@ class _PulseScreenState extends State<PulseScreen> with SingleTickerProviderStat
   Widget build(BuildContext context) {
     return Scaffold(
       body: GlowBackground(
+        drift: true,
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
