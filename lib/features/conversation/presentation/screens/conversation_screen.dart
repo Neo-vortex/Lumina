@@ -793,7 +793,14 @@ class _ReadOnlyBarState extends State<_ReadOnlyBar> {
     } else if (member && widget.isChannel) {
       final muted = cache.isMuted(chat);
       child = TextButton.icon(
-        style: TextButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+        // A very light outline so it reads as a button on the dark bar.
+        style: TextButton.styleFrom(
+          minimumSize: const Size.fromHeight(48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(color: GlowColors.text.withValues(alpha: 0.14)),
+          ),
+        ),
         onPressed: _busy ? null : () => _run(() => context.read<ChatsRepository>().setMuted(chat.id, !muted)),
         icon: Icon(muted ? Icons.notifications_off_rounded : Icons.notifications_rounded),
         label: Text(muted ? 'Unmute' : 'Mute'),
