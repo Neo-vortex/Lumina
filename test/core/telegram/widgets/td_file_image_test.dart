@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumina/core/telegram/file_store.dart';
+import 'package:lumina/core/telegram/widgets/file_progress.dart';
 import 'package:lumina/core/telegram/widgets/td_file_image.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
@@ -79,6 +80,37 @@ void main() {
     await pump(tester, downloading(size: 100), placeholder: base64Decode(_png1x1));
     expect(find.byType(ImageFiltered), findsNothing);
     expect(tester.widget<Image>(find.byType(Image)).filterQuality, FilterQuality.medium);
+  });
+
+  testWidgets('an image mounting a FileBuilder of the same file does not rebuild it mid-build', (
+    tester,
+  ) async {
+    late StateSetter set;
+    var show = false;
+    await tester.pumpWidget(
+      RepositoryProvider(
+        create: (_) => FileStore(FakeTdClient()),
+        // The image is inside the builder, as AnimatedSticker's fallback is,
+        // and mounts after the builder is already listening.
+        child: StatefulBuilder(
+          builder: (context, setState) {
+            set = setState;
+            return FileBuilder(
+              file: downloading(size: 100),
+              builder: (_, _) => SizedBox(
+                width: 50,
+                height: 50,
+                child: show ? TdFileImage(file: downloading(size: 100), autoDownload: false) : null,
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    set(() => show = true);
+    await tester.pump();
+    expect(tester.takeException(), isNull);
   });
 }
 

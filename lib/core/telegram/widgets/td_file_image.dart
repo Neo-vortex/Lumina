@@ -46,7 +46,7 @@ class _TdFileImageState extends State<TdFileImage> {
     super.didChangeDependencies();
     _files = context.read<FileStore>();
     _stream ??= _files.watch(widget.file.id);
-    _files.remember(_files[widget.file.id] ?? widget.file);
+    _files.remember(_files[widget.file.id] ?? widget.file, notify: false);
     _maybeDownload();
   }
 

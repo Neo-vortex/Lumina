@@ -22,10 +22,12 @@ class FileStore {
 
   td.File? operator [](int fileId) => _files[fileId];
 
-  /// Records a file seen inside a message, photo or update.
-  void remember(td.File file) {
+  /// Records a file seen inside a message, photo or update. Widgets record
+  /// during build with [notify] off: a synchronous change event there would
+  /// rebuild a watcher of the same file mid-build.
+  void remember(td.File file, {bool notify = true}) {
     _files[file.id] = file;
-    if (!_changes.isClosed) _changes.add(file);
+    if (notify && !_changes.isClosed) _changes.add(file);
   }
 
   /// Current state (if known) followed by every change of [fileId].

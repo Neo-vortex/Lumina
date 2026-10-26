@@ -7,6 +7,8 @@ import 'package:lumina_tdlib/api.dart' as td;
 import '../custom_emoji_store.dart';
 import '../link_opener.dart';
 import 'td_file_image.dart';
+import 'animated_sticker.dart';
+import '../../storage/app_preferences.dart';
 
 /// Renders TDLib [td.FormattedText] with all its entities:
 /// * inline: bold, italic, underline, strikethrough, spoilers (tap to
@@ -410,8 +412,9 @@ class _Quote extends StatelessWidget {
   }
 }
 
-/// A custom emoji as its static sticker image (WebP), or the animated
-/// sticker's thumbnail; the plain emoji until it loads or if it can't.
+/// A custom emoji: animated TGS through Lottie (unless animated emoji are
+/// off in Settings), else its static image (WebP) or the animated sticker's
+/// thumbnail; the plain emoji until it loads or if it can't.
 class _CustomEmoji extends StatefulWidget {
   const _CustomEmoji({required this.id, required this.fallback, required this.size, required this.style});
 
@@ -444,9 +447,23 @@ class _CustomEmojiState extends State<_CustomEmoji> {
     }
   }
 
+  bool get _animate {
+    try {
+      return context.read<AppPreferences>().animatedEmoji;
+    } on ProviderNotFoundException {
+      return false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = _sticker;
+    if (s != null && s.format is td.StickerFormatTgs && _animate) {
+      return Semantics(
+        label: s.emoji,
+        child: AnimatedSticker(sticker: s, size: widget.size),
+      );
+    }
     final file = switch (s?.format) {
       td.StickerFormatWebp() => s!.sticker,
       td.StickerFormatTgs() || td.StickerFormatWebm() => switch (s!.thumbnail) {
