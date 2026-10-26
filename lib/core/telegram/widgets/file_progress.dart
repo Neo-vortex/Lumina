@@ -73,7 +73,8 @@ class TransferRing extends StatelessWidget {
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  if (active)
+                  // Unknown size: no indeterminate ring, which would redraw forever.
+                  if (active && p != null)
                     SizedBox.square(
                       dimension: size - 6,
                       child: CircularProgressIndicator(value: p, strokeWidth: 2.6, color: GlowColors.cyan),
