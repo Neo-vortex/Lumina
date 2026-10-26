@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_zxing/flutter_zxing.dart';
+
+import '../../../../core/telegram/internal_links.dart';
 
 import '../../../../core/theme/glow_colors.dart';
 import '../../data/proxy_config.dart';
@@ -30,12 +33,25 @@ class _ProxyScanScreenState extends State<ProxyScanScreen> {
       Navigator.of(context).pop(found);
       return;
     }
+    InternalLinks? links;
+    try {
+      links = context.read<InternalLinks>();
+    } on ProviderNotFoundException {
+      links = null;
+    }
+    if (links != null && links.canOpen(text)) {
+      _done = true;
+      final nav = Navigator.of(context);
+      nav.pop();
+      links.tryOpen(nav.context, text).ignore();
+      return;
+    }
     // The camera keeps seeing the same code; say so once.
     if (text != _lastRejected) {
       _lastRejected = text;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('That QR code has no proxy link')));
+        ..showSnackBar(const SnackBar(content: Text('That QR code has no proxy or folder link')));
     }
   }
 
@@ -46,7 +62,7 @@ class _ProxyScanScreenState extends State<ProxyScanScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: GlowColors.text,
-        title: const Text('Scan proxy QR code'),
+        title: const Text('Scan a proxy or folder QR code'),
       ),
       body: ReaderWidget(
         codeFormat: Format.qrCode,

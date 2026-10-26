@@ -32,6 +32,7 @@ class FoldersRepository {
   final DateTime Function() _now;
   late final StreamSubscription<td.Update> _sub;
   var _premium = false;
+  StreamSubscription<CacheEvent>? _foldersSub;
 
   /// TDLib allows checking a folder's new chats once per period; we use 10 min.
   static const newChatsPeriod = Duration(minutes: 10);
@@ -219,7 +220,14 @@ class FoldersRepository {
     _prefs.folderColorsJson = jsonEncode(map);
   }
 
+  /// Checks for new shared-folder chats whenever the folder list arrives or
+  /// changes (startup included); [refreshNewChats] throttles per folder.
+  void watchFolders() => _foldersSub ??= _cache.events
+      .where((e) => e is FoldersChanged)
+      .listen((_) => refreshNewChats().ignore());
+
   Future<void> dispose() async {
+    await _foldersSub?.cancel();
     await _sub.cancel();
     _newChats.dispose();
   }

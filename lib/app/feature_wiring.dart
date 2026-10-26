@@ -19,7 +19,6 @@ import '../features/proxy/data/proxy_config.dart';
 import '../features/proxy/presentation/screens/proxy_screen.dart';
 import '../features/proxy/presentation/widgets/proxy_link_dialog.dart';
 import '../features/proxy/presentation/widgets/connection_settings.dart';
-import '../features/proxy/presentation/widgets/proxy_button.dart';
 import '../features/search/data/message_indexer.dart';
 import '../features/search/presentation/widgets/search_settings.dart';
 import '../features/transcription/data/transcription_center.dart';
@@ -34,7 +33,12 @@ import '../features/notifications/data/notification_center.dart';
 import '../features/notifications/presentation/connection_mode_settings.dart';
 import '../features/media/data/live_location_service.dart';
 import '../features/media/data/media_sender.dart';
+import 'app_chat_list_extensions.dart';
 import 'app_conversation_extensions.dart';
+import '../features/folders/data/folders_repository.dart';
+import '../features/folders/domain/addlist_link.dart';
+import '../features/folders/presentation/widgets/folder_settings.dart';
+import '../features/folders/presentation/widgets/join_folder_sheet.dart';
 import 'app_story_wiring.dart';
 import '../features/maintenance/data/storage_repository.dart';
 import '../features/maintenance/presentation/widgets/background_settings.dart';
@@ -201,7 +205,19 @@ List<RepositoryProvider<Object>> featureProviders() => [
   RepositoryProvider<ChatInfoExtensions>(
     create: (c) => AppChatInfoExtensions(prefs: c.read<AppPreferences>()),
   ),
-  RepositoryProvider<ChatListExtensions>(create: (_) => const _ChatListExtensions()),
+  RepositoryProvider<FoldersRepository>(
+    lazy: false,
+    create: (c) => FoldersRepository(
+      client: c.read<TdClient>(),
+      cache: c.read<TelegramCache>(),
+      prefs: c.read<AppPreferences>(),
+    )..watchFolders(),
+    dispose: (r) => r.dispose(),
+  ),
+  RepositoryProvider<ChatListExtensions>(
+    create: (c) =>
+        AppChatListExtensions(folders: c.read<FoldersRepository>(), cache: c.read<TelegramCache>()),
+  ),
   RepositoryProvider<ChatRowExtensions>(
     create: (c) =>
         AppChatRowExtensions(stories: c.read<StoriesRepository>(), prefs: c.read<AppPreferences>()),
@@ -210,6 +226,7 @@ List<RepositoryProvider<Object>> featureProviders() => [
   RepositoryProvider<SettingsEntries>(
     create: (_) => SettingsEntries(
       (context) => [
+        SettingsEntry(SettingsCategory.chats, (_) => const FolderSettings(), forBots: false),
         SettingsEntry(SettingsCategory.media, (_) => const SpeechSettings()),
         SettingsEntry(SettingsCategory.notifications, (_) => const ConnectionModeSettings()),
         SettingsEntry(SettingsCategory.notifications, (_) => const BackgroundSettings()),
@@ -241,15 +258,12 @@ ComposeActions _composeActions(ComposeFlows flows) => ComposeActions([
   ),
 ]);
 
-class _ChatListExtensions extends ChatListExtensions {
-  const _ChatListExtensions();
-
-  @override
-  List<Widget> headerActions(BuildContext context) => const [ProxyButton()];
-}
-
-/// Links Lumina opens itself. Folder links are added with the folders feature.
+/// Links Lumina opens itself: folder invites and proxies.
 List<InternalLinkHandler> appLinkHandlers() => [
+  InternalLinkHandler(
+    matches: (uri) => addlistSlug(uri.toString()) != null,
+    open: (context, uri) => showJoinFolderSheet(context, url: addlistUrl(addlistSlug(uri.toString())!)),
+  ),
   InternalLinkHandler(
     matches: (uri) => ProxyConfig.parseLink(uri.toString()) != null,
     open: (context, uri) => confirmProxyLink(context, ProxyConfig.parseLink(uri.toString())!),

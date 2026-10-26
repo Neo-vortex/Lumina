@@ -47,6 +47,9 @@ class SystemChannel {
   Future<bool> shareText(String text) async =>
       (await _ch.invokeMethod<bool>('shareText', {'text': text})) ?? false;
 
+  /// Android's "Open by default" page for Lumina (t.me links).
+  Future<bool> openLinkSettings() async => (await _ch.invokeMethod<bool>('openLinkSettings')) ?? false;
+
   Future<int> totalRam() async => (await _ch.invokeMethod<int>('totalRam')) ?? 0;
 
   Future<bool> isIgnoringBatteryOptimizations() async =>

@@ -227,6 +227,13 @@ class MainActivity : FlutterActivity() {
                     .putExtra(Intent.EXTRA_TEXT, call.argument<String>("text") ?: "")
                 result.success(start(Intent.createChooser(share, null)))
             }
+            "openLinkSettings" -> {
+                val uri = Uri.parse("package:$packageName")
+                val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                    Intent(Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS, uri)
+                else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri)
+                result.success(start(intent))
+            }
             "sdkInt" -> result.success(Build.VERSION.SDK_INT)
             else -> result.notImplemented()
         }
