@@ -104,6 +104,8 @@ the list) so the list doesn't relayout. Fetch the pinned message in
 parallel with the history (`Future.wait`).
 
 **G4. Images pop in with no reserved height in stickers, link previews and IV.**
+*Resolved (checked 2026-10-26): stickers reserve a 160 px square, IV images use
+`AspectRatio`/`SizedBox` from TDLib sizes, link previews are 16:9 or fixed squares.*
 `sticker_content.dart:27`, `instant_view_screen.dart:501,559,724`. Visual
 media in bubbles reserve size from `w/h` (`media_content.dart:92-96`, good).
 Stickers and IV images without known dimensions lay out at the image's size
