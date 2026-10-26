@@ -7,21 +7,34 @@ import '../display.dart';
 import '../file_store.dart';
 
 /// Rebuilds with the latest state of a TDLib file.
-class FileBuilder extends StatelessWidget {
+class FileBuilder extends StatefulWidget {
   const FileBuilder({super.key, required this.file, required this.builder});
 
   final td.File file;
   final Widget Function(BuildContext context, td.File file) builder;
 
   @override
-  Widget build(BuildContext context) {
-    final store = context.read<FileStore>();
-    return StreamBuilder<td.File>(
-      stream: store.watch(file.id),
-      initialData: store[file.id] ?? file,
-      builder: (context, snap) => builder(context, snap.data!),
-    );
+  State<FileBuilder> createState() => _FileBuilderState();
+}
+
+class _FileBuilderState extends State<FileBuilder> {
+  late final FileStore _store = context.read<FileStore>();
+  // Made once: watch() is an async* generator, so a new stream per build
+  // meant a resubscribe and an extra rebuild each time.
+  late Stream<td.File> _stream = _store.watch(widget.file.id);
+
+  @override
+  void didUpdateWidget(FileBuilder old) {
+    super.didUpdateWidget(old);
+    if (old.file.id != widget.file.id) _stream = _store.watch(widget.file.id);
   }
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<td.File>(
+    stream: _stream,
+    initialData: _store[widget.file.id] ?? widget.file,
+    builder: (context, snap) => widget.builder(context, snap.data!),
+  );
 }
 
 extension FileProgressX on td.File {

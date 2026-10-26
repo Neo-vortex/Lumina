@@ -54,4 +54,24 @@ void main() {
     await tester.pump();
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
+
+  testWidgets('FileBuilder creates its stream once, not on every build', (tester) async {
+    late StateSetter rebuild;
+    await tester.pumpWidget(
+      RepositoryProvider(
+        create: (_) => FileStore(FakeTdClient()),
+        child: StatefulBuilder(
+          builder: (context, setState) {
+            rebuild = setState;
+            return FileBuilder(file: downloading(), builder: (_, _) => const SizedBox());
+          },
+        ),
+      ),
+    );
+    StreamBuilder<td.File> sb() => tester.widget(find.byType(StreamBuilder<td.File>));
+    final first = sb().stream;
+    rebuild(() {});
+    await tester.pump();
+    expect(identical(sb().stream, first), isTrue);
+  });
 }
