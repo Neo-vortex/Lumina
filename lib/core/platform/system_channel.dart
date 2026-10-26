@@ -43,6 +43,10 @@ class SystemChannel {
 
   Future<void> liveLocationStop() => _ch.invokeMethod<void>('liveLocationStop');
 
+  /// The system share sheet for plain text.
+  Future<bool> shareText(String text) async =>
+      (await _ch.invokeMethod<bool>('shareText', {'text': text})) ?? false;
+
   Future<int> totalRam() async => (await _ch.invokeMethod<int>('totalRam')) ?? 0;
 
   Future<bool> isIgnoringBatteryOptimizations() async =>

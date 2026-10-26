@@ -221,6 +221,12 @@ class MainActivity : FlutterActivity() {
                 }
             }
             "openUrl" -> result.success(start(Intent(Intent.ACTION_VIEW, Uri.parse(call.argument<String>("url")))))
+            "shareText" -> {
+                val share = Intent(Intent.ACTION_SEND)
+                    .setType("text/plain")
+                    .putExtra(Intent.EXTRA_TEXT, call.argument<String>("text") ?: "")
+                result.success(start(Intent.createChooser(share, null)))
+            }
             "sdkInt" -> result.success(Build.VERSION.SDK_INT)
             else -> result.notImplemented()
         }
