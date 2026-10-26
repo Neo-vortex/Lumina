@@ -10,6 +10,7 @@ import '../../bloc/folder_editor_cubit.dart';
 import '../../data/folders_repository.dart';
 import '../../domain/folder_draft.dart';
 import '../folder_palette.dart';
+import '../widgets/folder_share_sheet.dart';
 import 'chat_picker_screen.dart';
 
 /// Create or edit a folder: name, icon, glow colour, rules, chats.
@@ -257,6 +258,21 @@ class _FolderEditorScreenState extends State<FolderEditorScreen> {
                           onTap: () => _pickChats(cubit, included: false),
                         ),
                         for (final id in d.excluded) chatTile(id, included: false),
+                        if (cubit.folderId != null) ...[
+                          const _Header('Invite links'),
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.share_rounded, color: color),
+                            title: const Text('Share this folder'),
+                            subtitle: const Text('Others can add it and join its chats with one link'),
+                            onTap: () => showFolderShareSheet(
+                              context,
+                              folderId: cubit.folderId!,
+                              title: d.name,
+                              color: color,
+                            ),
+                          ),
+                        ],
                         if (s.error != null && !s.deleted)
                           Padding(
                             padding: const EdgeInsets.only(top: 16),
