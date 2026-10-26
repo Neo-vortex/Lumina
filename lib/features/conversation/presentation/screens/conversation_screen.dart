@@ -73,6 +73,27 @@ class _ConversationScreenState extends State<ConversationScreen> {
   var _showJump = false;
   List<MessageRow> _rows = const [];
 
+  // buildRows is memoised on the message list.
+  List<td.Message>? _rowsFrom;
+  int? _rowsUnread;
+
+  /// Bubbles that have already played their entrance (G1).
+  final _animated = <int>{};
+
+  void _updateRows(ConversationState state) {
+    if (identical(state.messages, _rowsFrom) && state.firstUnreadId == _rowsUnread) return;
+    _rowsFrom = state.messages;
+    _rowsUnread = state.firstUnreadId;
+    _rows = buildRows(state.messages, firstUnreadId: state.firstUnreadId);
+  }
+
+  static Object _rowKey(MessageRow row) => switch (row) {
+    DayHeaderRow(:final day) => 'd$day',
+    UnreadDividerRow() => 'unread',
+    ServiceRow(:final message) => message.id,
+    BubbleRow() => row.id,
+  };
+
   /// Sponsored cards occupy the first list indices (bottom of the screen).
   var _adsOffset = 0;
   late final ConversationCubit _cubit = context.read<ConversationCubit>();
@@ -289,7 +310,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
           _seenAtOpen.addAll(state.messages.map((m) => m.id));
           WidgetsBinding.instance.addPostFrameCallback((_) => _reportVisible());
         }
-        _rows = buildRows(state.messages, firstUnreadId: state.firstUnreadId);
+        _updateRows(state);
         _adsOffset = state.hasNewer ? 0 : state.sponsored.length;
         final isGroup =
             chat.type is td.ChatTypeBasicGroup ||
@@ -440,16 +461,16 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   Widget _buildRow(MessageRow row, td.Chat chat, ConversationState state, bool isGroup, bool isChannel) {
     return switch (row) {
-      DayHeaderRow(:final day) => _DayHeader(day: day),
-      UnreadDividerRow() => const _UnreadDivider(),
-      ServiceRow(:final message) => _ServiceBubble(message: message),
+      DayHeaderRow(:final day) => _DayHeader(key: ValueKey(_rowKey(row)), day: day),
+      UnreadDividerRow() => const _UnreadDivider(key: ValueKey('unread')),
+      ServiceRow(:final message) => _ServiceBubble(key: ValueKey(message.id), message: message),
       BubbleRow() => MessageBubble(
         key: ValueKey(row.id),
         row: row,
         chat: chat,
         isGroup: isGroup,
         isChannel: isChannel,
-        animateIn: _initialised && !_seenAtOpen.contains(row.id),
+        animateIn: _initialised && !_seenAtOpen.contains(row.id) && _animated.add(row.id),
         highlighted: row.messages.any((m) => m.id == state.highlightId),
         selected: row.messages.any((m) => state.selected.contains(m.id)),
         selecting: state.selecting,
@@ -466,7 +487,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
 }
 
 class _DayHeader extends StatelessWidget {
-  const _DayHeader({required this.day});
+  const _DayHeader({super.key, required this.day});
 
   final DateTime day;
 
@@ -493,7 +514,7 @@ class _DayHeader extends StatelessWidget {
 }
 
 class _UnreadDivider extends StatelessWidget {
-  const _UnreadDivider();
+  const _UnreadDivider({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -517,7 +538,7 @@ class _UnreadDivider extends StatelessWidget {
 }
 
 class _ServiceBubble extends StatelessWidget {
-  const _ServiceBubble({required this.message});
+  const _ServiceBubble({super.key, required this.message});
 
   final td.Message message;
 
