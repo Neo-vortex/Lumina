@@ -57,6 +57,7 @@ class SettingsHub extends StatelessWidget {
     return [
       SettingsEntry(SettingsCategory.privacy, (_) => const PrivacySettings(), forBots: false),
       SettingsEntry(SettingsCategory.chats, (_) => const GestureSettings()),
+      SettingsEntry(SettingsCategory.chats, (_) => const ReactionSettings()),
       SettingsEntry(SettingsCategory.chats, (_) => const LinkSettings()),
       SettingsEntry(SettingsCategory.chats, (_) => const StorySettings(), forBots: false),
       SettingsEntry(

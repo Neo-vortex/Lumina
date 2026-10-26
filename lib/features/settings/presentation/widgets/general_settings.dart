@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/storage/app_preferences.dart';
 import '../../../../core/theme/glow_colors.dart';
+import '../../../../core/widgets/glow_sheet.dart';
 import '../../../conversation/data/messages_repository.dart';
 import '../screens/swipe_settings_screen.dart';
 import 'settings_section.dart';
@@ -73,6 +74,150 @@ class GestureSettings extends StatelessWidget {
       ),
     ],
   );
+}
+
+/// Quick reactions (shown first on the message menu) and whether emoji,
+/// reactions and custom emoji animate.
+class ReactionSettings extends StatelessWidget {
+  const ReactionSettings({super.key});
+
+  static const choices = [
+    '❤️',
+    '👍',
+    '🔥',
+    '😂',
+    '😮',
+    '😢',
+    '🙏',
+    '👏',
+    '🎉',
+    '🤔',
+    '👎',
+    '💯',
+    '😍',
+    '🤩',
+    '😁',
+    '🥰',
+    '😱',
+    '🤯',
+    '😡',
+    '🤝',
+    '👌',
+    '⚡',
+    '🍓',
+    '🏆',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final prefs = context.read<AppPreferences>();
+    return ListenableBuilder(
+      listenable: prefs.changes,
+      builder: (context, _) => SettingsSection(
+        title: 'Reactions & emoji',
+        children: [
+          ListTile(
+            leading: const Icon(Icons.add_reaction_rounded, color: GlowColors.violet),
+            title: const Text('Quick reactions'),
+            subtitle: Text(prefs.quickReactions.join('  '), style: const TextStyle(fontSize: 18)),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => _pick(context, prefs),
+          ),
+          SwitchListTile(
+            value: prefs.animatedEmoji,
+            onChanged: (v) => prefs.animatedEmoji = v,
+            title: const Text('Animated emoji'),
+            subtitle: const Text('Reactions and custom emoji play their animation; off shows them static'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pick(BuildContext context, AppPreferences prefs) async {
+    final picked = [...prefs.quickReactions];
+    final result = await showGlowSheet<List<String>>(
+      context,
+      title: 'Quick reactions',
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Pick up to 5, in the order they should appear (${picked.length}/5)',
+                style: const TextStyle(color: GlowColors.textMuted),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final e in choices)
+                    InkResponse(
+                      radius: 28,
+                      onTap: () => setState(() {
+                        if (picked.contains(e)) {
+                          picked.remove(e);
+                        } else if (picked.length < 5) {
+                          picked.add(e);
+                        }
+                      }),
+                      child: Container(
+                        width: 50,
+                        height: 50,
+                        alignment: Alignment.center,
+                        decoration: picked.contains(e)
+                            ? BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: GlowColors.violet.withValues(alpha: 0.22),
+                                border: Border.all(color: GlowColors.violet),
+                              )
+                            : null,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Text(e, style: const TextStyle(fontSize: 26)),
+                            if (picked.contains(e))
+                              Positioned(
+                                right: -8,
+                                top: -6,
+                                child: Text(
+                                  '${picked.indexOf(e) + 1}',
+                                  style: const TextStyle(
+                                    color: GlowColors.violet,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  TextButton(onPressed: () => setState(picked.clear), child: const Text('Clear')),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: picked.isEmpty ? null : () => Navigator.pop(context, picked),
+                    child: const Text('Save'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (result != null) prefs.quickReactions = result;
+  }
 }
 
 class LinkSettings extends StatelessWidget {
