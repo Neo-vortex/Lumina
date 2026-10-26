@@ -62,6 +62,21 @@ class ChatsRepository {
   Future<void> setMarkedUnread(int chatId, bool unread) =>
       _client.invoke<td.Ok>(td.ToggleChatIsMarkedAsUnread(chatId: chatId, isMarkedAsUnread: unread));
 
+  /// Reads the whole chat: its messages (viewing the last one with
+  /// forceRead reads everything before it), mentions, and the manual
+  /// "marked as unread" flag. An explicit action, so it ignores the
+  /// "don't send read receipts" setting.
+  Future<void> markRead(td.Chat chat) async {
+    final last = chat.lastMessage;
+    if (chat.unreadCount > 0 && last != null) {
+      await _client.invoke<td.Ok>(td.ViewMessages(chatId: chat.id, messageIds: [last.id], forceRead: true));
+    }
+    if (chat.unreadMentionCount > 0) {
+      await _client.invoke<td.Ok>(td.ReadAllChatMentions(chatId: chat.id));
+    }
+    if (chat.isMarkedAsUnread) await setMarkedUnread(chat.id, false);
+  }
+
   Future<void> setMuted(int chatId, bool muted) async {
     final chat = await this.chat(chatId);
     await _client.invoke<td.Ok>(
