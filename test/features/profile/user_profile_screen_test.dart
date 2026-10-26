@@ -11,7 +11,10 @@ import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../helpers/fakes.dart';
 
-td.UserFullInfo fullInfo({bool blocked = false}) => td.UserFullInfo(
+td.ChatPhoto photo(int id) => td.ChatPhoto(id: id, addedDate: 0, sizes: const []);
+
+td.UserFullInfo fullInfo({bool blocked = false, td.ChatPhoto? personal}) => td.UserFullInfo(
+  personalPhoto: personal,
   communityId: 0,
   blockList: blocked ? const td.BlockListMain() : null,
   canBeCalled: true,
@@ -44,11 +47,15 @@ td.UserFullInfo fullInfo({bool blocked = false}) => td.UserFullInfo(
 );
 
 void main() {
-  Future<({FakeTdClient client, List<String> calls})> pump(WidgetTester tester) async {
+  Future<({FakeTdClient client, List<String> calls})> pump(
+    WidgetTester tester, {
+    td.ChatPhoto? personal,
+    List<td.ChatPhoto> photos = const [],
+  }) async {
     final client = FakeTdClient()
       ..respond = (f) => switch (f) {
-        td.GetUserFullInfo() => fullInfo(),
-        td.GetUserProfilePhotos() => const td.ChatPhotos(totalCount: 0, photos: []),
+        td.GetUserFullInfo() => fullInfo(personal: personal),
+        td.GetUserProfilePhotos() => td.ChatPhotos(totalCount: photos.length, photos: photos),
         td.GetChatPostedToChatPageStories() => const td.Stories(
           totalCount: 0,
           stories: [],
@@ -146,4 +153,17 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(h.client.sentOf<td.SetMessageSenderBlockList>().single.blockList, isA<td.BlockListMain>());
   });
+
+  testWidgets('the photo you set for them comes first; tapping the right side shows the next', (
+    tester,
+  ) async {
+    await pump(tester, personal: photo(100), photos: [photo(1), photo(2)]);
+    expect(_label('Profile photo 1 of 3, set by you'), findsOneWidget);
+    await tester.tapAt(tester.getCenter(find.byType(PageView)) + const Offset(120, 0));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(_label('Profile photo 2 of 3'), findsOneWidget);
+  });
 }
+
+Finder _label(String l) => find.byWidgetPredicate((w) => w is Semantics && w.properties.label == l);

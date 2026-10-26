@@ -210,12 +210,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       child: Scaffold(
         body: NestedScrollView(
           headerSliverBuilder: (context, _) => [
-            SliverAppBar(
-              pinned: true,
-              expandedHeight: 320,
-              title: Text(name),
-              flexibleSpace: FlexibleSpaceBar(
-                background: _Gallery(user: user, photos: _photos),
+            SliverAppBar(pinned: true, title: Text(name)),
+            // Not in the app bar's flexible space: its layers there swallowed
+            // the gallery's swipes and taps.
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 320,
+                child: _Gallery(user: user, photos: _photos, personal: _full?.personalPhoto),
               ),
             ),
             SliverToBoxAdapter(
@@ -355,10 +356,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 }
 
 class _Gallery extends StatefulWidget {
-  const _Gallery({required this.user, required this.photos});
+  const _Gallery({required this.user, required this.photos, this.personal});
 
   final td.User user;
   final List<td.ChatPhoto> photos;
+
+  /// The photo you set for this contact; shown first, like Telegram.
+  final td.ChatPhoto? personal;
 
   @override
   State<_Gallery> createState() => _GalleryState();
@@ -366,36 +370,67 @@ class _Gallery extends StatefulWidget {
 
 class _GalleryState extends State<_Gallery> {
   var _page = 0;
+  final _pages = PageController();
+
+  @override
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
+  }
+
+  void _go(int delta, int count) {
+    final next = (_page + delta).clamp(0, count - 1);
+    if (next != _page) {
+      _pages.animateToPage(next, duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final photos = widget.photos;
+    final personal = widget.personal;
+    final photos = [?personal, ...widget.photos.where((p) => p.id != personal?.id)];
     if (photos.isEmpty) {
       return Center(child: ChatAvatar.user(widget.user, size: 120));
     }
     return Stack(
       fit: StackFit.expand,
       children: [
-        PageView.builder(
-          itemCount: photos.length,
-          onPageChanged: (i) => setState(() => _page = i),
-          itemBuilder: (context, i) {
-            final sizes = photos[i].sizes;
-            return sizes.isEmpty
-                ? const SizedBox.shrink()
-                : TdFileImage(
-                    file: sizes.last.photo,
-                    placeholderBytes: Display.minithumbnail(photos[i].minithumbnail),
-                    semanticLabel: 'Profile photo ${i + 1} of ${photos.length}',
-                  );
-          },
+        // Swipe, or tap the left/right side, like Telegram.
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapUp: (d) =>
+              _go(d.localPosition.dx > MediaQuery.sizeOf(context).width / 2 ? 1 : -1, photos.length),
+          child: PageView.builder(
+            controller: _pages,
+            itemCount: photos.length,
+            onPageChanged: (i) => setState(() => _page = i),
+            itemBuilder: (context, i) {
+              final sizes = photos[i].sizes;
+              final mine = personal != null && i == 0;
+              return Semantics(
+                label: 'Profile photo ${i + 1} of ${photos.length}${mine ? ', set by you' : ''}',
+                image: true,
+                excludeSemantics: true,
+                child: sizes.isEmpty
+                    ? ChatAvatar.user(widget.user, size: 120)
+                    : TdFileImage(
+                        file: sizes.last.photo,
+                        placeholderBytes: Display.minithumbnail(photos[i].minithumbnail),
+                      ),
+              );
+            },
+          ),
         ),
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0x66000000), Color(0x00000000), Color(0x99000000)],
+        // The contrast scrim must not take touches, or swipes never reach
+        // the photos.
+        const IgnorePointer(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x66000000), Color(0x00000000), Color(0x99000000)],
+              ),
             ),
           ),
         ),
