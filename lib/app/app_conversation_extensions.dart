@@ -12,6 +12,7 @@ import '../core/telegram/telegram_cache.dart';
 import '../core/theme/glow_colors.dart';
 import '../features/assistant/data/action_extractor.dart';
 import '../features/assistant/presentation/action_sheet.dart';
+import '../features/assistant/presentation/writing_sheet.dart';
 import '../features/auth/bloc/auth_bloc.dart';
 import '../features/calls/presentation/call_buttons.dart';
 import '../features/chat_info/presentation/compose_flows.dart';
@@ -121,6 +122,24 @@ class AppConversationExtensions extends ConversationExtensions {
       color: outgoing ? GlowColors.onAccent : GlowColors.cyan,
     );
   }
+
+  @override
+  VoidCallback? writingTools(BuildContext context, TextEditingController text) => () async {
+    final extractor = context.read<ActionExtractor>();
+    final draft = text.text.trim();
+    if (draft.isEmpty) return;
+    final result = await showWritingTools(
+      context,
+      text: draft,
+      write: (t, tool, onStage) => extractor.write(t, tool, onStage: onStage),
+    );
+    if (result != null) {
+      text.value = TextEditingValue(
+        text: result,
+        selection: TextSelection.collapsed(offset: result.length),
+      );
+    }
+  };
 
   @override
   void onDictate(BuildContext context, td.Chat chat, TextEditingController text) =>

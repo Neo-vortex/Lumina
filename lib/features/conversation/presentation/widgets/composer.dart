@@ -31,6 +31,7 @@ class Composer extends StatefulWidget {
     this.onAttach,
     this.onVoice,
     this.onDictate,
+    this.onWritingTools,
     this.recordingOverlay,
     this.orbMode,
     this.loadPreview,
@@ -51,6 +52,9 @@ class Composer extends StatefulWidget {
   final VoidCallback? onAttach;
   final VoidCallback? onVoice;
   final VoidCallback? onDictate;
+
+  /// On-device writing help (rewrite, grammar, tone); shown once there's text.
+  final VoidCallback? onWritingTools;
 
   /// Replaces the text row while recording (waveform, timer).
   final Widget? recordingOverlay;
@@ -251,6 +255,17 @@ class _ComposerState extends State<Composer> {
                               hintStyle: const TextStyle(color: GlowColors.textMuted),
                               border: InputBorder.none,
                               contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+                              suffixIcon: hasText && widget.onWritingTools != null
+                                  ? IconButton(
+                                      tooltip: 'Writing help',
+                                      onPressed: widget.onWritingTools,
+                                      icon: const Icon(
+                                        Icons.auto_awesome_rounded,
+                                        color: GlowColors.magenta,
+                                        size: 20,
+                                      ),
+                                    )
+                                  : null,
                             ),
                           ),
                         ),

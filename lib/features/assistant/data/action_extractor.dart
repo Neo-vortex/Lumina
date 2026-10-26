@@ -6,6 +6,7 @@ import 'package:llamadart/llamadart.dart';
 import '../../../core/models/bundled_models.dart';
 import '../domain/action_guardrails.dart';
 import '../domain/assistant_action.dart';
+import '../domain/writing_tool.dart';
 import 'assistant_prompt.dart';
 
 /// Where a suggestion is, for the sheet's status line.
@@ -106,6 +107,35 @@ class ActionExtractor {
       draft.kind = ActionGuardrails.decide(draft.kind, messageText, ctx.now);
       if (draft.kind == ActionKind.note && draft.notes.isEmpty) draft.notes = messageText;
       return draft;
+    } finally {
+      _running--;
+      _idle = Timer(const Duration(minutes: 2), unload);
+    }
+  }
+
+  /// Writing help on [text] with [tool] (rewrite, grammar, summary, tone),
+  /// on the same model.
+  Future<String> write(String text, WritingTool tool, {void Function(ExtractStage stage)? onStage}) async {
+    _idle?.cancel();
+    _running++;
+    try {
+      final engine = await _ready(onStage);
+      onStage?.call(ExtractStage.reading);
+      final raw = await engine
+          .create(
+            [
+              LlamaChatMessage.fromText(role: LlamaChatRole.system, text: writingSystemPrompt(tool)),
+              LlamaChatMessage.fromText(role: LlamaChatRole.user, text: text),
+            ],
+            params: GenerationParams(
+              maxTokens: (text.length ~/ 2 + 64).clamp(64, 512),
+              temp: tool == WritingTool.grammar ? 0 : 0.4,
+            ),
+            enableThinking: false,
+          )
+          .text()
+          .timeout(const Duration(seconds: 45));
+      return cleanWritingOutput(raw);
     } finally {
       _running--;
       _idle = Timer(const Duration(minutes: 2), unload);

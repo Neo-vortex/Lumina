@@ -37,6 +37,9 @@ class ConversationExtensions {
 
   void onDictate(BuildContext context, td.Chat chat, TextEditingController text) {}
 
+  /// Opens on-device writing help on the draft; null when unavailable.
+  VoidCallback? writingTools(BuildContext context, TextEditingController text) => null;
+
   Widget? recordingOverlay(BuildContext context, td.Chat chat) => null;
 
   OrbMode? orbMode(BuildContext context, td.Chat chat) => null;
