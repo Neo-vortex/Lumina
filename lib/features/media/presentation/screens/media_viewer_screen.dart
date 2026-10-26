@@ -194,17 +194,9 @@ class _Page extends StatelessWidget {
       case td.MessagePhoto(:final photo):
         final size = largestSize(photo);
         if (size == null) return const SizedBox.shrink();
-        return GestureDetector(
+        return DoubleTapZoom(
+          controller: zoom,
           onTap: onTap,
-          onDoubleTapDown: (d) {
-            final zoomed = zoom.value.getMaxScaleOnAxis() > 1.01;
-            zoom.value = zoomed
-                ? Matrix4.identity()
-                : (Matrix4.identity()
-                    ..translateByDouble(-d.localPosition.dx, -d.localPosition.dy, 0, 1)
-                    ..scaleByDouble(2.5, 2.5, 1, 1));
-          },
-          onDoubleTap: () {},
           child: InteractiveViewer(
             transformationController: zoom,
             minScale: 1,
@@ -310,4 +302,63 @@ class _VideoPageState extends State<_VideoPage> {
       fileId: widget.file.id,
     );
   }
+}
+
+/// Zooms by [scale] about [focal], keeping that point where it is.
+Matrix4 zoomAt(Offset focal, double scale) => Matrix4.identity()
+  ..translateByDouble(-focal.dx * (scale - 1), -focal.dy * (scale - 1), 0, 1)
+  ..scaleByDouble(scale, scale, 1, 1);
+
+/// Double tap zooms in about the tap (or back out), animated rather than
+/// jumping.
+class DoubleTapZoom extends StatefulWidget {
+  const DoubleTapZoom({
+    super.key,
+    required this.controller,
+    required this.child,
+    this.onTap,
+    this.scale = 2.5,
+  });
+
+  final TransformationController controller;
+  final Widget child;
+  final VoidCallback? onTap;
+  final double scale;
+
+  @override
+  State<DoubleTapZoom> createState() => _DoubleTapZoomState();
+}
+
+class _DoubleTapZoomState extends State<DoubleTapZoom> with SingleTickerProviderStateMixin {
+  late final _anim = AnimationController(vsync: this, duration: const Duration(milliseconds: 280))
+    ..addListener(_tick);
+  Animation<Matrix4>? _tween;
+  Offset _focal = Offset.zero;
+
+  void _tick() {
+    if (_tween != null) widget.controller.value = _tween!.value;
+  }
+
+  void _toggle() {
+    final zoomed = widget.controller.value.getMaxScaleOnAxis() > 1.01;
+    _tween = Matrix4Tween(
+      begin: widget.controller.value,
+      end: zoomed ? Matrix4.identity() : zoomAt(_focal, widget.scale),
+    ).animate(CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic));
+    _anim.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: widget.onTap,
+    onDoubleTapDown: (d) => _focal = d.localPosition,
+    onDoubleTap: _toggle,
+    child: widget.child,
+  );
 }
