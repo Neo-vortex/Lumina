@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../../core/storage/app_preferences.dart';
 import '../../../../core/theme/glow_colors.dart';
-import '../../../chats/bloc/chat_list_cubit.dart';
-import '../../../chats/data/chats_repository.dart';
+import '../../../auth/bloc/auth_bloc.dart';
+import '../../../auth/domain/auth_step.dart';
+import '../../../chats/bloc/lens_cubit.dart';
+import '../../../../core/telegram/telegram_cache.dart';
 import '../../../chats/presentation/screens/chats_screen.dart';
 import '../../../settings/presentation/screens/settings_screen.dart';
 import '../widgets/compose_orb.dart';
@@ -25,9 +26,13 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) =>
-          ChatListCubit(repository: context.read<ChatsRepository>(), prefs: context.read<AppPreferences>())
-            ..start(),
+      create: (context) => LensCubit(
+        cache: context.read<TelegramCache>(),
+        isBot: switch (context.read<AuthBloc>().state.step) {
+          AuthReady(:final capabilities) => capabilities.isBot,
+          _ => false,
+        },
+      ),
       child: PopScope(
         canPop: _tab == 0,
         onPopInvokedWithResult: (didPop, _) {
