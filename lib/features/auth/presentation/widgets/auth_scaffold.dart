@@ -36,6 +36,7 @@ class AuthScaffold extends StatelessWidget {
     }
     return Scaffold(
       body: GlowBackground(
+        drift: true,
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(

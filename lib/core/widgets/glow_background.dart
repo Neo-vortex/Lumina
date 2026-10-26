@@ -5,14 +5,21 @@ import 'package:flutter/material.dart';
 import '../theme/glow_colors.dart';
 import '../theme/motion.dart';
 
-/// Near-black backdrop with a few slow, blurred light orbs drifting on it.
-/// One controller and one painter; wrapped in a RepaintBoundary so the drift
-/// never repaints the content above it. Decorative: excluded from semantics
-/// and frozen when the system asks for reduced motion (UX-07, UX-10).
+/// Near-black backdrop with a few soft light orbs. Decorative: excluded
+/// from semantics and frozen when the system asks for reduced motion
+/// (UX-07, UX-10).
+///
+/// Still by default. On Impeller every animated pixel re-rasters the whole
+/// screen (there is no raster cache), so a drifting backdrop behind a chat
+/// kept the raster thread busy at the display rate while idle. Only screens
+/// with nothing else moving (login, the call screen) set [drift].
 class GlowBackground extends StatefulWidget {
-  const GlowBackground({super.key, required this.child});
+  const GlowBackground({super.key, required this.child, this.drift = false});
 
   final Widget child;
+
+  /// Let the orbs drift slowly (40 s loop).
+  final bool drift;
 
   @override
   State<GlowBackground> createState() => _GlowBackgroundState();
@@ -24,7 +31,7 @@ class _GlowBackgroundState extends State<GlowBackground> with SingleTickerProvid
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (Motion.ambientEnabled(context)) {
+    if (widget.drift && Motion.ambientEnabled(context)) {
       if (!_drift.isAnimating) _drift.repeat();
     } else {
       _drift.stop();
