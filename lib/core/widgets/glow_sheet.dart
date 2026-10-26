@@ -17,45 +17,53 @@ Future<T?> showGlowSheet<T>(
   barrierColor: Colors.black54,
   builder: (context) => Padding(
     padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+    // The glow is a shadow only; the Material underneath is the surface, so
+    // list tiles in the sheet have something to paint their splashes on.
     child: Container(
       constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
       decoration: BoxDecoration(
-        color: GlowColors.surfaceHigh,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        border: Border(top: BorderSide(color: accent.withValues(alpha: 0.6), width: 1.5)),
         boxShadow: [
           BoxShadow(color: accent.withValues(alpha: 0.25), blurRadius: 32, offset: const Offset(0, -6)),
         ],
       ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(top: 10, bottom: 6),
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: GlowColors.outlineStrong,
-                  borderRadius: BorderRadius.circular(2),
+      child: Material(
+        color: GlowColors.surfaceHigh,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          side: BorderSide(color: accent.withValues(alpha: 0.6), width: 1.5),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 10, bottom: 6),
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: GlowColors.outlineStrong,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            if (title != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
-                child: Semantics(
-                  header: true,
-                  child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              if (title != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+                  child: Semantics(
+                    header: true,
+                    child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                  ),
                 ),
+              Flexible(
+                child: SingleChildScrollView(child: Builder(builder: builder)),
               ),
-            Flexible(
-              child: SingleChildScrollView(child: Builder(builder: builder)),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     ),

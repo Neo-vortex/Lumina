@@ -66,4 +66,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(picked, 'Work');
   });
+
+  testWidgets('list tiles inside a sheet get a Material to splash on', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showGlowSheet<void>(
+              context,
+              builder: (context) => ListTile(title: const Text('row'), onTap: () {}),
+            ),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.text('row'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
