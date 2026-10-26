@@ -118,15 +118,17 @@ class TranscriptView extends StatelessWidget {
                     spacing: 6,
                     children: [
                       if (!e.showTranslation)
-                        ActionChip(
-                          avatar: Icon(Icons.translate_rounded, size: 16, color: color),
-                          label: const Text('Translate to English'),
+                        TranscriptChip(
+                          icon: Icons.translate_rounded,
+                          label: 'Translate to English',
+                          color: color,
                           onPressed: () => center.transcribe(message, translate: true),
                         )
                       else
-                        ActionChip(
-                          avatar: Icon(Icons.undo_rounded, size: 16, color: color),
-                          label: const Text('Original'),
+                        TranscriptChip(
+                          icon: Icons.undo_rounded,
+                          label: 'Original',
+                          color: color,
                           onPressed: () => center.showOriginal(message),
                         ),
                     ],
@@ -139,4 +141,32 @@ class TranscriptView extends StatelessWidget {
       },
     );
   }
+}
+
+/// A transcript action drawn in the bubble's own text colour (dark on the
+/// amber outgoing bubble, cyan on incoming), so it reads on both. The theme
+/// default (light grey on a transparent chip) was nearly invisible.
+class TranscriptChip extends StatelessWidget {
+  const TranscriptChip({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => ActionChip(
+    avatar: Icon(icon, size: 16, color: color),
+    label: Text(label),
+    labelStyle: TextStyle(color: color, fontWeight: FontWeight.w600),
+    backgroundColor: color.withValues(alpha: 0.12),
+    side: BorderSide(color: color.withValues(alpha: 0.55)),
+    onPressed: onPressed,
+  );
 }
