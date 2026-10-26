@@ -35,6 +35,12 @@ class AppPreferences {
   double _double(String key, double fallback) => (_values[key] as num?)?.toDouble() ?? fallback;
   String? _string(String key) => _values[key] as String?;
 
+  Future<void> _remove(String key) async {
+    _values.remove(key);
+    _changes.value++;
+    await _prefs?.remove(key);
+  }
+
   Future<void> _set(String key, Object value) async {
     _values[key] = value;
     _changes.value++;
@@ -88,6 +94,30 @@ class AppPreferences {
   /// Which app opens a location: 'ask' (the system chooser), 'google' or 'osm'.
   String get mapApp => _string('maps.app') ?? 'ask';
   set mapApp(String v) => _set('maps.app', v);
+
+  /// Default chat background: 'glow' (Lumina), 'photo', 'telegram' (a
+  /// gallery wallpaper) or 'fill'.
+  String get backdropKind => _string('backdrop.kind') ?? 'glow';
+  set backdropKind(String v) => _set('backdrop.kind', v);
+
+  /// Local photo for the 'photo' default.
+  String? get backdropPath => _string('backdrop.path');
+  set backdropPath(String? v) => v == null ? _remove('backdrop.path') : _set('backdrop.path', v);
+
+  /// TDLib file id of a gallery wallpaper for the 'telegram' default.
+  int? get backdropFileId => (_values['backdrop.fileId'] as num?)?.toInt();
+  set backdropFileId(int? v) => v == null ? _remove('backdrop.fileId') : _set('backdrop.fileId', v);
+
+  /// RGB colours (0xRRGGBB) for the 'fill' default.
+  List<int> get backdropColors =>
+      _string('backdrop.colors')?.split(',').map(int.parse).toList() ?? const [0x1B1F3B, 0x0E1220];
+  set backdropColors(List<int> v) => _set('backdrop.colors', v.join(','));
+
+  double get backdropBlur => _double('backdrop.blur', 0);
+  set backdropBlur(double v) => _set('backdrop.blur', v.clamp(0.0, 30.0));
+
+  double get backdropDim => _double('backdrop.dim', 0.35);
+  set backdropDim(double v) => _set('backdrop.dim', v.clamp(0.0, 0.9));
 
   /// Play animated emoji, reactions and custom emoji; off shows them static.
   bool get animatedEmoji => _bool('emoji.animated', true);
