@@ -159,10 +159,12 @@ void main() {
   ) async {
     await pump(tester, personal: photo(100), photos: [photo(1), photo(2)]);
     expect(_label('Profile photo 1 of 3, set by you'), findsOneWidget);
+    expect(find.text('Set by you · only you see this photo'), findsOneWidget);
     await tester.tapAt(tester.getCenter(find.byType(PageView)) + const Offset(120, 0));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(_label('Profile photo 2 of 3'), findsOneWidget);
+    expect(find.text('Set by you · only you see this photo'), findsNothing);
   });
 }
 

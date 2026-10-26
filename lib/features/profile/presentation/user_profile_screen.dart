@@ -434,6 +434,39 @@ class _GalleryState extends State<_Gallery> {
             ),
           ),
         ),
+        // The photo you set for a contact isn't their real profile photo.
+        if (personal != null && _page == 0)
+          Positioned(
+            top: 12,
+            left: 16,
+            right: 16,
+            child: IgnorePointer(
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: GlowColors.violet.withValues(alpha: 0.6)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.visibility_rounded, size: 14, color: GlowColors.violet),
+                      SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          'Set by you · only you see this photo',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         if (photos.length > 1)
           Positioned(
             bottom: 12,
