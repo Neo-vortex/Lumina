@@ -29,9 +29,9 @@ abstract final class GlowColors {
   static const cyan = Color(0xFF4FE3DC);
   static const teal = Color(0xFF1C9AAE);
 
-  // Outgoing: warm amber -> coral.
-  static const amber = Color(0xFFFFB850);
-  static const coral = Color(0xFFFF6E66);
+  // Outgoing: soft apricot -> dusty coral (toned down from a vivid amber).
+  static const amber = Color(0xFFE8B778);
+  static const coral = Color(0xFFE08A80);
 
   // Active / selection: violet -> magenta. Bright variants for glow only.
   static const violet = Color(0xFF9A5CFF);
