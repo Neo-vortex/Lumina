@@ -40,6 +40,9 @@ abstract final class GlowColors {
   static const violetDeep = Color(0xFF7440E0);
   static const magentaDeep = Color(0xFFA83599);
 
+  /// Archive lens: cool and dimmer than the folder palette.
+  static const archive = Color(0xFF7C86C9);
+
   static const incoming = LinearGradient(
     colors: [cyan, teal],
     begin: Alignment.topLeft,
