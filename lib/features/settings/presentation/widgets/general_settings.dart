@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/storage/app_preferences.dart';
 import '../../../../core/theme/glow_colors.dart';
 import '../../../conversation/data/messages_repository.dart';
+import '../screens/swipe_settings_screen.dart';
 import 'settings_section.dart';
 
 /// Settings → Privacy.
@@ -56,6 +57,24 @@ class PrivacySettings extends StatelessWidget {
 }
 
 /// Settings → Chats: link previews and how links open.
+class GestureSettings extends StatelessWidget {
+  const GestureSettings({super.key});
+
+  @override
+  Widget build(BuildContext context) => SettingsSection(
+    title: 'Gestures',
+    children: [
+      ListTile(
+        leading: const Icon(Icons.swipe_rounded, color: GlowColors.violet),
+        title: const Text('Swipe gestures'),
+        subtitle: const Text('What swiping left or right does on messages and chats'),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: () => Navigator.of(context).push(SwipeSettingsScreen.route()),
+      ),
+    ],
+  );
+}
+
 class LinkSettings extends StatelessWidget {
   const LinkSettings({super.key});
 
