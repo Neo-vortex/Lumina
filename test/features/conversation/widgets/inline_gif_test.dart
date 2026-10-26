@@ -44,7 +44,15 @@ void main() {
       ),
     );
     expect(find.byType(LoopingGif), findsOneWidget);
+    expect(find.byIcon(Icons.play_arrow_rounded), findsNothing, reason: 'no play button while it plays');
     await tester.tap(find.byType(MediaTile));
+    await tester.pump();
     expect(opened, 0);
+    expect(tester.widget<LoopingGif>(find.byType(LoopingGif)).paused, isTrue);
+    expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget, reason: 'paused: offer to resume');
+    await tester.tap(find.byType(MediaTile));
+    await tester.pump();
+    expect(tester.widget<LoopingGif>(find.byType(LoopingGif)).paused, isFalse);
+    expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
   });
 }

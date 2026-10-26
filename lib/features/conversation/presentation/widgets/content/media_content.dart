@@ -147,6 +147,7 @@ class MediaTile extends StatefulWidget {
 
 class _MediaTileState extends State<MediaTile> {
   var _revealed = false;
+  var _gifPaused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -158,7 +159,7 @@ class _MediaTileState extends State<MediaTile> {
     // GIFs loop silently in place, like Telegram; no big player.
     final gif = m.content is td.MessageAnimation && !covered;
     final image = gif
-        ? LoopingGif(file: v.media!, thumbnail: v.file, minithumbnail: v.mini)
+        ? LoopingGif(file: v.media!, thumbnail: v.file, minithumbnail: v.mini, paused: _gifPaused)
         : v.file != null
         ? TdFileImage(
             file: v.file!,
@@ -173,7 +174,10 @@ class _MediaTileState extends State<MediaTile> {
       onTap: () {
         if (covered && !viewOnce) {
           setState(() => _revealed = true);
-        } else if (!gif) {
+        } else if (gif) {
+          // GIFs play in place; a tap pauses or resumes.
+          setState(() => _gifPaused = !_gifPaused);
+        } else {
           widget.onTap();
         }
       },
@@ -203,7 +207,7 @@ class _MediaTileState extends State<MediaTile> {
                   ),
                 ),
               )
-            else if (v.isVideo && !widget.compact)
+            else if (v.isVideo && !widget.compact && (!gif || _gifPaused))
               Center(
                 child: Container(
                   width: 52,
