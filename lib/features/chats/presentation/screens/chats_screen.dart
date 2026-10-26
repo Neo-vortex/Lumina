@@ -9,17 +9,18 @@ import '../../../../core/telegram/display.dart';
 import '../../../../core/telegram/telegram_cache.dart';
 import '../../../../core/telegram/widgets/chat_avatar.dart';
 import '../../../../core/widgets/highlighted_snippet.dart';
-import '../../../../core/telegram/widgets/connection_status.dart';
 import '../../../../core/theme/glow_colors.dart';
-import '../../../../core/widgets/luminous_refresh.dart';
 import '../../../auth/bloc/auth_bloc.dart';
 import '../../../auth/domain/auth_step.dart';
 import '../../../conversation/presentation/screens/conversation_screen.dart';
 import '../../../home/presentation/widgets/bot_limitations_card.dart';
-import '../../bloc/chat_list_cubit.dart';
 import '../../data/chats_repository.dart';
-import '../widgets/chat_actions_sheet.dart';
 import '../widgets/chat_list_extensions.dart';
+import '../widgets/chat_list_page.dart';
+import '../widgets/lens_picker.dart';
+import '../widgets/lens_title.dart';
+import '../../bloc/lens_cubit.dart';
+import '../../../../core/telegram/internal_links.dart';
 import '../widgets/timeline_chat_row.dart';
 
 class ChatsScreen extends StatefulWidget {
@@ -36,11 +37,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
   List<td.Chat>? _results;
   List<MessageHit> _messageHits = const [];
   Timer? _debounce;
+  late final PageController _pages = PageController(initialPage: context.read<LensCubit>().state.index);
 
   @override
   void dispose() {
     _search.dispose();
     _debounce?.cancel();
+    _pages.dispose();
     super.dispose();
   }
 
@@ -65,6 +68,28 @@ class _ChatsScreenState extends State<ChatsScreen> {
     });
   }
 
+  Future<void> _pickLens(LensState lens) async {
+    ChatListExtensions.of(context).onLensOpened();
+    final picked = await showLensPicker(context, entries: lens.entries, current: lens.index);
+    if (picked != null && mounted) context.read<LensCubit>().select(picked);
+  }
+
+  Future<void> _submitSearch(String q) async {
+    try {
+      final links = context.read<InternalLinks>();
+      if (links.canOpen(q)) {
+        setState(() {
+          _searching = false;
+          _search.clear();
+          _results = null;
+        });
+        await links.tryOpen(context, q);
+      }
+    } on ProviderNotFoundException {
+      // No in-app link handlers in this build.
+    }
+  }
+
   void _open(td.Chat chat) {
     Navigator.of(context).push(ConversationScreen.route(chat.id));
   }
@@ -79,113 +104,105 @@ class _ChatsScreenState extends State<ChatsScreen> {
     );
     final isBot = caps?.isBot ?? false;
 
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 8, 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _searching
-                        ? TextField(
-                            controller: _search,
-                            autofocus: true,
-                            onChanged: _onQuery,
-                            decoration: const InputDecoration(
-                              hintText: 'Search chats and people',
-                              border: InputBorder.none,
-                            ),
-                          )
-                        : const Align(
-                            alignment: Alignment.centerLeft,
-                            child: ConnectionAwareTitle(title: 'Chats'),
-                          ),
+    final ext = ChatListExtensions.of(context);
+    return BlocConsumer<LensCubit, LensState>(
+      listenWhen: (a, b) => a.index != b.index,
+      listener: (context, lens) {
+        if (_pages.hasClients && (_pages.page ?? -1).round() != lens.index) _pages.jumpToPage(lens.index);
+      },
+      builder: (context, lens) {
+        final current = lens.current;
+        final many = lens.entries.length > 1;
+        return Scaffold(
+          body: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _searching
+                            ? TextField(
+                                controller: _search,
+                                autofocus: true,
+                                onChanged: _onQuery,
+                                onSubmitted: _submitSearch,
+                                decoration: const InputDecoration(
+                                  hintText: 'Search chats and people',
+                                  border: InputBorder.none,
+                                ),
+                              )
+                            : current == null
+                            ? const SizedBox.shrink()
+                            : LensTitle(
+                                entry: current,
+                                color: ext.lensColor(current),
+                                onTap: many ? () => _pickLens(lens) : null,
+                              ),
+                      ),
+                      if (!_searching) ...ext.headerActions(context),
+                      IconButton(
+                        tooltip: _searching ? 'Close search' : 'Search',
+                        icon: Icon(_searching ? Icons.close_rounded : Icons.search_rounded),
+                        onPressed: () => setState(() {
+                          _searching = !_searching;
+                          _search.clear();
+                          _results = null;
+                        }),
+                      ),
+                    ],
                   ),
-                  if (!_searching) ...ChatListExtensions.of(context).headerActions(context),
-                  IconButton(
-                    tooltip: _searching ? 'Close search' : 'Search',
-                    icon: Icon(_searching ? Icons.close_rounded : Icons.search_rounded),
-                    onPressed: () => setState(() {
-                      _searching = !_searching;
-                      _search.clear();
-                      _results = null;
-                    }),
-                  ),
-                ],
-              ),
-            ),
-            if (isBot && !_botNoticeDismissed)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                child: Dismissible(
-                  key: const ValueKey('bot-limits'),
-                  onDismissed: (_) => setState(() => _botNoticeDismissed = true),
-                  child: BotLimitationsCard(caps!.limitations),
                 ),
-              ),
-            Expanded(
-              child: _results != null
-                  ? _ResultsList(
-                      results: _results!,
-                      messageHits: _messageHits,
-                      query: _search.text.trim(),
-                      onOpen: _open,
-                      onOpenMessage: (hit) =>
-                          Navigator.of(context)
-                              .push(ConversationScreen.route(hit.chatId, focusMessageId: hit.messageId)),
-                    )
-                  : BlocBuilder<ChatListCubit, ChatListState>(
-                      builder: (context, state) {
-                        if (state.chats.isEmpty) {
-                          return Center(
-                            child: state.loading
-                                ? const CircularProgressIndicator(color: GlowColors.violet)
-                                : Padding(
-                                    padding: const EdgeInsets.all(32),
-                                    child: Text(
-                                      isBot
-                                          ? 'No chats yet. Chats appear here when someone messages your bot.'
-                                          : 'No chats yet. Tap the orb to start one.',
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(color: GlowColors.textMuted),
-                                    ),
-                                  ),
-                          );
-                        }
-                        return LuminousRefresh(
-                          onRefresh: context.read<ChatListCubit>().refresh,
-                          child: NotificationListener<ScrollNotification>(
-                            onNotification: (n) {
-                              if (n.metrics.extentAfter < 600) context.read<ChatListCubit>().loadMore();
-                              return false;
-                            },
-                            child: ListView.builder(
-                              padding: const EdgeInsets.only(bottom: 120),
-                              itemCount: state.chats.length,
-                              itemBuilder: (context, i) {
-                                final chat = state.chats[i];
-                                return TimelineChatRow(
-                                  key: ValueKey(chat.id),
-                                  chat: chat,
-                                  isFirst: i == 0,
-                                  isLast: i == state.chats.length - 1,
-                                  showPresence: !isBot,
-                                  onTap: () => _open(chat),
-                                  onLongPress: () => showChatActions(context, chat),
-                                );
-                              },
-                            ),
-                          ),
-                        );
-                      },
+                if (isBot && !_botNoticeDismissed)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    child: Dismissible(
+                      key: const ValueKey('bot-limits'),
+                      onDismissed: (_) => setState(() => _botNoticeDismissed = true),
+                      child: BotLimitationsCard(caps!.limitations),
                     ),
+                  ),
+                Expanded(
+                  child: _results != null
+                      ? _ResultsList(
+                          results: _results!,
+                          messageHits: _messageHits,
+                          query: _search.text.trim(),
+                          onOpen: _open,
+                          onOpenMessage: (hit) =>
+                              Navigator.of(context)
+                                  .push(ConversationScreen.route(hit.chatId, focusMessageId: hit.messageId)),
+                        )
+                      : PageView.custom(
+                          controller: _pages,
+                          onPageChanged: context.read<LensCubit>().select,
+                          childrenDelegate: SliverChildBuilderDelegate(
+                            (context, i) {
+                              final e = lens.entries[i];
+                              return ChatListPage(
+                                key: ValueKey(e.key),
+                                entry: e,
+                                isBot: isBot,
+                                tint: many ? ext.lensColor(e) : null,
+                                onOpen: _open,
+                              );
+                            },
+                            childCount: lens.entries.length,
+                            findChildIndexCallback: (key) {
+                              final k = (key as ValueKey<String>).value;
+                              final i = lens.entries.indexWhere((e) => e.key == k);
+                              return i < 0 ? null : i;
+                            },
+                          ),
+                        ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

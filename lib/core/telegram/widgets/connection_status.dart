@@ -10,9 +10,10 @@ import '../telegram_cache.dart';
 /// Title that turns into "Connecting…" / "Waiting for network…" while TDLib
 /// is not ready, with a soft pulsing dot (announced to TalkBack).
 class ConnectionAwareTitle extends StatefulWidget {
-  const ConnectionAwareTitle({super.key, required this.title});
+  const ConnectionAwareTitle({super.key, required this.title, this.glow});
 
   final String title;
+  final Color? glow;
 
   @override
   State<ConnectionAwareTitle> createState() => _ConnectionAwareTitleState();
@@ -55,7 +56,13 @@ class _ConnectionAwareTitleState extends State<ConnectionAwareTitle> {
             ? Text(
                 widget.title,
                 key: const ValueKey('title'),
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                  shadows: widget.glow == null
+                      ? null
+                      : [Shadow(color: widget.glow!.withValues(alpha: 0.7), blurRadius: 14)],
+                ),
               )
             : Row(
                 key: ValueKey(status),
