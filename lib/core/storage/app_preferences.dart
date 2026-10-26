@@ -66,6 +66,16 @@ class AppPreferences {
   String get swipeEmoji => _string('swipe.emoji') ?? '❤️';
   set swipeEmoji(String v) => _set('swipe.emoji', v);
 
+  /// The reactions shown first when tapping a message (4–5).
+  List<String> get quickReactions =>
+      _string('reactions.quick')?.split(' ').where((e) => e.isNotEmpty).toList() ??
+      const ['❤️', '👍', '🔥', '😂', '😮'];
+  set quickReactions(List<String> v) => _set('reactions.quick', v.take(5).join(' '));
+
+  /// Play animated emoji, reactions and custom emoji; off shows them static.
+  bool get animatedEmoji => _bool('emoji.animated', true);
+  set animatedEmoji(bool v) => _set('emoji.animated', v);
+
   T? _enum<T extends Enum>(List<T> values, String key) {
     final name = _string(key);
     for (final v in values) {

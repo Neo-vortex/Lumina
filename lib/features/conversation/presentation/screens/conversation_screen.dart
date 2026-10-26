@@ -30,6 +30,7 @@ import '../widgets/message_bubble.dart';
 import '../widgets/message_menu.dart';
 import '../widgets/message_rows.dart';
 import '../../../../core/widgets/delete_confirm.dart';
+import '../../../../core/telegram/widgets/animated_sticker.dart';
 import '../../../../core/gestures/swipe_actions.dart';
 import '../widgets/pinned_banner.dart';
 import '../widgets/sponsored_card.dart';
@@ -192,19 +193,39 @@ class _ConversationScreenState extends State<ConversationScreen> {
     }
   }
 
-  Future<void> _onLongPress(td.Message m, td.Chat chat) async {
+  /// Long-press starts (or extends) multi-select, like Telegram.
+  void _onLongPress(td.Message m) {
+    HapticFeedback.mediumImpact();
+    _cubit.toggleSelected(m);
+  }
+
+  /// Tap: the focus menu with quick reactions, read status and actions.
+  Future<void> _openMenu(td.Message m, td.Chat chat, {Rect? anchor, Widget? bubble}) async {
     if (_cubit.state.selecting) {
       _cubit.toggleSelected(m);
       return;
     }
     final extensions = ConversationExtensions.of(context);
+    final repo = context.read<MessagesRepository>();
+    final prefs = context.read<AppPreferences>();
     final properties = await _cubit.properties(m);
     if (!mounted) return;
+    final private = chat.type is td.ChatTypePrivate;
     final result = await showMessageMenu(
       context,
       message: m,
       properties: properties,
       reactions: _cubit.reactionChoices(m),
+      quickReactions: prefs.quickReactions,
+      anchor: anchor,
+      bubble: bubble,
+      readStatus: m.isOutgoing && private ? repo.readStatus(chat.id, m.id) : null,
+      reactionIcon: (emoji, size) => FutureBuilder<td.EmojiReaction?>(
+        future: repo.emojiReaction(emoji),
+        builder: (context, snap) => snap.data == null
+            ? Text(emoji, style: TextStyle(fontSize: size * 0.8, height: 1))
+            : AnimatedSticker(sticker: snap.data!.centerAnimation ?? snap.data!.appearAnimation, size: size),
+      ),
       protectedContent: chat.hasProtectedContent,
       extras: extensions.menuEntries(m),
     );
@@ -509,7 +530,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
           MessageSwipe.delete => _confirmAndDelete([for (final m in row.messages) m.id], chat),
           MessageSwipe.none => null,
         },
-        onLongPress: () => _onLongPress(row.primary, chat),
+        onLongPress: () => _onLongPress(row.primary),
+        onMenu: (rect) => _openMenu(
+          row.primary,
+          chat,
+          anchor: rect,
+          bubble: _buildRow(row, chat, state, isGroup, isChannel),
+        ),
         onTap: () {
           if (state.selecting) _cubit.toggleSelected(row.primary);
         },

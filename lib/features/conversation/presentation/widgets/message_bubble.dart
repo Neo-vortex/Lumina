@@ -40,6 +40,7 @@ class MessageBubble extends StatefulWidget {
     required this.onSwipe,
     required this.onLongPress,
     required this.onTap,
+    this.onMenu,
     required this.onReplyQuoteTap,
     required this.onReaction,
   });
@@ -60,6 +61,10 @@ class MessageBubble extends StatefulWidget {
   final ValueChanged<SwipeSide> onSwipe;
   final VoidCallback onLongPress;
   final VoidCallback onTap;
+
+  /// Opens the message menu, given where the bubble sits on screen (the
+  /// menu redraws it there, lifted). Taps go to [onTap] while selecting.
+  final ValueChanged<Rect>? onMenu;
   final void Function(int messageId) onReplyQuoteTap;
   final void Function(String emoji) onReaction;
 
@@ -82,6 +87,7 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
     duration: const Duration(milliseconds: 900),
   );
   double _drag = 0;
+  final _bubbleKey = GlobalKey();
   bool _crossed = false;
 
   static const _replyThreshold = 64.0;
@@ -169,6 +175,7 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
             : 0.0;
         final dragGlow = (_drag.abs() / _replyThreshold).clamp(0.0, 1.0);
         return Container(
+          key: _bubbleKey,
           constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * (media ? 0.78 : 0.8)),
           decoration: bare
               ? BoxDecoration(
@@ -297,7 +304,14 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
     final action = _drag >= 0 ? widget.swipeRight : widget.swipeLeft;
     final swipe = GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onTap: widget.onTap,
+      onTap: () {
+        final box = _bubbleKey.currentContext?.findRenderObject() as RenderBox?;
+        if (widget.selecting || widget.onMenu == null || box == null) {
+          widget.onTap();
+        } else {
+          widget.onMenu!(box.localToGlobal(Offset.zero) & box.size);
+        }
+      },
       onLongPress: widget.onLongPress,
       onHorizontalDragUpdate: widget.selecting
           ? null

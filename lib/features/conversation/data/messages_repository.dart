@@ -334,6 +334,42 @@ class MessagesRepository {
     );
   }
 
+  final _emojiReactions = <String, Future<td.EmojiReaction?>>{};
+
+  /// A standard reaction's animations (TGS), fetched once per emoji.
+  Future<td.EmojiReaction?> emojiReaction(String emoji) => _emojiReactions[emoji] ??= _client
+      .invoke<td.EmojiReaction>(td.GetEmojiReaction(emoji: emoji))
+      .then<td.EmojiReaction?>((r) => r)
+      .catchError((Object _) => null);
+
+  /// "Read today at 14:02" for an outgoing message in a private chat, or
+  /// null when TDLib can't tell (too old, privacy).
+  Future<String?> readStatus(int chatId, int messageId, {DateTime? now}) async {
+    try {
+      final r = await _client.invoke<td.MessageReadDate>(
+        td.GetMessageReadDate(chatId: chatId, messageId: messageId),
+      );
+      return switch (r) {
+        td.MessageReadDateRead(:final readDate) => 'Read ${_when(readDate, now ?? DateTime.now())}',
+        td.MessageReadDateUnread() => 'Not read yet',
+        _ => null,
+      };
+    } on TdException {
+      return null;
+    }
+  }
+
+  static String _when(int unix, DateTime now) {
+    final t = DateTime.fromMillisecondsSinceEpoch(unix * 1000);
+    final hm = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+    final day = DateTime(t.year, t.month, t.day), today = DateTime(now.year, now.month, now.day);
+    final diff = today.difference(day).inDays;
+    if (diff == 0) return 'today at $hm';
+    if (diff == 1) return 'yesterday at $hm';
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${t.day} ${months[t.month - 1]} at $hm';
+  }
+
   Future<List<td.ReactionType>> availableReactions(int chatId, int messageId) async {
     final result = await _client.invoke<td.AvailableReactions>(
       td.GetMessageAvailableReactions(chatId: chatId, messageId: messageId, rowSize: 8),

@@ -22,4 +22,15 @@ void main() {
     expect(p.chatSwipe(SwipeSide.left), ChatSwipe.mute);
     expect(p.swipeEmoji, '🔥');
   });
+
+  test('quick reactions default to five and keep at most five; emoji animate by default', () {
+    final p = AppPreferences.inMemory();
+    expect(p.quickReactions, ['❤️', '👍', '🔥', '😂', '😮']);
+    expect(p.animatedEmoji, isTrue);
+    p
+      ..quickReactions = ['🎉', '🙏', '👏', '😢', '🤔', '💯']
+      ..animatedEmoji = false;
+    expect(p.quickReactions, ['🎉', '🙏', '👏', '😢', '🤔']);
+    expect(p.animatedEmoji, isFalse);
+  });
 }
