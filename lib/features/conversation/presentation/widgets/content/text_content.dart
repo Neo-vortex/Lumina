@@ -26,8 +26,8 @@ class TextContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final onAccent = color == GlowColors.onAccent;
-    final linkColor = onAccent ? const Color(0xFF3B1C7A) : GlowColors.cyan;
+    final onAccent = color == GlowColors.onOutgoing;
+    final linkColor = onAccent ? const Color(0xFFB9ECFF) : GlowColors.cyan;
     var showPreview = linkPreview != null;
     try {
       showPreview = showPreview && context.read<AppPreferences>().showLinkPreviews;

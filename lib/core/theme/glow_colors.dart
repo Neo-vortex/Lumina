@@ -29,9 +29,14 @@ abstract final class GlowColors {
   static const cyan = Color(0xFF4FE3DC);
   static const teal = Color(0xFF1C9AAE);
 
-  // Outgoing: soft apricot -> dusty coral (toned down from a vivid amber).
+  // Warm accents (status, warnings, destructive actions).
   static const amber = Color(0xFFE8B778);
   static const coral = Color(0xFFE08A80);
+
+  // Outgoing bubbles: deep violet -> indigo, white text.
+  static const outgoingTop = Color(0xFF5B3FD0);
+  static const outgoingBottom = Color(0xFF3A2E8F);
+  static const onOutgoing = Colors.white;
 
   // Active / selection: violet -> magenta. Bright variants for glow only.
   static const violet = Color(0xFF9A5CFF);
@@ -49,6 +54,13 @@ abstract final class GlowColors {
     end: Alignment.bottomRight,
   );
   static const outgoing = LinearGradient(
+    colors: [outgoingTop, outgoingBottom],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  /// Warm destructive actions (log out, reset), dark text (UX-01).
+  static const warm = LinearGradient(
     colors: [amber, coral],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,

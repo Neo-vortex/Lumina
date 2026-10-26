@@ -52,7 +52,7 @@ class VoiceNoteContent extends StatelessWidget {
           final progress = current && total > Duration.zero
               ? s.position.inMilliseconds / total.inMilliseconds
               : 0.0;
-          final accent = outgoing ? GlowColors.onAccent : GlowColors.cyan;
+          final accent = outgoing ? GlowColors.onOutgoing : GlowColors.cyan;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -81,7 +81,7 @@ class VoiceNoteContent extends StatelessWidget {
                       height: 32,
                       child: WaveformBars(
                         values: values.isEmpty ? List.filled(40, 6) : values,
-                        color: (outgoing ? GlowColors.onAccent : GlowColors.textMuted).withValues(
+                        color: (outgoing ? GlowColors.onOutgoing : GlowColors.textMuted).withValues(
                           alpha: 0.45,
                         ),
                         activeColor: accent,
@@ -150,7 +150,7 @@ class MusicContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final player = context.read<AudioPlayback>();
     final key = '${message.chatId}:${message.id}';
-    final accent = outgoing ? GlowColors.onAccent : GlowColors.cyan;
+    final accent = outgoing ? GlowColors.onOutgoing : GlowColors.cyan;
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 12, 6),
       child: ValueListenableBuilder<PlaybackState>(

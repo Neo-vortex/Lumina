@@ -148,8 +148,8 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
             bottomLeft: tight,
           );
 
-    final textColor = outgoing ? GlowColors.onAccent : GlowColors.text;
-    final mutedColor = outgoing ? GlowColors.onAccent.withValues(alpha: 0.65) : GlowColors.textMuted;
+    final textColor = outgoing ? GlowColors.onOutgoing : GlowColors.text;
+    final mutedColor = outgoing ? GlowColors.onOutgoing.withValues(alpha: 0.65) : GlowColors.textMuted;
     final edge = switch (delivery) {
       Delivery.read => GlowColors.cyan,
       Delivery.failed => GlowColors.error,
@@ -563,7 +563,7 @@ class _ReplyQuoteState extends State<_ReplyQuote> {
   Widget build(BuildContext context) {
     final cache = context.read<TelegramCache>();
     final m = _message;
-    final accent = widget.outgoing ? GlowColors.onAccent : GlowColors.cyan;
+    final accent = widget.outgoing ? GlowColors.onOutgoing : GlowColors.cyan;
     return GestureDetector(
       onTap: widget.onTap,
       child: Container(
@@ -592,7 +592,7 @@ class _ReplyQuoteState extends State<_ReplyQuote> {
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: widget.outgoing ? GlowColors.onAccent : GlowColors.text,
+                        color: widget.outgoing ? GlowColors.onOutgoing : GlowColors.text,
                         fontSize: 13,
                         fontStyle: FontStyle.italic,
                       ),
@@ -607,7 +607,7 @@ class _ReplyQuoteState extends State<_ReplyQuote> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: widget.outgoing ? GlowColors.onAccent : GlowColors.textMuted,
+                  color: widget.outgoing ? GlowColors.onOutgoing : GlowColors.textMuted,
                   fontSize: 13,
                 ),
               ),

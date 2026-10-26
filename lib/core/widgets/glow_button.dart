@@ -17,7 +17,7 @@ class GlowButton extends StatefulWidget {
 
   /// Warm action (log out, reset): amber → coral with dark text (UX-01).
   const GlowButton.warm({super.key, required this.label, required this.onPressed, this.busy = false})
-    : gradient = GlowColors.outgoing,
+    : gradient = GlowColors.warm,
       glowColor = GlowColors.coral,
       foreground = GlowColors.onAccent;
 

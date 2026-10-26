@@ -150,7 +150,7 @@ class AppConversationExtensions extends ConversationExtensions {
     return TranscriptView(
       center: transcripts,
       message: message,
-      color: outgoing ? GlowColors.onAccent : GlowColors.cyan,
+      color: outgoing ? GlowColors.onOutgoing : GlowColors.cyan,
     );
   }
 

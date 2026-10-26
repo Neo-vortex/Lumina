@@ -298,7 +298,7 @@ class _BubbleSample extends StatelessWidget {
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(gradient: GlowColors.outgoing, borderRadius: BorderRadius.circular(18)),
-      child: const Text('See you at eight ✨', style: TextStyle(color: GlowColors.onAccent)),
+      child: const Text('See you at eight ✨', style: TextStyle(color: GlowColors.onOutgoing)),
     ),
   );
 }
