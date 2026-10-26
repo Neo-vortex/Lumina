@@ -67,4 +67,42 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect((await result)?.reaction, '🔥');
   });
+
+  testWidgets('a ❤️ pick shows as the chat\'s plain ❤, first', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MultiRepositoryProvider(
+        providers: [
+          RepositoryProvider.value(value: AppPreferences.inMemory()),
+          RepositoryProvider(create: (_) => FileStore(FakeTdClient())),
+        ],
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showMessageMenu(
+                context,
+                message: fakeMessage(1),
+                properties: null,
+                reactions: Future.value(['👍', '❤', '🔥']),
+                quickReactions: const ['❤️', '👍'],
+                protectedContent: false,
+              ),
+              child: const Text('go'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('go'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    final pill = find.byKey(const ValueKey('quick-reactions'));
+    final shown = tester
+        .widgetList<Text>(find.descendant(of: pill, matching: find.byType(Text)))
+        .map((t) => t.data)
+        .toList();
+    expect(shown.take(3), ['❤', '👍', '🔥']);
+  });
 }

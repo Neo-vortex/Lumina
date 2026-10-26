@@ -552,7 +552,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
           row.primary,
           chat,
           anchor: rect,
-          bubble: _buildRow(row, chat, state, isGroup, isChannel),
+          // The menu is its own route: hand the bubble the chat's cubit.
+          bubble: BlocProvider.value(value: _cubit, child: _buildRow(row, chat, state, isGroup, isChannel)),
         ),
         onTap: () {
           if (state.selecting) _cubit.toggleSelected(row.primary);

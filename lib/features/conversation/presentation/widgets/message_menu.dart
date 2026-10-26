@@ -73,6 +73,9 @@ Future<({MessageAction? action, String? reaction})?> showMessageMenu(
   return Navigator.of(context).push(
     PageRouteBuilder<({MessageAction? action, String? reaction})>(
       opaque: false,
+      // Leave focus where it is: taking it closed the keyboard, the chat
+      // re-laid out, and the menu no longer matched the bubble's place.
+      requestFocus: false,
       barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.55),
       transitionDuration: const Duration(milliseconds: 220),
@@ -196,10 +199,14 @@ class _FocusMenuState extends State<_FocusMenu> {
       final available = snap.data ?? const [];
       if (snap.hasData && available.isEmpty) return const SizedBox(height: 0);
       // Your picks first (when the chat allows them), then fill to five.
-      final quick = [
-        ...widget.quick.where((e) => available.isEmpty || available.contains(e)),
-        ...available.where((e) => !widget.quick.contains(e)),
-      ].take(5).toList();
+      // Compared without the emoji variation selector: the chat's heart is
+      // a plain ❤ while pickers give ❤️; the chat's form is shown.
+      String plain(String e) => e.replaceAll('\uFE0F', '');
+      final picks = [
+        for (final e in widget.quick)
+          if (available.isEmpty) e else ?available.where((a) => plain(a) == plain(e)).firstOrNull,
+      ];
+      final quick = [...picks, ...available.where((a) => !picks.contains(a))].take(5).toList();
       return Material(
         color: GlowColors.surfaceHigh,
         shape: RoundedRectangleBorder(
