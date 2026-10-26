@@ -6,6 +6,7 @@ import 'package:lumina/core/telegram/file_store.dart';
 import 'package:lumina/core/telegram/telegram_cache.dart';
 import 'package:lumina/features/chats/data/chats_repository.dart';
 import 'package:lumina/features/profile/data/user_profile_repository.dart';
+import 'package:lumina/features/profile/presentation/profile_photo_viewer.dart';
 import 'package:lumina/features/profile/presentation/user_profile_screen.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
@@ -165,6 +166,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     expect(_label('Profile photo 2 of 3'), findsOneWidget);
     expect(find.text('Set by you · only you see this photo'), findsNothing);
+  });
+
+  testWidgets('pulling down at the top opens the photos full screen', (tester) async {
+    await pump(tester, personal: photo(100), photos: [photo(1)]);
+    await tester.drag(find.byType(NestedScrollView), const Offset(0, 300));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(ProfilePhotoViewer), findsOneWidget);
   });
 }
 

@@ -15,6 +15,7 @@ import '../../../core/widgets/glow_button.dart';
 import '../../../core/widgets/glow_sheet.dart';
 import '../../chats/data/chats_repository.dart';
 import '../data/user_profile_repository.dart';
+import 'profile_photo_viewer.dart';
 
 typedef CallFn = void Function(int userId, {required bool video});
 
@@ -51,6 +52,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   late final _repo = context.read<UserProfileRepository>();
   late final _cache = context.read<TelegramCache>();
   td.UserFullInfo? _full;
+  final _gallery = GlobalKey<_GalleryState>();
+  var _pulled = false;
   List<td.ChatPhoto> _photos = const [];
   List<td.Story> _posts = const [];
 
@@ -208,146 +211,164 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return DefaultTabController(
       length: ProfileTab.values.length,
       child: Scaffold(
-        body: NestedScrollView(
-          headerSliverBuilder: (context, _) => [
-            SliverAppBar(pinned: true, title: Text(name)),
-            // Not in the app bar's flexible space: its layers there swallowed
-            // the gallery's swipes and taps.
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 320,
-                child: _Gallery(user: user, photos: _photos, personal: _full?.personalPhoto),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            name,
-                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (user.isPremium)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 6),
-                            child: Icon(Icons.auto_awesome_rounded, color: GlowColors.violet, size: 18),
-                          ),
-                        if (user.verificationStatus?.isVerified ?? false)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 6),
-                            child: Icon(Icons.verified_rounded, color: GlowColors.cyan, size: 18),
-                          ),
-                      ],
-                    ),
-                    Text(
-                      _blocked ? 'Blocked' : Display.status(user),
-                      style: TextStyle(color: _blocked ? GlowColors.coral : GlowColors.textMuted),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _Orb(
-                          icon: Icons.chat_bubble_rounded,
-                          label: 'Message',
-                          onTap: () => widget.onMessage(user.id),
-                        ),
-                        _Orb(
-                          icon: muted ? Icons.notifications_off_rounded : Icons.notifications_rounded,
-                          label: muted ? 'Unmute' : 'Mute',
-                          onTap: chat == null ? null : _toggleMute,
-                        ),
-                        _Orb(
-                          icon: Icons.call_rounded,
-                          label: 'Voice call',
-                          onTap: canCall ? () => widget.onCall(user.id, video: false) : null,
-                        ),
-                        _Orb(
-                          icon: Icons.videocam_rounded,
-                          label: 'Video call',
-                          onTap: canCall && (_full?.supportsVideoCalls ?? true)
-                              ? () => widget.onCall(user.id, video: true)
-                              : null,
-                        ),
-                        _Orb(icon: Icons.more_horiz_rounded, label: 'More', onTap: _more),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _InfoCard(
-                      children: [
-                        if (user.phoneNumber.isNotEmpty)
-                          _InfoRow(
-                            icon: Icons.phone_rounded,
-                            value: '+${user.phoneNumber}',
-                            label: 'Mobile',
-                            onTap: () => _copy('Phone', '+${user.phoneNumber}'),
-                          ),
-                        if (_username.isNotEmpty)
-                          _InfoRow(
-                            icon: Icons.alternate_email_rounded,
-                            value: '@$_username',
-                            label: 'Username',
-                            onTap: () => _copy('Username', '@$_username'),
-                            trailing: widget.onShowQr == null
-                                ? null
-                                : IconButton(
-                                    tooltip: 'QR code',
-                                    icon: const Icon(Icons.qr_code_2_rounded),
-                                    onPressed: () => widget.onShowQr!(_link, name),
-                                  ),
-                          ),
-                        _InfoRow(
-                          icon: Icons.tag_rounded,
-                          value: '${user.id}',
-                          label: 'User ID',
-                          onTap: () => _copy('User ID', '${user.id}'),
-                        ),
-                        if (_full?.bio case final bio? when bio.text.isNotEmpty)
-                          _InfoRow(icon: Icons.info_outline_rounded, value: bio.text, label: 'Bio'),
-                        if (_full?.birthdate case final b?)
-                          _InfoRow(
-                            icon: Icons.cake_rounded,
-                            value: '${b.day}/${b.month}${b.year == 0 ? '' : '/${b.year}'}',
-                            label: 'Birthday',
-                          ),
-                        if (_full?.businessInfo?.location case final loc? when loc.address.isNotEmpty)
-                          _InfoRow(icon: Icons.place_rounded, value: loc.address, label: 'Location'),
-                      ],
-                    ),
-                    if (_posts.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      const Text(
-                        'POSTS',
-                        style: TextStyle(color: GlowColors.violet, fontSize: 12, fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        height: 96,
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
-                          children: [for (final s in _posts) _PostThumb(story: s)],
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 8),
-                  ],
+        // Pulling down at the top opens the photos full screen.
+        body: NotificationListener<ScrollNotification>(
+          onNotification: (n) {
+            if (n is OverscrollNotification &&
+                n.overscroll < -12 &&
+                n.metrics.extentBefore == 0 &&
+                !_pulled) {
+              _pulled = true;
+              _gallery.currentState?.open();
+            }
+            if (n is ScrollEndNotification) _pulled = false;
+            return false;
+          },
+          child: NestedScrollView(
+            headerSliverBuilder: (context, _) => [
+              SliverAppBar(pinned: true, title: Text(name)),
+              // Not in the app bar's flexible space: its layers there swallowed
+              // the gallery's swipes and taps.
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 320,
+                  child: _Gallery(key: _gallery, user: user, photos: _photos, personal: _full?.personalPhoto),
                 ),
               ),
-            ),
-            SliverPersistentHeader(pinned: true, delegate: _TabsHeader()),
-          ],
-          body: TabBarView(
-            children: [
-              for (final tab in ProfileTab.values)
-                _TabBody(userId: user.id, tab: tab, onOpenChat: widget.onOpenChat),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              name,
+                              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (user.isPremium)
+                            const Padding(
+                              padding: EdgeInsets.only(left: 6),
+                              child: Icon(Icons.auto_awesome_rounded, color: GlowColors.violet, size: 18),
+                            ),
+                          if (user.verificationStatus?.isVerified ?? false)
+                            const Padding(
+                              padding: EdgeInsets.only(left: 6),
+                              child: Icon(Icons.verified_rounded, color: GlowColors.cyan, size: 18),
+                            ),
+                        ],
+                      ),
+                      Text(
+                        _blocked ? 'Blocked' : Display.status(user),
+                        style: TextStyle(color: _blocked ? GlowColors.coral : GlowColors.textMuted),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _Orb(
+                            icon: Icons.chat_bubble_rounded,
+                            label: 'Message',
+                            onTap: () => widget.onMessage(user.id),
+                          ),
+                          _Orb(
+                            icon: muted ? Icons.notifications_off_rounded : Icons.notifications_rounded,
+                            label: muted ? 'Unmute' : 'Mute',
+                            onTap: chat == null ? null : _toggleMute,
+                          ),
+                          _Orb(
+                            icon: Icons.call_rounded,
+                            label: 'Voice call',
+                            onTap: canCall ? () => widget.onCall(user.id, video: false) : null,
+                          ),
+                          _Orb(
+                            icon: Icons.videocam_rounded,
+                            label: 'Video call',
+                            onTap: canCall && (_full?.supportsVideoCalls ?? true)
+                                ? () => widget.onCall(user.id, video: true)
+                                : null,
+                          ),
+                          _Orb(icon: Icons.more_horiz_rounded, label: 'More', onTap: _more),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _InfoCard(
+                        children: [
+                          if (user.phoneNumber.isNotEmpty)
+                            _InfoRow(
+                              icon: Icons.phone_rounded,
+                              value: '+${user.phoneNumber}',
+                              label: 'Mobile',
+                              onTap: () => _copy('Phone', '+${user.phoneNumber}'),
+                            ),
+                          if (_username.isNotEmpty)
+                            _InfoRow(
+                              icon: Icons.alternate_email_rounded,
+                              value: '@$_username',
+                              label: 'Username',
+                              onTap: () => _copy('Username', '@$_username'),
+                              trailing: widget.onShowQr == null
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'QR code',
+                                      icon: const Icon(Icons.qr_code_2_rounded),
+                                      onPressed: () => widget.onShowQr!(_link, name),
+                                    ),
+                            ),
+                          _InfoRow(
+                            icon: Icons.tag_rounded,
+                            value: '${user.id}',
+                            label: 'User ID',
+                            onTap: () => _copy('User ID', '${user.id}'),
+                          ),
+                          if (_full?.bio case final bio? when bio.text.isNotEmpty)
+                            _InfoRow(icon: Icons.info_outline_rounded, value: bio.text, label: 'Bio'),
+                          if (_full?.birthdate case final b?)
+                            _InfoRow(
+                              icon: Icons.cake_rounded,
+                              value: '${b.day}/${b.month}${b.year == 0 ? '' : '/${b.year}'}',
+                              label: 'Birthday',
+                            ),
+                          if (_full?.businessInfo?.location case final loc? when loc.address.isNotEmpty)
+                            _InfoRow(icon: Icons.place_rounded, value: loc.address, label: 'Location'),
+                        ],
+                      ),
+                      if (_posts.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        const Text(
+                          'POSTS',
+                          style: TextStyle(
+                            color: GlowColors.violet,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          height: 96,
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            children: [for (final s in _posts) _PostThumb(story: s)],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
+              ),
+              SliverPersistentHeader(pinned: true, delegate: _TabsHeader()),
             ],
+            body: TabBarView(
+              children: [
+                for (final tab in ProfileTab.values)
+                  _TabBody(userId: user.id, tab: tab, onOpenChat: widget.onOpenChat),
+              ],
+            ),
           ),
         ),
       ),
@@ -356,7 +377,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 }
 
 class _Gallery extends StatefulWidget {
-  const _Gallery({required this.user, required this.photos, this.personal});
+  const _Gallery({super.key, required this.user, required this.photos, this.personal});
 
   final td.User user;
   final List<td.ChatPhoto> photos;
@@ -376,6 +397,18 @@ class _GalleryState extends State<_Gallery> {
   void dispose() {
     _pages.dispose();
     super.dispose();
+  }
+
+  List<td.ChatPhoto> get _all {
+    final personal = widget.personal;
+    return [?personal, ...widget.photos.where((p) => p.id != personal?.id)];
+  }
+
+  /// Full screen, starting at the photo on show.
+  void open() {
+    final photos = _all;
+    if (photos.isEmpty) return;
+    Navigator.of(context).push(ProfilePhotoViewer.route(photos, _page.clamp(0, photos.length - 1)));
   }
 
   void _go(int delta, int count) {

@@ -256,6 +256,27 @@ class MainActivity : FlutterActivity() {
                 else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri)
                 result.success(start(intent))
             }
+            // Copies a file into the shared gallery (Pictures/Lumina).
+            "saveToGallery" -> {
+                val path = call.argument<String>("path")!!
+                val mime = call.argument<String>("mime") ?: "image/jpeg"
+                val name = call.argument<String>("name") ?: File(path).name
+                io.execute {
+                    val ok = runCatching {
+                        val values = android.content.ContentValues().apply {
+                            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
+                            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mime)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/Lumina")
+                            }
+                        }
+                        val uri = contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)!!
+                        contentResolver.openOutputStream(uri)!!.use { out -> File(path).inputStream().use { it.copyTo(out) } }
+                        true
+                    }.getOrDefault(false)
+                    main.post { result.success(ok) }
+                }
+            }
             "sdkInt" -> result.success(Build.VERSION.SDK_INT)
             else -> result.notImplemented()
         }

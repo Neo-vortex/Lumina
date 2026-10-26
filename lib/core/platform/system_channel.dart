@@ -44,6 +44,10 @@ class SystemChannel {
   Future<void> liveLocationStop() => _ch.invokeMethod<void>('liveLocationStop');
 
   /// The system share sheet for plain text.
+  /// Saves an image file into the phone's gallery (Pictures/Lumina).
+  Future<bool> saveToGallery(String path, {String mime = 'image/jpeg', String? name}) async =>
+      (await _ch.invokeMethod<bool>('saveToGallery', {'path': path, 'mime': mime, 'name': ?name})) ?? false;
+
   Future<bool> shareText(String text) async =>
       (await _ch.invokeMethod<bool>('shareText', {'text': text})) ?? false;
 
