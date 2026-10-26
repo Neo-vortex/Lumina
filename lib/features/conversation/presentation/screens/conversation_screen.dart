@@ -92,11 +92,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
     _rows = buildRows(state.messages, firstUnreadId: state.firstUnreadId);
   }
 
-  static Object _rowKey(MessageRow row) => switch (row) {
+  Object _rowKey(MessageRow row) => switch (row) {
     DayHeaderRow(:final day) => 'd$day',
     UnreadDividerRow() => 'unread',
     ServiceRow(:final message) => message.id,
-    BubbleRow() => row.id,
+    BubbleRow() => _cubit.stableId(row.id),
   };
 
   /// Sponsored cards occupy the first list indices (bottom of the screen).
@@ -539,12 +539,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
       UnreadDividerRow() => const _UnreadDivider(key: ValueKey('unread')),
       ServiceRow(:final message) => _ServiceBubble(key: ValueKey(message.id), message: message),
       BubbleRow() => MessageBubble(
-        key: ValueKey(row.id),
+        key: ValueKey(_cubit.stableId(row.id)),
         row: row,
         chat: chat,
         isGroup: isGroup,
         isChannel: isChannel,
-        animateIn: _initialised && !_seenAtOpen.contains(row.id) && _animated.add(row.id),
+        animateIn: _initialised && !_seenAtOpen.contains(row.id) && _animated.add(_cubit.stableId(row.id)),
         highlighted: row.messages.any((m) => m.id == state.highlightId),
         selected: row.messages.any((m) => state.selected.contains(m.id)),
         selecting: state.selecting,

@@ -466,6 +466,7 @@ class ConversationCubit extends Cubit<ConversationState> {
         if (state.hasNewer || state.messages.any((m) => m.id == message.id)) return;
         emit(state.copyWith(messages: [message, ...state.messages]));
       case td.UpdateMessageSendSucceeded(:final message, :final oldMessageId) when message.chatId == chatId:
+        _stableIds[message.id] = stableId(oldMessageId);
         _replace(oldMessageId, (_) => message);
       case td.UpdateMessageSendFailed(:final message, :final oldMessageId) when message.chatId == chatId:
         _replace(oldMessageId, (_) => message);
@@ -496,6 +497,14 @@ class ConversationCubit extends Cubit<ConversationState> {
         break;
     }
   }
+
+  final _stableIds = <int, int>{};
+
+  /// The id a message first appeared with. A sent message is shown under a
+  /// temporary id until TDLib swaps in the server's; keying bubbles by the
+  /// first one keeps the same bubble instead of building (and animating
+  /// in) a second one.
+  int stableId(int id) => _stableIds[id] ?? id;
 
   void _replace(int messageId, td.Message Function(td.Message) change) {
     final index = state.messages.indexWhere((m) => m.id == messageId);
