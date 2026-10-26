@@ -3,11 +3,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_vlc_player/flutter_vlc_player.dart';
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:screen_brightness/screen_brightness.dart';
 
 import '../../../../core/storage/app_preferences.dart';
 import '../../../../core/telegram/display.dart';
+import '../../../../core/telegram/file_store.dart';
 import '../../../../core/theme/glow_colors.dart';
 
 /// libVLC playback with the spec's gestures (§7.1):
@@ -31,6 +34,7 @@ class VideoPlayerView extends StatefulWidget {
     this.paused = false,
     this.onProgress,
     this.onControlsVisibilityChanged,
+    this.fileId,
   });
 
   final String source;
@@ -50,12 +54,58 @@ class VideoPlayerView extends StatefulWidget {
   /// Controls shown or hidden (tap, auto-hide), so the host can show or
   /// hide its own overlay (title, caption) with them.
   final ValueChanged<bool>? onControlsVisibilityChanged;
+  /// The TDLib file behind a streamed [source]; its download progress is
+  /// drawn on the seek bar.
+  final int? fileId;
 
   @override
   State<VideoPlayerView> createState() => _VideoPlayerViewState();
 }
 
 enum _Drag { none, scrub, brightness, volume }
+
+/// How much of a streamed TDLib file is on disk. TDLib downloads from the
+/// offset the player last asked for, so the useful part is the contiguous
+/// range from [rangeStart] to [rangeEnd] (fractions of the file).
+class StreamDownload {
+  const StreamDownload({
+    required this.downloaded,
+    required this.rangeStart,
+    required this.rangeEnd,
+    required this.complete,
+  });
+
+  factory StreamDownload.of(td.File f) {
+    final size = f.size != 0 ? f.size : f.expectedSize;
+    final l = f.local;
+    if (l.isDownloadingCompleted || size <= 0) {
+      return StreamDownload(downloaded: 1, rangeStart: 0, rangeEnd: 1, complete: l.isDownloadingCompleted);
+    }
+    double frac(int bytes) => (bytes / size).clamp(0.0, 1.0);
+    return StreamDownload(
+      downloaded: frac(l.downloadedSize),
+      rangeStart: frac(l.downloadOffset),
+      rangeEnd: frac(l.downloadOffset + l.downloadedPrefixSize),
+      complete: false,
+    );
+  }
+
+  /// Fraction of the whole file downloaded, in any ranges.
+  final double downloaded;
+  final double rangeStart;
+  final double rangeEnd;
+  final bool complete;
+
+  /// Where playback can run to without waiting, given the playhead at
+  /// [position] (a fraction): the end of the downloaded range holding it.
+  /// Byte offsets map to time linearly, which is close enough for a bar.
+  double bufferedAhead(double position) {
+    if (complete) return 1;
+    const slack = 0.01; // the container header and rounding
+    if (position + slack >= rangeStart && position <= rangeEnd) return rangeEnd;
+    return position;
+  }
+}
 
 class _VideoPlayerViewState extends State<VideoPlayerView> {
   late final VlcPlayerController _vlc = widget.isLocalFile
@@ -83,11 +133,23 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   double _scale = 1, _scaleStart = 1;
   String? _toast;
   Timer? _toastTimer;
+  StreamDownload? _download;
+  StreamSubscription<td.File>? _fileSub;
 
   @override
   void initState() {
     super.initState();
     _vlc.addListener(_onValue);
+    final fileId = widget.fileId;
+    if (fileId != null && !widget.isLocalFile) {
+      try {
+        _fileSub = context.read<FileStore>().watch(fileId).listen((f) {
+          if (mounted) setState(() => _download = StreamDownload.of(f));
+        });
+      } on ProviderNotFoundException {
+        // No file store (tests); the bar just shows playback.
+      }
+    }
     _scheduleHide();
     ScreenBrightness.instance.application.then((b) => _brightness = b).ignore();
     if (widget.muted) _volume = 0;
@@ -122,6 +184,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   void dispose() {
     _hideTimer?.cancel();
     _toastTimer?.cancel();
+    _fileSub?.cancel();
     _vlc.removeListener(_onValue);
     _vlc.dispose();
     ScreenBrightness.instance.resetApplicationScreenBrightness().ignore();
@@ -247,8 +310,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                     ),
                   ),
                 ),
-                if (v.isBuffering)
-                  const Center(child: CircularProgressIndicator(color: GlowColors.cyan, strokeWidth: 2.4)),
+                if (v.isBuffering) Center(child: _BufferingIndicator(percent: v.bufferPercent)),
                 if (_drag == _Drag.scrub)
                   Center(child: _Bubble('${_fmt(_scrubTarget)} / ${_fmt(v.duration)}')),
                 if (_toast != null) Align(alignment: const Alignment(0, -0.6), child: _Bubble(_toast!)),
@@ -260,6 +322,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                       ignoring: !_controlsVisible,
                       child: _Controls(
                         controller: _vlc,
+                        download: _download,
                         onPlayPause: _togglePlay,
                         onSeek: (d) {
                           _vlc.seekTo(d);
@@ -301,10 +364,47 @@ class _Bubble extends StatelessWidget {
   );
 }
 
+/// Spinner with libVLC's buffer fill (0–100) while playback waits for data.
+class _BufferingIndicator extends StatelessWidget {
+  const _BufferingIndicator({required this.percent});
+
+  final double percent;
+
+  @override
+  Widget build(BuildContext context) {
+    final known = percent > 0 && percent < 100;
+    return Semantics(
+      label: known ? 'Buffering ${percent.round()} percent' : 'Buffering',
+      child: SizedBox.square(
+        dimension: 56,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox.expand(
+              child: CircularProgressIndicator(
+                value: known ? percent / 100 : null,
+                color: GlowColors.cyan,
+                backgroundColor: known ? Colors.white24 : null,
+                strokeWidth: 2.4,
+              ),
+            ),
+            if (known)
+              Text(
+                '${percent.round()}%',
+                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _Controls extends StatelessWidget {
-  const _Controls({required this.controller, required this.onPlayPause, required this.onSeek});
+  const _Controls({required this.controller, required this.onPlayPause, required this.onSeek, this.download});
 
   final VlcPlayerController controller;
+  final StreamDownload? download;
   final VoidCallback onPlayPause;
   final ValueChanged<Duration> onSeek;
 
@@ -313,6 +413,8 @@ class _Controls extends StatelessWidget {
     final v = controller.value;
     final total = v.duration.inMilliseconds.toDouble();
     final pos = v.position.inMilliseconds.toDouble().clamp(0.0, total <= 0 ? 0.0 : total);
+    final dl = download;
+    final buffered = dl == null || total <= 0 ? null : dl.bufferedAhead(pos / total) * total;
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -350,7 +452,9 @@ class _Controls extends StatelessWidget {
                     child: Slider(
                       value: pos,
                       max: total <= 0 ? 1 : total,
+                      secondaryTrackValue: buffered,
                       activeColor: GlowColors.cyan,
+                      secondaryActiveColor: Colors.white54,
                       inactiveColor: Colors.white24,
                       onChanged: total <= 0 ? null : (x) => onSeek(Duration(milliseconds: x.round())),
                     ),
@@ -359,6 +463,15 @@ class _Controls extends StatelessWidget {
                     Display.duration(v.duration.inSeconds),
                     style: const TextStyle(color: Colors.white, fontSize: 12),
                   ),
+                  if (dl != null && !dl.complete)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Text(
+                        '↓ ${(dl.downloaded * 100).floor()}%',
+                        semanticsLabel: 'Downloaded ${(dl.downloaded * 100).floor()} percent',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                    ),
                   PopupMenuButton<double>(
                     tooltip: 'Playback speed',
                     icon: Text('${v.playbackSpeed}×', style: const TextStyle(color: Colors.white)),
