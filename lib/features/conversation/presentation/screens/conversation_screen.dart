@@ -29,6 +29,7 @@ import '../widgets/forward_sheet.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/message_menu.dart';
 import '../widgets/message_rows.dart';
+import '../../../../core/tdlib/td_errors.dart';
 import '../../../../core/widgets/delete_confirm.dart';
 import '../../../../core/telegram/widgets/animated_sticker.dart';
 import '../../../../core/gestures/swipe_actions.dart';
@@ -193,6 +194,20 @@ class _ConversationScreenState extends State<ConversationScreen> {
     }
   }
 
+  /// Reacts, telling the user when it couldn't (not allowed here, offline).
+  Future<void> _react(td.Message m, String emoji) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      if (!await _cubit.toggleReaction(m, emoji)) {
+        messenger.showSnackBar(SnackBar(content: Text('$emoji isn\'t allowed as a reaction in this chat')));
+      } else {
+        HapticFeedback.lightImpact();
+      }
+    } on TdException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
   /// Long-press starts (or extends) multi-select, like Telegram.
   void _onLongPress(td.Message m) {
     HapticFeedback.mediumImpact();
@@ -231,7 +246,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
     );
     if (!mounted || result == null) return;
     if (result.reaction != null) {
-      await _cubit.toggleReaction(m, result.reaction!);
+      await _react(m, result.reaction!);
       return;
     }
     final messenger = ScaffoldMessenger.of(context);
@@ -528,7 +543,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
         swipeEmoji: prefs.swipeEmoji,
         onSwipe: (side) => switch (prefs.messageSwipe(side)) {
           MessageSwipe.reply => _cubit.startReply(row.primary),
-          MessageSwipe.react => _cubit.toggleReaction(row.primary, prefs.swipeEmoji),
+          MessageSwipe.react => _react(row.primary, prefs.swipeEmoji),
           MessageSwipe.delete => _confirmAndDelete([for (final m in row.messages) m.id], chat),
           MessageSwipe.none => null,
         },
@@ -543,7 +558,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
           if (state.selecting) _cubit.toggleSelected(row.primary);
         },
         onReplyQuoteTap: _cubit.jumpTo,
-        onReaction: (emoji) => _cubit.toggleReaction(row.primary, emoji),
+        onReaction: (emoji) => _react(row.primary, emoji),
       ),
     };
   }

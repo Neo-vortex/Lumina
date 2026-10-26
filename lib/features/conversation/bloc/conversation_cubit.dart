@@ -404,15 +404,23 @@ class ConversationCubit extends Cubit<ConversationState> {
     await _refreshPinned();
   }
 
-  Future<void> toggleReaction(td.Message m, String emoji) async {
-    final reaction = td.ReactionTypeEmoji(emoji: emoji);
-    final chosen =
-        m.interactionInfo?.reactions?.reactions.any(
-          (r) =>
-              r.isChosen && r.type is td.ReactionTypeEmoji && (r.type as td.ReactionTypeEmoji).emoji == emoji,
-        ) ??
-        false;
-    await _repository.react(chatId, m.id, reaction, add: !chosen);
+  /// Adds or removes [emoji] as a reaction. Matches the chat's reactions
+  /// ignoring the emoji variation selector (Telegram's heart is a plain ❤,
+  /// keyboards send ❤️). False when the chat doesn't allow it.
+  Future<bool> toggleReaction(td.Message m, String emoji) async {
+    String plain(String e) => e.replaceAll('\uFE0F', '');
+    final mine = m.interactionInfo?.reactions?.reactions.where((r) => r.isChosen).map((r) => r.type);
+    for (final t in mine ?? const <td.ReactionType>[]) {
+      if (t is td.ReactionTypeEmoji && plain(t.emoji) == plain(emoji)) {
+        await _repository.react(chatId, m.id, t, add: false);
+        return true;
+      }
+    }
+    final allowed = await reactionChoices(m);
+    final match = allowed.where((a) => plain(a) == plain(emoji)).firstOrNull;
+    if (match == null) return false;
+    await _repository.react(chatId, m.id, td.ReactionTypeEmoji(emoji: match), add: true);
+    return true;
   }
 
   Future<List<String>> reactionChoices(td.Message m) async {
