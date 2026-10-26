@@ -15,6 +15,7 @@ import '../features/folders/presentation/screens/folder_qr_screen.dart';
 import '../features/calls/bloc/call_cubit.dart';
 import '../features/assistant/data/action_extractor.dart';
 import '../features/backgrounds/domain/chat_backdrop.dart';
+import '../features/backgrounds/presentation/background_picker_screen.dart';
 import '../features/backgrounds/presentation/chat_backdrop_view.dart';
 import '../features/media_panel/presentation/media_panel.dart';
 import '../features/assistant/presentation/action_sheet.dart';
@@ -91,7 +92,16 @@ class AppConversationExtensions extends ConversationExtensions {
   }
 
   @override
-  List<Widget> headerActions(BuildContext context, td.Chat chat) {
+  List<Widget> headerActions(BuildContext context, td.Chat chat) => [
+    ..._callActions(context, chat),
+    IconButton(
+      tooltip: 'Chat background',
+      icon: const Icon(Icons.wallpaper_rounded),
+      onPressed: () => Navigator.of(context).push(BackgroundPickerScreen.route(chat: chat)),
+    ),
+  ];
+
+  List<Widget> _callActions(BuildContext context, td.Chat chat) {
     final type = chat.type;
     if (type is! td.ChatTypePrivate) return const [];
     final me = switch (context.read<AuthBloc>().state.step) {

@@ -5,6 +5,7 @@ import '../../../../core/storage/app_preferences.dart';
 import '../../../../core/theme/glow_colors.dart';
 import '../../../../core/widgets/glow_sheet.dart';
 import '../../../conversation/data/messages_repository.dart';
+import '../../../backgrounds/presentation/background_picker_screen.dart';
 import '../screens/swipe_settings_screen.dart';
 import 'settings_section.dart';
 
@@ -71,6 +72,13 @@ class GestureSettings extends StatelessWidget {
         subtitle: const Text('What swiping left or right does on messages and chats'),
         trailing: const Icon(Icons.chevron_right_rounded),
         onTap: () => Navigator.of(context).push(SwipeSettingsScreen.route()),
+      ),
+      ListTile(
+        leading: const Icon(Icons.wallpaper_rounded, color: GlowColors.violet),
+        title: const Text('Default chat background'),
+        subtitle: const Text('For chats without their own background; blur and dim'),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: () => Navigator.of(context).push(BackgroundPickerScreen.route()),
       ),
     ],
   );
