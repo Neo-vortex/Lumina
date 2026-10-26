@@ -151,6 +151,11 @@ class AppPreferences {
   bool get hideProxySponsor => _bool('proxy.hideSponsor', false);
   set hideProxySponsor(bool v) => _set('proxy.hideSponsor', v);
 
+  /// Folder glow colours chosen on this device (JSON: folder id → colour id),
+  /// for accounts whose folder colours Telegram doesn't sync (non-Premium).
+  String get folderColorsJson => _string('folders.colors') ?? '{}';
+  set folderColorsJson(String v) => _set('folders.colors', v);
+
   /// Active outgoing live locations (JSON), resumed after process death.
   String get liveLocations => _string('live.shares') ?? '[]';
   set liveLocations(String v) => _set('live.shares', v);
