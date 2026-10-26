@@ -10,6 +10,9 @@ import '../core/storage/app_preferences.dart';
 import '../core/telegram/display.dart';
 import '../core/telegram/telegram_cache.dart';
 import '../core/theme/glow_colors.dart';
+import '../features/profile/presentation/user_profile_screen.dart';
+import '../features/folders/presentation/screens/folder_qr_screen.dart';
+import '../features/calls/bloc/call_cubit.dart';
 import '../features/assistant/data/action_extractor.dart';
 import '../features/assistant/presentation/action_sheet.dart';
 import '../features/assistant/presentation/writing_sheet.dart';
@@ -54,8 +57,35 @@ class AppConversationExtensions extends ConversationExtensions {
   final LiveLocationService liveLocations;
 
   @override
-  void openChatInfo(BuildContext context, td.Chat chat) =>
+  void openChatInfo(BuildContext context, td.Chat chat) {
+    final type = chat.type;
+    final userId = switch (type) {
+      td.ChatTypePrivate(:final userId) || td.ChatTypeSecret(:final userId) => userId,
+      _ => null,
+    };
+    if (userId == null) {
       Navigator.of(context).push(ChatInfoScreen.route(chat.id, openChat: flows.openChat));
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => UserProfileScreen(
+          userId: userId,
+          // The chat is right behind the profile.
+          onMessage: (_) => Navigator.of(context).maybePop(),
+          onCall: (id, {required video}) async {
+            final messenger = ScaffoldMessenger.of(context);
+            final error = await context.read<CallCubit>().startCall(id, video: video);
+            if (error != null) messenger.showSnackBar(SnackBar(content: Text(error)));
+          },
+          onOpenChat: (id) => flows.openChat(context, id),
+          onShowQr: (url, title) =>
+              Navigator.of(context)
+                  .push(FolderQrScreen.route(url: url, title: title, color: GlowColors.violet)),
+        ),
+      ),
+    );
+  }
 
   @override
   List<Widget> headerActions(BuildContext context, td.Chat chat) {

@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../features/profile/data/user_profile_repository.dart';
 import '../core/media/audio_playback.dart';
 import '../core/media/ffmpeg_service.dart';
 import '../core/media/tdlib_stream_server.dart';
@@ -75,6 +76,7 @@ final appNavigatorKey = GlobalKey<NavigatorState>();
 /// screen, compose menu and settings. Kept in one place so features stay
 /// independent of each other.
 List<RepositoryProvider<Object>> featureProviders() => [
+  RepositoryProvider<UserProfileRepository>(create: (c) => UserProfileRepository(c.read<TdClient>())),
   RepositoryProvider<FfmpegService>(create: (_) => FfmpegService()..purgeTemp().ignore()),
   RepositoryProvider<MediaSender>(create: (c) => MediaSender(c.read<FfmpegService>())),
   RepositoryProvider<AudioPlayback>(
