@@ -100,6 +100,27 @@ class ProxyConfig {
     enabled: enabled ?? this.enabled,
   );
 
+  static final _linkPattern = RegExp(
+    r'(?:tg://(?:proxy|socks)|https?://(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog)/(?:proxy|socks))'
+    r'''\?[^\s<>"']+''',
+    caseSensitive: false,
+  );
+
+  /// Sentence punctuation right after a link isn't part of it.
+  static final _trailingPunctuation = RegExp(r'[.,;:!?)\]]+$');
+
+  /// Every proxy link in [text] (a pasted list, a channel post, a QR code),
+  /// in order and without duplicates.
+  static List<ProxyConfig> parseLinks(String text) {
+    final seen = <String>{};
+    return [
+      for (final m in _linkPattern.allMatches(text))
+        if (parseLink(m[0]!.replaceFirst(_trailingPunctuation, '')) case final c?
+            when seen.add('${c.id}:${c.secret}:${c.username}'))
+          c,
+    ];
+  }
+
   /// Parses proxy share links:
   /// `tg://proxy?server=…&port=…&secret=…`, `https://t.me/proxy?…`,
   /// `tg://socks?server=…&port=…&user=…&pass=…`, `https://t.me/socks?…`.

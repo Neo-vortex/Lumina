@@ -62,6 +62,15 @@ class _ConnectionSettingsState extends State<ConnectionSettings> {
             title: const Text('Use proxy for calls'),
             subtitle: _loaded ? Text(ConnectionSettingsNotes.note(_active, on: prefs.callsUseProxy)) : null,
           ),
+          SwitchListTile(
+            value: prefs.hideProxySponsor,
+            onChanged: (v) => prefs.hideProxySponsor = v,
+            title: const Text('Hide proxy sponsor channel'),
+            subtitle: const Text(
+              'MTProto proxies can pin a channel to the top of your chats. When shown, it is labelled '
+              '“Proxy sponsor”.',
+            ),
+          ),
         ],
       ),
     );

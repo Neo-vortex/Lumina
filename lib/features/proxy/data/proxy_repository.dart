@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../core/storage/app_preferences.dart';
@@ -29,9 +30,23 @@ class ProxyRepository {
       if (u case td.UpdateAuthorizationState(
         authorizationState: td.AuthorizationStateWaitPhoneNumber() || td.AuthorizationStateReady(),
       )) {
-        unawaited(restoreIfMissing());
+        unawaited(restoreIfMissing().then((_) => _refreshActive()));
       }
     });
+  }
+
+  final _active = ValueNotifier<ProxyConfig?>(null);
+
+  /// The proxy in use, kept current as proxies are added, switched or removed.
+  ValueListenable<ProxyConfig?> get activeProxy => _active;
+
+  Future<void> _refreshActive([List<SavedProxy>? current]) async {
+    try {
+      current ??= await list();
+      _active.value = current.where((p) => p.config.enabled).firstOrNull?.config;
+    } on Exception {
+      // TDLib not ready; the next authorization update refreshes.
+    }
   }
 
   final TdClient _client;
@@ -71,6 +86,26 @@ class ProxyRepository {
     await _persist();
     return SavedProxy(p.id, ProxyConfig.fromTd(p)!);
   }
+
+  /// Adds the proxies not saved yet (from a pasted list or a QR code) and
+  /// returns how many were new. A single new proxy is switched on, as with
+  /// a tapped proxy link; several are left off for the user to pick.
+  Future<int> addAll(List<ProxyConfig> configs) async {
+    final existing = {for (final p in await list()) _key(p.config)};
+    final fresh = [
+      for (final c in configs)
+        if (existing.add(_key(c))) c,
+    ];
+    for (final c in fresh) {
+      await _client.invoke<td.AddedProxy>(
+        td.AddProxy(proxy: c.toTdProxy(), enable: fresh.length == 1, comment: ''),
+      );
+    }
+    if (fresh.isNotEmpty) await _persist();
+    return fresh.length;
+  }
+
+  static String _key(ProxyConfig c) => '${c.id}:${c.secret}:${c.username}';
 
   Future<void> edit(int id, ProxyConfig c) async {
     await _client.invoke<td.AddedProxy>(
@@ -128,6 +163,7 @@ class ProxyRepository {
 
   Future<void> _persist() async {
     final current = await list();
+    await _refreshActive(current);
     final json = [for (final p in current) p.config.toJson()];
     _prefs.proxiesJson = jsonEncode(json);
     for (final p in current) {
@@ -179,5 +215,8 @@ class ProxyRepository {
     }
   }
 
-  Future<void> dispose() async => _sub?.cancel();
+  Future<void> dispose() async {
+    await _sub?.cancel();
+    _active.dispose();
+  }
 }

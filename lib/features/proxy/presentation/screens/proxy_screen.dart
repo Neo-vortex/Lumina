@@ -7,6 +7,7 @@ import '../../../../core/widgets/glow_background.dart';
 import '../../data/proxy_config.dart';
 import '../../data/proxy_repository.dart';
 import '../widgets/proxy_form.dart';
+import 'proxy_scan_screen.dart';
 
 /// Proxy list (spec §5): toggles, active indicator, add/edit, test, share.
 class ProxyScreen extends StatefulWidget {
@@ -78,13 +79,27 @@ class _ProxyScreenState extends State<ProxyScreen> {
 
   Future<void> _paste() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
-    final config = ProxyConfig.parseLink(data?.text ?? '');
-    if (config == null) {
+    final found = ProxyConfig.parseLinks(data?.text ?? '');
+    if (found.isEmpty) {
       _snack('No proxy link in the clipboard');
       return;
     }
-    await _run(() => _repo.add(config));
+    await _import(found);
   }
+
+  Future<void> _scan() async {
+    final found = await ProxyScanScreen.scan(context);
+    if (found != null && mounted) await _import(found);
+  }
+
+  Future<void> _import(List<ProxyConfig> found) => _run(() async {
+    final added = await _repo.addAll(found);
+    _snack(switch (added) {
+      0 => found.length == 1 ? 'That proxy is already saved' : 'Those proxies are already saved',
+      1 => 'Proxy added',
+      _ => 'Added $added proxies. Tap one to use it',
+    });
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -95,7 +110,12 @@ class _ProxyScreenState extends State<ProxyScreen> {
         title: const Text('Proxy'),
         actions: [
           IconButton(
-            tooltip: 'Paste proxy link',
+            tooltip: 'Scan QR code',
+            icon: const Icon(Icons.qr_code_scanner_rounded),
+            onPressed: _scan,
+          ),
+          IconButton(
+            tooltip: 'Paste proxy links',
             icon: const Icon(Icons.content_paste_rounded),
             onPressed: _paste,
           ),
@@ -127,7 +147,8 @@ class _ProxyScreenState extends State<ProxyScreen> {
                     const Padding(
                       padding: EdgeInsets.all(24),
                       child: Text(
-                        'Add a SOCKS5, HTTP or MTProto proxy, or copy a t.me/proxy link and tap paste.',
+                        'Add a SOCKS5, HTTP or MTProto proxy, scan a proxy QR code, or copy t.me/proxy links '
+                        'and tap paste.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: GlowColors.textMuted),
                       ),

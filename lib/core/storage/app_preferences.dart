@@ -147,6 +147,10 @@ class AppPreferences {
   bool get callsUseProxy => _bool('calls.useProxy', false);
   set callsUseProxy(bool v) => _set('calls.useProxy', v);
 
+  /// Hide the channel an MTProto proxy promotes at the top of the chat list.
+  bool get hideProxySponsor => _bool('proxy.hideSponsor', false);
+  set hideProxySponsor(bool v) => _set('proxy.hideSponsor', v);
+
   /// Active outgoing live locations (JSON), resumed after process death.
   String get liveLocations => _string('live.shares') ?? '[]';
   set liveLocations(String v) => _set('live.shares', v);
