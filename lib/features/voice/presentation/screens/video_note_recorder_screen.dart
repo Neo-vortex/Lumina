@@ -48,7 +48,7 @@ class _VideoNoteRecorderScreenState extends State<VideoNoteRecorderScreen> {
         (c) => c.lensDirection == CameraLensDirection.front,
         orElse: () => cams.first,
       );
-      final cam = CameraController(front, ResolutionPreset.medium, enableAudio: true);
+      final cam = videoNoteCamera(front);
       await cam.initialize();
       if (!mounted) return;
       setState(() => _camera = cam);
@@ -216,3 +216,11 @@ class _VideoNoteRecorderScreenState extends State<VideoNoteRecorderScreen> {
     );
   }
 }
+
+/// CameraX binds video capture only when recording starts, and that rebind
+/// switches auto-exposure to the video stream's frame-rate range, so the
+/// picture darkened the moment recording began. A fixed rate set up front
+/// keeps preview and recording on the same exposure; 24 fps allows ~41 ms
+/// exposures, brighter indoors than 30.
+CameraController videoNoteCamera(CameraDescription camera) =>
+    CameraController(camera, ResolutionPreset.medium, enableAudio: true, fps: 24);
