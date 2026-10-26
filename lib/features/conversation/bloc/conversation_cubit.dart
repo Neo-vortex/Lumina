@@ -467,7 +467,9 @@ class ConversationCubit extends Cubit<ConversationState> {
         _replace(messageId, (m) => m.copyWith(editDate: editDate));
       case td.UpdateMessageInteractionInfo(chatId: final c, :final messageId, :final interactionInfo)
           when c == chatId && interactionInfo != null:
-        _replace(messageId, (m) => m.copyWith(interactionInfo: interactionInfo));
+        // View and reaction counts tick constantly on busy channels.
+        _pendingInfo[messageId] = interactionInfo;
+        _infoFlush ??= Timer(const Duration(milliseconds: 500), _flushInfo);
       case td.UpdateMessageIsPinned(chatId: final c, :final messageId, :final isPinned) when c == chatId:
         _replace(messageId, (m) => m.copyWith(isPinned: isPinned));
         unawaited(_refreshPinned());
@@ -492,8 +494,28 @@ class ConversationCubit extends Cubit<ConversationState> {
     if (index < 0) return;
     final next = [...state.messages];
     next[index] = change(next[index]);
-    next.sort((a, b) => b.id.compareTo(a.id));
+    // Only a sent message changes id (and so its place).
+    if (next[index].id != messageId) next.sort((a, b) => b.id.compareTo(a.id));
     emit(state.copyWith(messages: next));
+  }
+
+  final _pendingInfo = <int, td.MessageInteractionInfo>{};
+  Timer? _infoFlush;
+
+  void _flushInfo() {
+    _infoFlush = null;
+    if (isClosed || _pendingInfo.isEmpty) return;
+    final pending = Map.of(_pendingInfo);
+    _pendingInfo.clear();
+    if (!state.messages.any((m) => pending.containsKey(m.id))) return;
+    emit(
+      state.copyWith(
+        messages: [
+          for (final m in state.messages)
+            if (pending[m.id] case final info?) m.copyWith(interactionInfo: info) else m,
+        ],
+      ),
+    );
   }
 
   bool _showsUser(int userId) {
@@ -536,6 +558,7 @@ class ConversationCubit extends Cubit<ConversationState> {
   Future<void> close() async {
     _viewDebounce?.cancel();
     _highlightTimer?.cancel();
+    _infoFlush?.cancel();
     await _updates.cancel();
     await _cacheEvents.cancel();
     _repository.closeChat(chatId).ignore();
