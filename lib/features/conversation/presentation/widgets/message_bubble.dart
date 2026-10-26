@@ -149,6 +149,8 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
         ? Display.senderName(cache, m.senderId)
         : null;
     final media = isMediaContent(m.content);
+    // Round videos stand alone, like Telegram: just the circle, no bubble.
+    final bare = m.content is td.MessageVideoNote;
 
     final bubble = AnimatedBuilder(
       animation: _bloom,
@@ -159,29 +161,35 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
         final dragGlow = (_drag / _replyThreshold).clamp(0.0, 1.0);
         return Container(
           constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * (media ? 0.78 : 0.8)),
-          decoration: BoxDecoration(
-            gradient: outgoing
-                ? GlowColors.outgoing
-                : LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color.alphaBlend(GlowColors.cyan.withValues(alpha: 0.16), GlowColors.surface),
-                      Color.alphaBlend(GlowColors.teal.withValues(alpha: 0.10), GlowColors.surface),
-                    ],
+          decoration: bare
+              ? BoxDecoration(
+                  borderRadius: radius,
+                  boxShadow: [if (widget.highlighted) ...glow(GlowColors.violet, intensity: 0.9)],
+                )
+              : BoxDecoration(
+                  gradient: outgoing
+                      ? GlowColors.outgoing
+                      : LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color.alphaBlend(GlowColors.cyan.withValues(alpha: 0.16), GlowColors.surface),
+                            Color.alphaBlend(GlowColors.teal.withValues(alpha: 0.10), GlowColors.surface),
+                          ],
+                        ),
+                  borderRadius: radius,
+                  border: Border.all(
+                    color: edgeColor,
+                    width: delivery == Delivery.read || widget.highlighted ? 1.4 : 1,
                   ),
-            borderRadius: radius,
-            border: Border.all(
-              color: edgeColor,
-              width: delivery == Delivery.read || widget.highlighted ? 1.4 : 1,
-            ),
-            boxShadow: [
-              if (delivery == Delivery.read && outgoing) ...glow(GlowColors.cyan, intensity: 0.25),
-              if (widget.highlighted) ...glow(GlowColors.violet, intensity: 0.9),
-              if (bloom > 0) ...glow(GlowColors.amber, intensity: bloom),
-              if (dragGlow > 0) ...glow(outgoing ? GlowColors.amber : GlowColors.cyan, intensity: dragGlow),
-            ],
-          ),
+                  boxShadow: [
+                    if (delivery == Delivery.read && outgoing) ...glow(GlowColors.cyan, intensity: 0.25),
+                    if (widget.highlighted) ...glow(GlowColors.violet, intensity: 0.9),
+                    if (bloom > 0) ...glow(GlowColors.amber, intensity: bloom),
+                    if (dragGlow > 0)
+                      ...glow(outgoing ? GlowColors.amber : GlowColors.cyan, intensity: dragGlow),
+                  ],
+                ),
           child: child,
         );
       },

@@ -35,6 +35,7 @@ class VideoPlayerView extends StatefulWidget {
     this.onProgress,
     this.onControlsVisibilityChanged,
     this.fileId,
+    this.seek,
   });
 
   final String source;
@@ -54,9 +55,13 @@ class VideoPlayerView extends StatefulWidget {
   /// Controls shown or hidden (tap, auto-hide), so the host can show or
   /// hide its own overlay (title, caption) with them.
   final ValueChanged<bool>? onControlsVisibilityChanged;
+
   /// The TDLib file behind a streamed [source]; its download progress is
   /// drawn on the seek bar.
   final int? fileId;
+
+  /// Seek requests from a caller drawing its own scrubber (round videos).
+  final ValueNotifier<Duration?>? seek;
 
   @override
   State<VideoPlayerView> createState() => _VideoPlayerViewState();
@@ -140,6 +145,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   void initState() {
     super.initState();
     _vlc.addListener(_onValue);
+    widget.seek?.addListener(_onSeek);
     final fileId = widget.fileId;
     if (fileId != null && !widget.isLocalFile) {
       try {
@@ -156,6 +162,11 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   }
 
   var _configured = false;
+
+  void _onSeek() {
+    final to = widget.seek?.value;
+    if (to != null && _vlc.value.isInitialized) _vlc.seekTo(to);
+  }
 
   void _onValue() {
     final v = _vlc.value;
@@ -186,6 +197,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
     _toastTimer?.cancel();
     _fileSub?.cancel();
     _vlc.removeListener(_onValue);
+    widget.seek?.removeListener(_onSeek);
     _vlc.dispose();
     ScreenBrightness.instance.resetApplicationScreenBrightness().ignore();
     super.dispose();
