@@ -446,9 +446,13 @@ chat info, stories, storage, the attach hub, polls, music, send options, live lo
   `build`, `test`, `drive` and `attach` (other commands pass through).
   `LUMINA_CREDENTIALS=<path>` points it at another file. Never commit or
   print the file's contents.
-- Run `tool/fetch_tdlib.sh` once (and after each TDLib pin change) before
-  `tool/flutter.sh run`: it puts the CI-built `libtdjson.so` into the app's
-  git-ignored jniLibs.
+- `libtdjson.so` (arm64) is committed via Git LFS in
+  `android/app/src/main/jniLibs/arm64-v8a/`, built from the pinned commit
+  with `tool/build_tdlib.sh arm64-v8a`. After a TDLib pin change, rebuild
+  and commit it. The Gradle task `checkTdlib` (runs before `preBuild`)
+  fails the build when it is missing or not the pinned version for a
+  targeted ABI, so local builds use `--target-platform android-arm64`
+  (x86_64 isn't committed; CI still fetches both).
 - ABI filter: arm64-v8a and x86_64.
 - **Licensing:** Lumina is GPL-3.0-or-later (DECISIONS D14). ffmpeg stays
   the LGPL `ffmpeg_kit_flutter_new_full` build (the GPL codecs add nothing). H.264 and

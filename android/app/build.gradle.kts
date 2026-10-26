@@ -89,3 +89,30 @@ dependencies {
     implementation("androidx.core:core:1.16.0")
     implementation("androidx.work:work-runtime:2.10.5")
 }
+
+// TDLib must be in the APK: without it the app starts but never connects.
+// Fails the build when libtdjson.so is missing for a targeted ABI or isn't
+// the pinned release (packages/lumina_tdlib/schema/VERSION).
+val checkTdlib by tasks.registering {
+    val root = rootProject.projectDir.parentFile
+    val version = File(root, "packages/lumina_tdlib/schema/VERSION").readLines()
+        .first { it.startsWith("version=") }.removePrefix("version=")
+    val abis = when (val target = findProperty("target-platform") as String?) {
+        null -> listOf("arm64-v8a", "x86_64")
+        else -> target.split(",").mapNotNull {
+            mapOf("android-arm64" to "arm64-v8a", "android-x64" to "x86_64", "android-arm" to "armeabi-v7a")[it]
+        }
+    }
+    val libs = abis.map { File(projectDir, "src/main/jniLibs/$it/libtdjson.so") }
+    doLast {
+        for (lib in libs) {
+            if (!lib.isFile) {
+                throw GradleException("$lib is missing: run tool/build_tdlib.sh ${lib.parentFile.name} and copy it there")
+            }
+            if (!String(lib.readBytes(), Charsets.ISO_8859_1).contains(version)) {
+                throw GradleException("$lib is not TDLib $version: rebuild it with tool/build_tdlib.sh")
+            }
+        }
+    }
+}
+tasks.named("preBuild") { dependsOn(checkTdlib) }
