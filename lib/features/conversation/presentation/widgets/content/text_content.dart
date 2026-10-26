@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
+import '../../../../../core/telegram/widgets/animated_sticker.dart';
 import '../../../../../core/storage/app_preferences.dart';
 import '../link_preview_card.dart';
 
@@ -77,10 +78,13 @@ class TextContent extends StatelessWidget {
 }
 
 /// A lone emoji, shown large without a bubble feel.
+/// A single emoji sent on its own: big and animated (Telegram's animated
+/// emoji), standing alone without a bubble.
 class BigEmojiContent extends StatelessWidget {
-  const BigEmojiContent({super.key, required this.emoji, required this.footer});
+  const BigEmojiContent({super.key, required this.emoji, required this.footer, this.sticker});
 
   final String emoji;
+  final td.Sticker? sticker;
   final Widget footer;
 
   @override
@@ -91,8 +95,14 @@ class BigEmojiContent extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 52)),
-          footer,
+          if (sticker case final s?)
+            AnimatedSticker(sticker: s, size: 140)
+          else
+            Text(emoji, style: const TextStyle(fontSize: 52)),
+          DecoratedBox(
+            decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(10)),
+            child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), child: footer),
+          ),
         ],
       ),
     );

@@ -165,7 +165,7 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
         : null;
     final media = isMediaContent(m.content);
     // Round videos stand alone, like Telegram: just the circle, no bubble.
-    final bare = m.content is td.MessageVideoNote;
+    final bare = m.content is td.MessageVideoNote || m.content is td.MessageAnimatedEmoji;
 
     final bubble = AnimatedBuilder(
       animation: _bloom,
