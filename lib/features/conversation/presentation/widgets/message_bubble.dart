@@ -66,10 +66,15 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
 
   static const _replyThreshold = 64.0;
 
+  bool _entered = false;
+
+  // Here, not initState: reduced motion comes from MediaQuery.
   @override
-  void initState() {
-    super.initState();
-    if (widget.animateIn) {
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_entered) return;
+    _entered = true;
+    if (widget.animateIn && Motion.ambientEnabled(context)) {
       _entrance.forward();
       if (widget.row.primary.isOutgoing) _bloom.forward();
     } else {
