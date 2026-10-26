@@ -12,6 +12,7 @@ import '../../../../core/storage/app_preferences.dart';
 import '../../../../core/telegram/display.dart';
 import '../../../../core/telegram/file_store.dart';
 import '../../../../core/theme/glow_colors.dart';
+import 'video_dock.dart';
 
 /// libVLC playback with the spec's gestures (§7.1):
 /// * double-tap left/right: −/+10 s
@@ -162,6 +163,17 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   }
 
   var _configured = false;
+  var _landscape = false;
+
+  void _toggleFullscreen() {
+    _landscape = !_landscape;
+    SystemChrome.setPreferredOrientations(
+      _landscape
+          ? const [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
+          : const [DeviceOrientation.portraitUp],
+    );
+    _scheduleHide();
+  }
 
   void _onSeek() {
     final to = widget.seek?.value;
@@ -200,6 +212,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
     widget.seek?.removeListener(_onSeek);
     _vlc.dispose();
     ScreenBrightness.instance.resetApplicationScreenBrightness().ignore();
+    if (_landscape) SystemChrome.setPreferredOrientations(const [DeviceOrientation.portraitUp]);
     super.dispose();
   }
 
@@ -332,14 +345,41 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                     duration: const Duration(milliseconds: 200),
                     child: IgnorePointer(
                       ignoring: !_controlsVisible,
-                      child: _Controls(
-                        controller: _vlc,
-                        download: _download,
-                        onPlayPause: _togglePlay,
+                      child: VideoDock(
+                        position: v.position,
+                        duration: v.duration,
+                        playing: v.isPlaying,
+                        speed: v.playbackSpeed,
+                        muted: _volume == 0,
+                        buffered: _download == null || v.duration == Duration.zero
+                            ? null
+                            : v.duration *
+                                  _download!.bufferedAhead(
+                                    v.position.inMilliseconds / v.duration.inMilliseconds,
+                                  ),
+                        downloaded: _download == null || _download!.complete ? null : _download!.downloaded,
+                        onPlayPause: () {
+                          _togglePlay();
+                          _scheduleHide();
+                        },
                         onSeek: (d) {
                           _vlc.seekTo(d);
                           _scheduleHide();
                         },
+                        onSeekBy: (d) {
+                          _seekBy(d);
+                          _scheduleHide();
+                        },
+                        onSpeed: (s) {
+                          _vlc.setPlaybackSpeed(s);
+                          _scheduleHide();
+                        },
+                        onMute: () {
+                          setState(() => _volume = _volume == 0 ? 100 : 0);
+                          _vlc.setVolume(_volume);
+                          _scheduleHide();
+                        },
+                        onFullscreen: _toggleFullscreen,
                       ),
                     ),
                   ),
@@ -407,97 +447,6 @@ class _BufferingIndicator extends StatelessWidget {
               ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _Controls extends StatelessWidget {
-  const _Controls({required this.controller, required this.onPlayPause, required this.onSeek, this.download});
-
-  final VlcPlayerController controller;
-  final StreamDownload? download;
-  final VoidCallback onPlayPause;
-  final ValueChanged<Duration> onSeek;
-
-  @override
-  Widget build(BuildContext context) {
-    final v = controller.value;
-    final total = v.duration.inMilliseconds.toDouble();
-    final pos = v.position.inMilliseconds.toDouble().clamp(0.0, total <= 0 ? 0.0 : total);
-    final dl = download;
-    final buffered = dl == null || total <= 0 ? null : dl.bufferedAhead(pos / total) * total;
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.center,
-          colors: [Color(0xCC000000), Color(0x00000000)],
-        ),
-      ),
-      child: Stack(
-        children: [
-          Center(
-            child: IconButton(
-              iconSize: 64,
-              tooltip: v.isPlaying ? 'Pause' : 'Play',
-              onPressed: onPlayPause,
-              icon: Icon(
-                v.isPlaying ? Icons.pause_circle_filled_rounded : Icons.play_circle_fill_rounded,
-                color: Colors.white,
-              ),
-            ),
-          ),
-          Positioned(
-            left: 12,
-            right: 12,
-            bottom: 12,
-            child: SafeArea(
-              top: false,
-              child: Row(
-                children: [
-                  Text(
-                    Display.duration(v.position.inSeconds),
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                  ),
-                  Expanded(
-                    child: Slider(
-                      value: pos,
-                      max: total <= 0 ? 1 : total,
-                      secondaryTrackValue: buffered,
-                      activeColor: GlowColors.cyan,
-                      secondaryActiveColor: Colors.white54,
-                      inactiveColor: Colors.white24,
-                      onChanged: total <= 0 ? null : (x) => onSeek(Duration(milliseconds: x.round())),
-                    ),
-                  ),
-                  Text(
-                    Display.duration(v.duration.inSeconds),
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                  ),
-                  if (dl != null && !dl.complete)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: Text(
-                        '↓ ${(dl.downloaded * 100).floor()}%',
-                        semanticsLabel: 'Downloaded ${(dl.downloaded * 100).floor()} percent',
-                        style: const TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
-                    ),
-                  PopupMenuButton<double>(
-                    tooltip: 'Playback speed',
-                    icon: Text('${v.playbackSpeed}×', style: const TextStyle(color: Colors.white)),
-                    onSelected: controller.setPlaybackSpeed,
-                    itemBuilder: (_) => [
-                      for (final s in const [0.5, 0.75, 1.0, 1.25, 1.5, 2.0])
-                        PopupMenuItem(value: s, child: Text('$s×')),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
