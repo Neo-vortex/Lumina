@@ -496,11 +496,24 @@ class ConversationCubit extends Cubit<ConversationState> {
     emit(state.copyWith(messages: next));
   }
 
+  bool _showsUser(int userId) {
+    final chat = _cache.chats[chatId];
+    if (chat != null && _cache.peerUser(chat)?.id == userId) return true;
+    return state.messages.any(
+      (m) => switch (m.senderId) {
+        td.MessageSenderUser(userId: final id) => id == userId,
+        _ => false,
+      },
+    );
+  }
+
   void _onCacheEvent(CacheEvent e) {
     final relevant = switch (e) {
       ChatChanged(:final chatId) => chatId == this.chatId,
       TypingChanged(:final chatId) => chatId == this.chatId,
-      UserChanged() => true,
+      // Status ticks for every contact arrive constantly; only users the
+      // screen shows (the peer, loaded senders) matter.
+      UserChanged(:final userId) => _showsUser(userId),
       // Membership and rights (joining, leaving, being promoted) decide
       // whether the composer or the bottom bar shows.
       GroupChanged(:final basicGroupId, :final supergroupId) => switch (_cache.chats[chatId]?.type) {
