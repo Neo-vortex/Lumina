@@ -20,6 +20,7 @@ class TdFileImage extends StatefulWidget {
     this.priority = 8,
     this.autoDownload = true,
     this.semanticLabel,
+    this.fullResolution = false,
   });
 
   final td.File file;
@@ -29,17 +30,23 @@ class TdFileImage extends StatefulWidget {
   final bool autoDownload;
   final String? semanticLabel;
 
+  /// Decode every pixel (the zoomable viewer). Otherwise the image decodes
+  /// at its laid-out size, which keeps big photos out of the image cache.
+  final bool fullResolution;
+
   @override
   State<TdFileImage> createState() => _TdFileImageState();
 }
 
 class _TdFileImageState extends State<TdFileImage> {
   late FileStore _files;
+  Stream<td.File>? _stream;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _files = context.read<FileStore>();
+    _stream ??= _files.watch(widget.file.id);
     _files.remember(_files[widget.file.id] ?? widget.file);
     _maybeDownload();
   }
@@ -47,7 +54,10 @@ class _TdFileImageState extends State<TdFileImage> {
   @override
   void didUpdateWidget(TdFileImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.file.id != widget.file.id) _maybeDownload();
+    if (oldWidget.file.id != widget.file.id) {
+      _stream = _files.watch(widget.file.id);
+      _maybeDownload();
+    }
   }
 
   void _maybeDownload() {
@@ -63,7 +73,7 @@ class _TdFileImageState extends State<TdFileImage> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<td.File>(
-      stream: _files.watch(widget.file.id),
+      stream: _stream,
       initialData: _files[widget.file.id] ?? widget.file,
       builder: (context, snapshot) {
         final f = snapshot.data!;
@@ -82,13 +92,27 @@ class _TdFileImageState extends State<TdFileImage> {
             child: ImageFiltered(imageFilter: _blur, child: placeholder),
           );
         }
-        return Image.file(
+        Widget image(int? cacheWidth) => Image.file(
           File(f.local.path),
           fit: widget.fit,
+          cacheWidth: cacheWidth,
           gaplessPlayback: true,
           semanticLabel: widget.semanticLabel,
           frameBuilder: (context, child, frame, sync) => sync || frame != null ? child : placeholder,
           errorBuilder: (_, _, _) => placeholder,
+        );
+        if (widget.fullResolution) return image(null);
+        return LayoutBuilder(
+          builder: (context, box) {
+            final side = switch (widget.fit) {
+              BoxFit.contain || BoxFit.fitWidth || BoxFit.scaleDown => box.maxWidth,
+              _ when !box.maxHeight.isFinite => box.maxWidth,
+              _ when !box.maxWidth.isFinite => box.maxHeight,
+              _ => box.maxWidth > box.maxHeight ? box.maxWidth : box.maxHeight,
+            };
+            if (!side.isFinite) return image(null);
+            return image((side * MediaQuery.devicePixelRatioOf(context)).round());
+          },
         );
       },
     );

@@ -220,6 +220,7 @@ class _Page extends StatelessWidget {
                     priority: 32,
                     placeholderBytes: Display.minithumbnail(photo.minithumbnail),
                     semanticLabel: 'Photo',
+                    fullResolution: true,
                   ),
                 ),
               ),
