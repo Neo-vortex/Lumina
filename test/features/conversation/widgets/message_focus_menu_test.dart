@@ -105,4 +105,11 @@ void main() {
         .toList();
     expect(shown.take(3), ['❤', '👍', '🔥']);
   });
+
+  testWidgets('the lifted bubble sits on Material (no yellow underline) over a blurred chat', (tester) async {
+    await open(tester);
+    final bubble = find.text('the bubble');
+    expect(find.ancestor(of: bubble, matching: find.byType(Material)), findsWidgets);
+    expect(find.byType(BackdropFilter), findsOneWidget);
+  });
 }

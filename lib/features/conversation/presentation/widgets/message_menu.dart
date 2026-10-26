@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lumina_tdlib/api.dart' as td;
@@ -148,49 +150,64 @@ class _FocusMenuState extends State<_FocusMenu> {
       ),
     );
     final curve = CurvedAnimation(parent: widget.animation, curve: Curves.easeOutCubic);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => Navigator.pop(context),
-      child: Stack(
-        children: [
-          Positioned(
-            top: top,
-            left: 12,
-            right: 12,
-            child: GestureDetector(
-              onTap: () {},
-              child: FadeTransition(
-                opacity: curve,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _reactionPill(),
-                    const SizedBox(height: 8),
-                    if (widget.bubble != null)
-                      Align(
-                        alignment: anchor.center.dx > screen.width / 2
-                            ? Alignment.centerRight
-                            : Alignment.centerLeft,
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(maxHeight: bubbleH + 24, maxWidth: anchor.width + 24),
-                          child: ScaleTransition(
-                            scale: Tween(begin: 0.96, end: 1.0).animate(curve),
-                            // Long bubbles are clipped to the space left, not overflowed.
-                            child: SingleChildScrollView(
-                              physics: const NeverScrollableScrollPhysics(),
-                              child: IgnorePointer(child: widget.bubble),
-                            ),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    _actions(),
-                  ],
+    // Material: without it the lifted bubble's text fell back to Flutter's
+    // yellow-underlined "no Material" style.
+    return Material(
+      type: MaterialType.transparency,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => Navigator.pop(context),
+        child: Stack(
+          children: [
+            // The chat softly blurred behind the menu (only while it's open).
+            Positioned.fill(
+              child: AnimatedBuilder(
+                animation: curve,
+                builder: (context, _) => BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 6 * curve.value, sigmaY: 6 * curve.value),
+                  child: const SizedBox.expand(),
                 ),
               ),
             ),
-          ),
-        ],
+            Positioned(
+              top: top,
+              left: 12,
+              right: 12,
+              child: GestureDetector(
+                onTap: () {},
+                child: FadeTransition(
+                  opacity: curve,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _reactionPill(),
+                      const SizedBox(height: 8),
+                      if (widget.bubble != null)
+                        Align(
+                          alignment: anchor.center.dx > screen.width / 2
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(maxHeight: bubbleH + 24, maxWidth: anchor.width + 24),
+                            child: ScaleTransition(
+                              scale: Tween(begin: 0.96, end: 1.0).animate(curve),
+                              // Long bubbles are clipped to the space left, not overflowed.
+                              child: SingleChildScrollView(
+                                physics: const NeverScrollableScrollPhysics(),
+                                child: IgnorePointer(child: widget.bubble),
+                              ),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 8),
+                      _actions(),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
