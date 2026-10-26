@@ -171,6 +171,42 @@ class MessagesRepository {
     );
   }
 
+  /// Edits [message]: its text, or its caption for media (photos, videos,
+  /// files, music, voice). TDLib rejects editMessageText on media.
+  Future<void> edit(
+    td.Message message,
+    String text, {
+    List<td.TextEntity> entities = const [],
+    td.LinkPreviewOptions? linkPreviewOptions,
+  }) async {
+    final above = switch (message.content) {
+      td.MessageText() => null,
+      td.MessagePhoto(:final showCaptionAboveMedia) ||
+      td.MessageVideo(:final showCaptionAboveMedia) ||
+      td.MessageAnimation(:final showCaptionAboveMedia) => showCaptionAboveMedia,
+      _ => false,
+    };
+    if (above == null) {
+      await editText(
+        message.chatId,
+        message.id,
+        text,
+        entities: entities,
+        linkPreviewOptions: linkPreviewOptions,
+      );
+      return;
+    }
+    final caption = await _format(text, entities);
+    await _client.invoke<td.Message>(
+      td.EditMessageCaption(
+        chatId: message.chatId,
+        messageId: message.id,
+        caption: caption,
+        showCaptionAboveMedia: above,
+      ),
+    );
+  }
+
   /// [forEveryone] = revoke for all participants when allowed.
   Future<void> delete(int chatId, List<int> messageIds, {required bool forEveryone}) =>
       _client.invoke<td.Ok>(td.DeleteMessages(chatId: chatId, messageIds: messageIds, revoke: forEveryone));

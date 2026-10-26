@@ -278,18 +278,13 @@ class ConversationCubit extends Cubit<ConversationState> {
     td.LinkPreviewOptions? linkPreview,
   }) async {
     final f = EntityEdit.trim(text, entities);
-    if (f.text.isEmpty) return null;
     final editing = state.editing;
+    // An empty edit is allowed only to remove a media caption.
+    if (f.text.isEmpty && (editing == null || editing.content is td.MessageText)) return null;
     final replyTo = state.replyTo;
     try {
       if (editing != null) {
-        await _repository.editText(
-          chatId,
-          editing.id,
-          f.text,
-          entities: f.entities,
-          linkPreviewOptions: linkPreview,
-        );
+        await _repository.edit(editing, f.text, entities: f.entities, linkPreviewOptions: linkPreview);
       } else {
         if (state.hasNewer) await _loadLatest(scroll: true);
         await _repository.sendText(
