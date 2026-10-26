@@ -6,6 +6,7 @@ import 'package:lumina_tdlib/api.dart' as td;
 import 'package:intl/intl.dart';
 
 import '../../../../core/telegram/display.dart';
+import '../../../../core/gestures/swipe_actions.dart';
 import '../../../../core/telegram/telegram_cache.dart';
 import '../../../../core/telegram/widgets/chat_avatar.dart';
 import '../../../../core/theme/glow_colors.dart';
@@ -33,7 +34,10 @@ class MessageBubble extends StatefulWidget {
     required this.highlighted,
     required this.selected,
     required this.selecting,
-    required this.onReply,
+    this.swipeLeft = MessageSwipe.reply,
+    this.swipeRight = MessageSwipe.none,
+    this.swipeEmoji = '❤️',
+    required this.onSwipe,
     required this.onLongPress,
     required this.onTap,
     required this.onReplyQuoteTap,
@@ -48,7 +52,12 @@ class MessageBubble extends StatefulWidget {
   final bool highlighted;
   final bool selected;
   final bool selecting;
-  final VoidCallback onReply;
+
+  /// What swiping toward each edge does (Settings → Swipe gestures).
+  final MessageSwipe swipeLeft;
+  final MessageSwipe swipeRight;
+  final String swipeEmoji;
+  final ValueChanged<SwipeSide> onSwipe;
   final VoidCallback onLongPress;
   final VoidCallback onTap;
   final void Function(int messageId) onReplyQuoteTap;
@@ -158,7 +167,7 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
         final bloom = ambient
             ? Curves.easeOut.transform(1 - _bloom.value) * (_bloom.isAnimating ? 1 : 0)
             : 0.0;
-        final dragGlow = (_drag / _replyThreshold).clamp(0.0, 1.0);
+        final dragGlow = (_drag.abs() / _replyThreshold).clamp(0.0, 1.0);
         return Container(
           constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * (media ? 0.78 : 0.8)),
           decoration: bare
@@ -283,7 +292,9 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
       ),
     );
 
-    // Swiping a bubble toward the middle of the screen replies to it.
+    // Each direction runs its configured action; _drag is signed, positive
+    // toward the right edge.
+    final action = _drag >= 0 ? widget.swipeRight : widget.swipeLeft;
     final swipe = GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: widget.onTap,
@@ -291,19 +302,24 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
       onHorizontalDragUpdate: widget.selecting
           ? null
           : (d) {
-              final delta = outgoing ? -d.delta.dx : d.delta.dx;
-              setState(() => _drag = (_drag + delta).clamp(0.0, _replyThreshold * 1.4));
-              if (!_crossed && _drag >= _replyThreshold) {
+              const max = _replyThreshold * 1.4;
+              final lo = widget.swipeLeft == MessageSwipe.none ? 0.0 : -max;
+              final hi = widget.swipeRight == MessageSwipe.none ? 0.0 : max;
+              setState(() => _drag = (_drag + d.delta.dx).clamp(lo, hi));
+              final past = _drag.abs() >= _replyThreshold;
+              if (!_crossed && past) {
                 _crossed = true;
                 HapticFeedback.selectionClick();
-              } else if (_crossed && _drag < _replyThreshold) {
+              } else if (_crossed && !past) {
                 _crossed = false;
               }
             },
       onHorizontalDragEnd: widget.selecting
           ? null
           : (_) {
-              if (_drag >= _replyThreshold) widget.onReply();
+              if (_drag.abs() >= _replyThreshold) {
+                widget.onSwipe(_drag > 0 ? SwipeSide.right : SwipeSide.left);
+              }
               setState(() {
                 _drag = 0;
                 _crossed = false;
@@ -312,20 +328,29 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
       child: AnimatedContainer(
         duration: _drag == 0 ? Motion.standard : Duration.zero,
         curve: Motion.move,
-        transform: Matrix4.translationValues(outgoing ? -_drag * 0.6 : _drag * 0.6, 0, 0),
+        transform: Matrix4.translationValues(_drag * 0.6, 0, 0),
         color: widget.selected ? GlowColors.violet.withValues(alpha: 0.12) : Colors.transparent,
         child: Stack(
           children: [
             rowWidget,
-            if (_drag > 8)
+            if (_drag.abs() > 8)
               Positioned.fill(
                 child: Align(
-                  alignment: outgoing ? Alignment.centerRight : Alignment.centerLeft,
+                  // The icon shows on the side the bubble moved away from.
+                  alignment: _drag > 0 ? Alignment.centerLeft : Alignment.centerRight,
                   child: Opacity(
-                    opacity: (_drag / _replyThreshold).clamp(0.0, 1.0),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 4),
-                      child: Icon(Icons.reply_rounded, color: GlowColors.cyan),
+                    opacity: (_drag.abs() / _replyThreshold).clamp(0.0, 1.0),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: switch (action) {
+                        MessageSwipe.reply => const Icon(Icons.reply_rounded, color: GlowColors.cyan),
+                        MessageSwipe.react => Text(widget.swipeEmoji, style: const TextStyle(fontSize: 22)),
+                        MessageSwipe.delete => const Icon(
+                          Icons.delete_outline_rounded,
+                          color: GlowColors.coral,
+                        ),
+                        MessageSwipe.none => const SizedBox.shrink(),
+                      },
                     ),
                   ),
                 ),
@@ -339,7 +364,19 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
       container: true,
       label: _semanticLabel(cache, m, delivery, outgoing),
       onLongPressHint: 'message actions',
-      customSemanticsActions: {const CustomSemanticsAction(label: 'Reply'): widget.onReply},
+      customSemanticsActions: {
+        for (final (side, a) in [(SwipeSide.left, widget.swipeLeft), (SwipeSide.right, widget.swipeRight)])
+          if (a != MessageSwipe.none)
+            CustomSemanticsAction(
+              label: switch (a) {
+                MessageSwipe.reply => 'Reply',
+                MessageSwipe.react => 'React ${widget.swipeEmoji}',
+                MessageSwipe.delete => 'Delete',
+                MessageSwipe.none => '',
+              },
+            ): () =>
+                widget.onSwipe(side),
+      },
       child: _animates
           ? FadeTransition(
               opacity: _entrance,

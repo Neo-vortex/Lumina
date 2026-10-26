@@ -29,6 +29,8 @@ import '../widgets/forward_sheet.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/message_menu.dart';
 import '../widgets/message_rows.dart';
+import '../../../../core/widgets/delete_confirm.dart';
+import '../../../../core/gestures/swipe_actions.dart';
 import '../widgets/pinned_banner.dart';
 import '../widgets/sponsored_card.dart';
 import 'chat_search_screen.dart';
@@ -243,10 +245,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
           final link = await context.read<MessagesRepository>().link(m.chatId, m.id);
           await Clipboard.setData(ClipboardData(text: link));
           messenger.showSnackBar(const SnackBar(content: Text('Link copied')));
-        case MessageAction.deleteForMe:
-          await _cubit.delete([m.id], forEveryone: false);
-        case MessageAction.deleteForAll:
-          await _cubit.delete([m.id], forEveryone: true);
+        case MessageAction.delete:
+          await _confirmAndDelete([m.id], chat);
         case MessageAction.aiAction || MessageAction.transcribe:
           if (mounted) await extensions.onMenuAction(context, result.action!, m);
       }
@@ -255,33 +255,32 @@ class _ConversationScreenState extends State<ConversationScreen> {
     }
   }
 
-  Future<void> _deleteSelected(td.Chat chat) async {
-    final ids = _cubit.state.selected.toList();
-    final forAll = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: GlowColors.surfaceHigh,
-        title: Text('Delete ${ids.length} message${ids.length == 1 ? '' : 's'}?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          if (chat.canBeDeletedForAllUsers)
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('For everyone', style: TextStyle(color: GlowColors.coral)),
-            ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('For me', style: TextStyle(color: GlowColors.coral)),
-          ),
-        ],
-      ),
+  Future<void> _deleteSelected(td.Chat chat) => _confirmAndDelete(_cubit.state.selected.toList(), chat);
+
+  /// Every delete confirms; "for everyone" is offered only when TDLib allows
+  /// it for all of [ids].
+  Future<void> _confirmAndDelete(List<int> ids, td.Chat chat) async {
+    if (ids.isEmpty) return;
+    final repo = context.read<MessagesRepository>();
+    final cache = context.read<TelegramCache>();
+    var canForAll = true;
+    try {
+      for (final id in ids) {
+        final p = await repo.properties(chat.id, id);
+        if (!p.canBeDeletedForAllUsers) canForAll = false;
+      }
+    } catch (_) {
+      canForAll = false;
+    }
+    if (!mounted) return;
+    final forAll = await confirmDeleteMessages(
+      context,
+      count: ids.length,
+      canForEveryone: canForAll,
+      otherName: cache.peerUser(chat)?.firstName,
     );
     if (forAll == null) return;
-    try {
-      await _cubit.delete(ids, forEveryone: forAll);
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-    }
+    await _cubit.delete(ids, forEveryone: forAll);
   }
 
   @override
@@ -486,6 +485,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
       );
 
   Widget _buildRow(MessageRow row, td.Chat chat, ConversationState state, bool isGroup, bool isChannel) {
+    final prefs = context.read<AppPreferences>();
     return switch (row) {
       DayHeaderRow(:final day) => _DayHeader(key: ValueKey(_rowKey(row)), day: day),
       UnreadDividerRow() => const _UnreadDivider(key: ValueKey('unread')),
@@ -500,7 +500,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
         highlighted: row.messages.any((m) => m.id == state.highlightId),
         selected: row.messages.any((m) => state.selected.contains(m.id)),
         selecting: state.selecting,
-        onReply: () => _cubit.startReply(row.primary),
+        swipeLeft: prefs.messageSwipe(SwipeSide.left),
+        swipeRight: prefs.messageSwipe(SwipeSide.right),
+        swipeEmoji: prefs.swipeEmoji,
+        onSwipe: (side) => switch (prefs.messageSwipe(side)) {
+          MessageSwipe.reply => _cubit.startReply(row.primary),
+          MessageSwipe.react => _cubit.toggleReaction(row.primary, prefs.swipeEmoji),
+          MessageSwipe.delete => _confirmAndDelete([for (final m in row.messages) m.id], chat),
+          MessageSwipe.none => null,
+        },
         onLongPress: () => _onLongPress(row.primary, chat),
         onTap: () {
           if (state.selecting) _cubit.toggleSelected(row.primary);

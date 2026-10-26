@@ -50,7 +50,7 @@ void main() {
               highlighted: false,
               selected: false,
               selecting: false,
-              onReply: () {},
+              onSwipe: (_) {},
               onLongPress: () {},
               onTap: () {},
               onReplyQuoteTap: (_) {},

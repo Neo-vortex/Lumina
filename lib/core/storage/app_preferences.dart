@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../gestures/swipe_actions.dart';
+
 /// Non-secret user preferences, persisted with shared_preferences. Listen to
 /// [changes] to react immediately.
 class AppPreferences {
@@ -46,6 +48,30 @@ class AppPreferences {
       case String v:
         await _prefs?.setString(key, v);
     }
+  }
+
+  // ---- Swipe gestures -----------------------------------------------------
+
+  MessageSwipe messageSwipe(SwipeSide side) =>
+      _enum(MessageSwipe.values, 'swipe.message.${side.name}') ??
+      (side == SwipeSide.left ? MessageSwipe.reply : MessageSwipe.react);
+  void setMessageSwipe(SwipeSide side, MessageSwipe v) => _set('swipe.message.${side.name}', v.name);
+
+  ChatSwipe chatSwipe(SwipeSide side) =>
+      _enum(ChatSwipe.values, 'swipe.chat.${side.name}') ??
+      (side == SwipeSide.left ? ChatSwipe.archive : ChatSwipe.pin);
+  void setChatSwipe(SwipeSide side, ChatSwipe v) => _set('swipe.chat.${side.name}', v.name);
+
+  /// The reaction a "React" message swipe sends.
+  String get swipeEmoji => _string('swipe.emoji') ?? '❤️';
+  set swipeEmoji(String v) => _set('swipe.emoji', v);
+
+  T? _enum<T extends Enum>(List<T> values, String key) {
+    final name = _string(key);
+    for (final v in values) {
+      if (v.name == name) return v;
+    }
+    return null;
   }
 
   // ---- Privacy ("ghost mode", user request) -------------------------------
