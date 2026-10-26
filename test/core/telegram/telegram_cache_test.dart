@@ -115,4 +115,77 @@ void main() {
     );
     expect(cache.isMuted(cache.chats[1]!), isFalse);
   });
+
+  td.ChatFolderInfo folderInfo(int id, String name) => td.ChatFolderInfo(
+    id: id,
+    name: td.ChatFolderName(
+      text: td.FormattedText(text: name, entities: const []),
+      animateCustomEmoji: false,
+    ),
+    icon: const td.ChatFolderIcon(name: 'Custom'),
+    colorId: -1,
+    isShareable: false,
+    hasMyInviteLinks: false,
+  );
+
+  test('mirrors chat folders and emits FoldersChanged', () {
+    final events = <CacheEvent>[];
+    cache.events.listen(events.add);
+    cache.apply(
+      td.UpdateChatFolders(
+        chatFolders: [folderInfo(3, 'Work'), folderInfo(5, 'Home')],
+        mainChatListPosition: 1,
+        areTagsEnabled: true,
+      ),
+    );
+    expect(cache.chatFolders.map((f) => f.id), [3, 5]);
+    expect(cache.mainListPosition, 1);
+    expect(cache.folderTagsEnabled, isTrue);
+    expect(events.whereType<FoldersChanged>(), hasLength(1));
+  });
+
+  test('unread counts are kept per chat list', () {
+    final events = <CacheEvent>[];
+    cache.events.listen(events.add);
+    cache.apply(
+      const td.UpdateUnreadChatCount(
+        chatList: td.ChatListFolder(chatFolderId: 3),
+        totalCount: 10,
+        unreadCount: 4,
+        unreadUnmutedCount: 2,
+        markedAsUnreadCount: 0,
+        markedAsUnreadUnmutedCount: 0,
+      ),
+    );
+    expect(cache.unreadIn(const td.ChatListFolder(chatFolderId: 3)), (chats: 4, unmuted: 2));
+    expect(cache.unreadIn(const td.ChatListMain()), (chats: 0, unmuted: 0));
+    expect(events.whereType<UnreadCountChanged>().single.list, isA<td.ChatListFolder>());
+  });
+
+  test('foldersOf lists the folders a chat is positioned in', () {
+    cache.apply(
+      td.UpdateNewChat(
+        chat: fakeChat(1).copyWith(
+          positions: const [
+            td.ChatPosition(list: td.ChatListMain(), order: 9, isPinned: false),
+            td.ChatPosition(list: td.ChatListFolder(chatFolderId: 3), order: 9, isPinned: false),
+            td.ChatPosition(list: td.ChatListFolder(chatFolderId: 5), order: 9, isPinned: true),
+          ],
+        ),
+      ),
+    );
+    expect(cache.foldersOf(cache.chats[1]!), [3, 5]);
+  });
+
+  test('clear forgets folders and counts', () {
+    cache.apply(
+      td.UpdateChatFolders(
+        chatFolders: [folderInfo(3, 'Work')],
+        mainChatListPosition: 0,
+        areTagsEnabled: false,
+      ),
+    );
+    cache.clear();
+    expect(cache.chatFolders, isEmpty);
+  });
 }
