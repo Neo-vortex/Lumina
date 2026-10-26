@@ -28,6 +28,7 @@ import '../widgets/conversation_header.dart';
 import '../widgets/forward_sheet.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/message_menu.dart';
+import '../widgets/message_details_sheet.dart';
 import '../widgets/message_rows.dart';
 import '../../../../core/tdlib/td_errors.dart';
 import '../../../../core/widgets/delete_confirm.dart';
@@ -277,6 +278,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
           );
         case MessageAction.select:
           _cubit.toggleSelected(m);
+        case MessageAction.details:
+          await showMessageDetails(
+            context,
+            m,
+            readStatus: m.isOutgoing && chat.type is td.ChatTypePrivate
+                ? context.read<MessagesRepository>().readStatus(chat.id, m.id)
+                : null,
+          );
         case MessageAction.copyLink:
           final link = await context.read<MessagesRepository>().link(m.chatId, m.id);
           await Clipboard.setData(ClipboardData(text: link));

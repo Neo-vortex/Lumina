@@ -16,6 +16,7 @@ enum MessageAction {
   forwardHidden,
   select,
   copyLink,
+  details,
   delete,
   aiAction,
   transcribe,
@@ -66,6 +67,7 @@ Future<({MessageAction? action, String? reaction})?> showMessageMenu(
     for (final e in extras) (e.action, e.icon, e.label, GlowColors.cyan),
     (MessageAction.select, Icons.check_circle_outline_rounded, 'Select', null),
     if (p?.canGetLink ?? false) (MessageAction.copyLink, Icons.link_rounded, 'Copy link', null),
+    (MessageAction.details, Icons.info_outline_rounded, 'Details', null),
     // One entry; the confirmation offers "for everyone" when allowed.
     if ((p?.canBeDeletedOnlyForSelf ?? false) || (p?.canBeDeletedForAllUsers ?? false) || p == null)
       (MessageAction.delete, Icons.delete_outline_rounded, 'Delete', GlowColors.coral),
