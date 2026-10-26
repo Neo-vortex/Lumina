@@ -9,6 +9,7 @@ import '../../bloc/chat_list_cubit.dart';
 import '../../data/chats_repository.dart';
 import '../../domain/lens_entry.dart';
 import 'chat_actions_sheet.dart';
+import 'chat_swipe.dart';
 import 'chat_list_extensions.dart';
 import 'timeline_chat_row.dart';
 
@@ -107,15 +108,19 @@ class _ChatListPageState extends State<ChatListPage> with AutomaticKeepAliveClie
                 itemCount: state.chats.length,
                 itemBuilder: (context, i) {
                   final chat = state.chats[i];
-                  return TimelineChatRow(
+                  return SwipeableChatRow(
                     key: ValueKey(chat.id),
                     chat: chat,
-                    isFirst: i == 0,
-                    isLast: i == state.chats.length - 1,
-                    showPresence: !widget.isBot,
-                    tint: widget.tint,
-                    onTap: () => widget.onOpen(chat),
-                    onLongPress: () => showChatActions(context, chat, list: widget.entry.list),
+                    list: widget.entry.list,
+                    child: TimelineChatRow(
+                      chat: chat,
+                      isFirst: i == 0,
+                      isLast: i == state.chats.length - 1,
+                      showPresence: !widget.isBot,
+                      tint: widget.tint,
+                      onTap: () => widget.onOpen(chat),
+                      onLongPress: () => showChatActions(context, chat, list: widget.entry.list),
+                    ),
                   );
                 },
               ),

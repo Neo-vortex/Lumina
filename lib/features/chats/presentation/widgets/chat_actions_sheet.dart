@@ -4,6 +4,7 @@ import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../core/telegram/telegram_cache.dart';
 import '../../../../core/theme/glow_colors.dart';
+import '../../../../core/widgets/delete_confirm.dart';
 import '../../data/chats_repository.dart';
 import 'chat_list_extensions.dart';
 
@@ -71,10 +72,38 @@ Future<void> showChatActions(
               isGroupish ? (cache.isChannel(chat) ? 'Leave channel' : 'Leave group') : 'Delete chat',
               style: const TextStyle(color: GlowColors.coral),
             ),
-            onTap: () => run(() => repo.leaveOrDelete(chat)),
+            onTap: () {
+              Navigator.of(context).pop();
+              confirmAndDeleteChat(outer, chat).ignore();
+            },
           ),
         ],
       ),
     ),
   );
+}
+
+/// Every chat delete or leave confirms; private chats offer "also delete
+/// for {name}" when TDLib allows it.
+Future<void> confirmAndDeleteChat(BuildContext context, td.Chat chat) async {
+  final repo = context.read<ChatsRepository>();
+  final cache = context.read<TelegramCache>();
+  final messenger = ScaffoldMessenger.of(context);
+  final private = chat.type is td.ChatTypePrivate || chat.type is td.ChatTypeSecret;
+  final channel = cache.isChannel(chat);
+  final forBoth = await confirmDelete(
+    context,
+    title: private ? 'Delete chat with ${chat.title}?' : 'Leave ${chat.title}?',
+    message: private ? null : (channel ? 'You will stop receiving its posts.' : 'You will leave the group.'),
+    confirmLabel: private ? 'Delete' : 'Leave',
+    alsoLabel: private && chat.canBeDeletedForAllUsers
+        ? 'Also delete for ${cache.peerUser(chat)?.firstName ?? chat.title}'
+        : null,
+  );
+  if (forBoth == null) return;
+  try {
+    await repo.leaveOrDelete(chat, forBoth: forBoth);
+  } catch (e) {
+    messenger.showSnackBar(SnackBar(content: Text('$e')));
+  }
 }

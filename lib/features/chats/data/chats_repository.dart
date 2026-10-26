@@ -90,12 +90,20 @@ class ChatsRepository {
     );
   }
 
-  /// Leaves a group/channel, or deletes a private chat's history for self.
-  Future<void> leaveOrDelete(td.Chat chat) async {
+  Future<void> setArchived(int chatId, bool archived) => _client.invoke<td.Ok>(
+    td.AddChatToList(
+      chatId: chatId,
+      chatList: archived ? const td.ChatListArchive() : const td.ChatListMain(),
+    ),
+  );
+
+  /// Leaves a group/channel, or deletes a private chat's history ([forBoth]:
+  /// for the other side too, when TDLib allows it).
+  Future<void> leaveOrDelete(td.Chat chat, {bool forBoth = false}) async {
     switch (chat.type) {
       case td.ChatTypePrivate() || td.ChatTypeSecret():
         await _client.invoke<td.Ok>(
-          td.DeleteChatHistory(chatId: chat.id, removeFromChatList: true, revoke: false),
+          td.DeleteChatHistory(chatId: chat.id, removeFromChatList: true, revoke: forBoth),
         );
       default:
         await _client.invoke<td.Ok>(td.LeaveChat(chatId: chat.id));
