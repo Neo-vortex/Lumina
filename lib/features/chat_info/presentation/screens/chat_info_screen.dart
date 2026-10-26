@@ -278,15 +278,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         _Action(
-                          icon: chat.notificationSettings.muteFor > 0
+                          icon: _cache.isMuted(chat)
                               ? Icons.notifications_off_rounded
                               : Icons.notifications_rounded,
-                          label: chat.notificationSettings.muteFor > 0 ? 'Unmute' : 'Mute',
+                          label: _cache.isMuted(chat) ? 'Unmute' : 'Mute',
                           onTap: () => _run(
-                            () => context.read<ChatsRepository>().setMuted(
-                              chat.id,
-                              chat.notificationSettings.muteFor == 0,
-                            ),
+                            () => context.read<ChatsRepository>().setMuted(chat.id, !_cache.isMuted(chat)),
                           ),
                         ),
                         if (chat.type is td.ChatTypeSupergroup && !_cache.isMember(chat))

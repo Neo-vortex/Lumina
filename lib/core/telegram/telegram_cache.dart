@@ -67,6 +67,10 @@ class TelegramCache {
   final supergroups = <int, td.Supergroup>{};
   final secretChats = <int, td.SecretChat>{};
 
+  /// Default mute duration per chat type (private, group, channel), for
+  /// chats whose settings say "use the default".
+  final _scopeMuteFor = <Type, int>{};
+
   /// chatId -> sender key -> action. Entries expire after 6 s without a
   /// refresh, as TDLib clients are expected to do.
   final _typing = <int, Map<String, ({td.MessageSender sender, td.ChatAction action, Timer expiry})>>{};
@@ -117,6 +121,13 @@ class TelegramCache {
         _patchChat(chatId, (c) => c.copyWith(permissions: permissions));
       case td.UpdateChatNotificationSettings(:final chatId, :final notificationSettings):
         _patchChat(chatId, (c) => c.copyWith(notificationSettings: notificationSettings));
+      case td.UpdateScopeNotificationSettings(:final scope, :final notificationSettings):
+        _scopeMuteFor[scope.runtimeType] = notificationSettings.muteFor;
+        for (final c in chats.values) {
+          if (c.notificationSettings.useDefaultMuteFor && _scopeOf(c).runtimeType == scope.runtimeType) {
+            _emit(ChatChanged(c.id));
+          }
+        }
       case td.UpdateChatAvailableReactions(:final chatId, :final availableReactions):
         _patchChat(chatId, (c) => c.copyWith(availableReactions: availableReactions));
       case td.UpdateChatHasScheduledMessages(:final chatId, :final hasScheduledMessages):
@@ -200,12 +211,34 @@ class TelegramCache {
     _ => null,
   };
 
+  /// The chat is in the main list only because the active MTProto proxy
+  /// sponsors it.
+  bool isProxySponsored(td.Chat chat) =>
+      positionIn(chat, const td.ChatListMain())?.source is td.ChatSourceMtprotoProxy;
+
   bool isChannel(td.Chat chat) =>
       chat.type is td.ChatTypeSupergroup && (chat.type as td.ChatTypeSupergroup).isChannel;
+
+  /// Whether the chat's notifications are muted, following the chat-type
+  /// default when the chat has no explicit setting.
+  bool isMuted(td.Chat chat) {
+    final settings = chat.notificationSettings;
+    final muteFor = settings.useDefaultMuteFor
+        ? _scopeMuteFor[_scopeOf(chat).runtimeType] ?? 0
+        : settings.muteFor;
+    return muteFor > 0;
+  }
+
+  td.NotificationSettingsScope _scopeOf(td.Chat chat) => switch (chat.type) {
+    td.ChatTypePrivate() || td.ChatTypeSecret() => const td.NotificationSettingsScopePrivateChats(),
+    td.ChatTypeSupergroup(isChannel: true) => const td.NotificationSettingsScopeChannelChats(),
+    _ => const td.NotificationSettingsScopeGroupChats(),
+  };
 
   /// Forgets everything; called when the session closes.
   void clear() {
     chats.clear();
+    _scopeMuteFor.clear();
     users.clear();
     basicGroups.clear();
     supergroups.clear();

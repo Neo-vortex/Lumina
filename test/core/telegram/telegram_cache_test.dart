@@ -80,4 +80,39 @@ void main() {
     cache.apply(const td.UpdateAuthorizationState(authorizationState: td.AuthorizationStateClosed()));
     expect(cache.chats, isEmpty);
   });
+
+  test('isMuted follows the chat-type default unless the chat overrides it', () {
+    final chat = fakeChat(1, order: 10);
+    cache.apply(td.UpdateNewChat(chat: chat));
+    expect(cache.isMuted(cache.chats[1]!), isFalse);
+
+    final events = <CacheEvent>[];
+    cache.events.listen(events.add);
+    cache.apply(
+      const td.UpdateScopeNotificationSettings(
+        scope: td.NotificationSettingsScopePrivateChats(),
+        notificationSettings: td.ScopeNotificationSettings(
+          muteFor: 0x7fffffff,
+          soundId: 0,
+          showPreview: true,
+          useDefaultMuteStories: true,
+          muteStories: false,
+          storySoundId: 0,
+          showStoryPoster: false,
+          disablePinnedMessageNotifications: false,
+          disableMentionNotifications: false,
+        ),
+      ),
+    );
+    expect(cache.isMuted(cache.chats[1]!), isTrue);
+    expect(events.whereType<ChatChanged>().map((e) => e.chatId), [1]);
+
+    cache.apply(
+      td.UpdateChatNotificationSettings(
+        chatId: 1,
+        notificationSettings: chat.notificationSettings.copyWith(useDefaultMuteFor: false, muteFor: 0),
+      ),
+    );
+    expect(cache.isMuted(cache.chats[1]!), isFalse);
+  });
 }

@@ -483,6 +483,17 @@ class ConversationCubit extends Cubit<ConversationState> {
       ChatChanged(:final chatId) => chatId == this.chatId,
       TypingChanged(:final chatId) => chatId == this.chatId,
       UserChanged() => true,
+      // Membership and rights (joining, leaving, being promoted) decide
+      // whether the composer or the bottom bar shows.
+      GroupChanged(:final basicGroupId, :final supergroupId) => switch (_cache.chats[chatId]?.type) {
+        td.ChatTypeBasicGroup(basicGroupId: final id) => id == basicGroupId,
+        td.ChatTypeSupergroup(supergroupId: final id) => id == supergroupId,
+        _ => false,
+      },
+      SecretChatChanged(:final secretChatId) => switch (_cache.chats[chatId]?.type) {
+        td.ChatTypeSecret(secretChatId: final id) => id == secretChatId,
+        _ => false,
+      },
       _ => false,
     };
     if (relevant && !isClosed) {

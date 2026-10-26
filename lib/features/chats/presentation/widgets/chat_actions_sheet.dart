@@ -12,7 +12,7 @@ Future<void> showChatActions(BuildContext context, td.Chat chat) async {
   final repo = context.read<ChatsRepository>();
   final cache = context.read<TelegramCache>();
   final pinned = cache.positionIn(chat, const td.ChatListMain())?.isPinned ?? false;
-  final muted = chat.notificationSettings.muteFor > 0;
+  final muted = cache.isMuted(chat);
   final unread = chat.unreadCount > 0 || chat.isMarkedAsUnread;
   final isGroupish = chat.type is td.ChatTypeBasicGroup || chat.type is td.ChatTypeSupergroup;
   final messenger = ScaffoldMessenger.of(context);

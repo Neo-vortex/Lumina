@@ -16,6 +16,8 @@ import '../../../../core/theme/motion.dart';
 import '../../../../core/widgets/glow_background.dart';
 import '../../../auth/bloc/auth_bloc.dart';
 import '../../../auth/domain/auth_step.dart';
+import '../../../chat_info/data/chat_info_repository.dart';
+import '../../../chats/data/chats_repository.dart';
 import '../../bloc/conversation_cubit.dart';
 import '../../data/messages_repository.dart';
 import '../widgets/composer.dart';
@@ -646,35 +648,77 @@ class _SelectionBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-class _ReadOnlyBar extends StatelessWidget {
+/// Shown instead of the composer where the account can't post: Subscribe /
+/// Join when it isn't a member of a public supergroup or channel, Mute /
+/// Unmute in a channel it follows, otherwise a line saying why.
+class _ReadOnlyBar extends StatefulWidget {
   const _ReadOnlyBar({required this.chat, required this.isChannel});
 
   final td.Chat chat;
   final bool isChannel;
 
   @override
+  State<_ReadOnlyBar> createState() => _ReadOnlyBarState();
+}
+
+class _ReadOnlyBarState extends State<_ReadOnlyBar> {
+  bool _busy = false;
+
+  Future<void> _run(Future<void> Function() action) async {
+    setState(() => _busy = true);
+    try {
+      await action();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final chat = widget.chat;
     final cache = context.read<TelegramCache>();
     final member = cache.isMember(chat);
-    final text = !member
-        ? (isChannel ? 'You are not subscribed' : 'You are not a member')
-        : chat.type is td.ChatTypeSecret
-        ? 'Waiting for the secret chat to start…'
-        : isChannel
-        ? 'Only admins can post here'
-        : 'Sending messages is restricted here';
+    final Widget child;
+    if (!member && chat.type is td.ChatTypeSupergroup) {
+      child = FilledButton(
+        style: FilledButton.styleFrom(
+          backgroundColor: GlowColors.violetDeep,
+          foregroundColor: GlowColors.text,
+          minimumSize: const Size.fromHeight(48),
+        ),
+        onPressed: _busy ? null : () => _run(() => context.read<ChatInfoRepository>().join(chat)),
+        child: Text(widget.isChannel ? 'Subscribe' : 'Join group'),
+      );
+    } else if (member && widget.isChannel) {
+      final muted = cache.isMuted(chat);
+      child = TextButton.icon(
+        style: TextButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+        onPressed: _busy ? null : () => _run(() => context.read<ChatsRepository>().setMuted(chat.id, !muted)),
+        icon: Icon(muted ? Icons.notifications_off_rounded : Icons.notifications_rounded),
+        label: Text(muted ? 'Unmute' : 'Mute'),
+      );
+    } else {
+      final text = !member
+          ? 'You are not a member'
+          : chat.type is td.ChatTypeSecret
+          ? 'Waiting for the secret chat to start…'
+          : 'Sending messages is restricted here';
+      child = Padding(
+        padding: const EdgeInsets.all(8),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: GlowColors.textMuted),
+        ),
+      );
+    }
     return Material(
       color: GlowColors.background,
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            text,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: GlowColors.textMuted),
-          ),
-        ),
+        child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: child),
       ),
     );
   }
