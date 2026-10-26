@@ -51,6 +51,28 @@ class MainActivity : FlutterActivity() {
         calls = null
     }
 
+    override fun onResume() {
+        super.onResume()
+        preferHighestRefreshRate()
+    }
+
+    /**
+     * Flutter never asks Android for more than the default refresh rate, and
+     * many phones (Xiaomi/Poco especially) then hold it at 60 Hz. Prefer the
+     * fastest display mode at the current resolution (90/120/144 Hz).
+     */
+    @Suppress("DEPRECATION")
+    private fun preferHighestRefreshRate() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        val display = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) display else windowManager.defaultDisplay) ?: return
+        val current = display.mode
+        val best = display.supportedModes
+            .filter { it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight }
+            .maxByOrNull { it.refreshRate } ?: return
+        if (window.attributes.preferredDisplayModeId == best.modeId) return
+        window.attributes = window.attributes.apply { preferredDisplayModeId = best.modeId }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleCallIntent(intent)
