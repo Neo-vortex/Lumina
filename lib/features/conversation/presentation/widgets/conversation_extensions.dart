@@ -37,6 +37,12 @@ class ConversationExtensions {
 
   void onDictate(BuildContext context, td.Chat chat, TextEditingController text) {}
 
+  /// The composer's emoji/sticker/GIF panel; null hides the smiley.
+  Widget Function(double height, ValueChanged<String> onEmoji, VoidCallback onSent)? mediaPanel(
+    BuildContext context,
+    td.Chat chat,
+  ) => null;
+
   /// Opens on-device writing help on the draft; null when unavailable.
   VoidCallback? writingTools(BuildContext context, TextEditingController text) => null;
 

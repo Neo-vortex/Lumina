@@ -14,6 +14,7 @@ import '../features/profile/presentation/user_profile_screen.dart';
 import '../features/folders/presentation/screens/folder_qr_screen.dart';
 import '../features/calls/bloc/call_cubit.dart';
 import '../features/assistant/data/action_extractor.dart';
+import '../features/media_panel/presentation/media_panel.dart';
 import '../features/assistant/presentation/action_sheet.dart';
 import '../features/assistant/presentation/writing_sheet.dart';
 import '../features/auth/bloc/auth_bloc.dart';
@@ -152,6 +153,14 @@ class AppConversationExtensions extends ConversationExtensions {
       color: outgoing ? GlowColors.onAccent : GlowColors.cyan,
     );
   }
+
+  @override
+  Widget Function(double height, ValueChanged<String> onEmoji, VoidCallback onSent)? mediaPanel(
+    BuildContext context,
+    td.Chat chat,
+  ) =>
+      (height, onEmoji, onSent) =>
+          MediaPanel(chatId: chat.id, height: height, onEmoji: onEmoji, onSent: onSent);
 
   @override
   VoidCallback? writingTools(BuildContext context, TextEditingController text) => () async {

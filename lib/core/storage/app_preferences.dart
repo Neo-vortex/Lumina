@@ -72,6 +72,11 @@ class AppPreferences {
       const ['❤️', '👍', '🔥', '😂', '😮'];
   set quickReactions(List<String> v) => _set('reactions.quick', v.take(5).join(' '));
 
+  /// Emoji picked in the media panel, most recent first.
+  List<String> get recentEmoji =>
+      _string('emoji.recent')?.split(' ').where((e) => e.isNotEmpty).toList() ?? const [];
+  set recentEmoji(List<String> v) => _set('emoji.recent', v.join(' '));
+
   /// Play animated emoji, reactions and custom emoji; off shows them static.
   bool get animatedEmoji => _bool('emoji.animated', true);
   set animatedEmoji(bool v) => _set('emoji.animated', v);

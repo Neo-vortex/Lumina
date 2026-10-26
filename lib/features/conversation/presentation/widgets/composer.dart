@@ -32,6 +32,7 @@ class Composer extends StatefulWidget {
     this.onVoice,
     this.onDictate,
     this.onWritingTools,
+    this.mediaPanel,
     this.recordingOverlay,
     this.orbMode,
     this.loadPreview,
@@ -56,6 +57,10 @@ class Composer extends StatefulWidget {
   /// On-device writing help (rewrite, grammar, tone); shown once there's text.
   final VoidCallback? onWritingTools;
 
+  /// The emoji/sticker/GIF panel, built at keyboard height in place of the
+  /// keyboard; emoji go to the draft, stickers and GIFs send.
+  final Widget Function(double height, ValueChanged<String> onEmoji, VoidCallback onSent)? mediaPanel;
+
   /// Replaces the text row while recording (waveform, timer).
   final Widget? recordingOverlay;
 
@@ -74,6 +79,29 @@ class Composer extends StatefulWidget {
 
 class _ComposerState extends State<Composer> {
   var _sending = false;
+  final _focus = FocusNode();
+  var _panel = false;
+  var _keyboardHeight = 300.0;
+
+  void _togglePanel() {
+    if (_panel) {
+      setState(() => _panel = false);
+      _focus.requestFocus();
+    } else {
+      setState(() => _panel = true);
+      _focus.unfocus();
+    }
+  }
+
+  void _insertEmoji(String e) {
+    final c = widget.controller;
+    final sel = c.selection.isValid ? c.selection : TextSelection.collapsed(offset: c.text.length);
+    final text = c.text.replaceRange(sel.start, sel.end, e);
+    c.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: sel.start + e.length),
+    );
+  }
 
   // Link preview while composing.
   static final _linkish = RegExp(r'(https?://|www\.|t\.me/)\S+', caseSensitive: false);
@@ -95,6 +123,7 @@ class _ComposerState extends State<Composer> {
   @override
   void dispose() {
     _previewTimer?.cancel();
+    _focus.dispose();
     widget.controller.removeListener(_onText);
     super.dispose();
   }
@@ -184,6 +213,9 @@ class _ComposerState extends State<Composer> {
     final hasText = text.trim().isNotEmpty;
     final mode = widget.orbMode ?? (_sending ? OrbMode.busy : (hasText ? OrbMode.send : OrbMode.mic));
     final contextMessage = widget.editing ?? widget.replyTo;
+    // Remember the keyboard's height so the panel takes exactly its place.
+    final inset = MediaQuery.viewInsetsOf(context).bottom;
+    if (inset > 120) _keyboardHeight = inset;
 
     return Material(
       color: GlowColors.background,
@@ -243,6 +275,10 @@ class _ComposerState extends State<Composer> {
                           ),
                           child: TextField(
                             controller: widget.controller,
+                            focusNode: _focus,
+                            onTap: () {
+                              if (_panel) setState(() => _panel = false);
+                            },
                             onChanged: widget.onChanged,
                             minLines: 1,
                             maxLines: 6,
@@ -254,6 +290,16 @@ class _ComposerState extends State<Composer> {
                               hintText: widget.editing != null ? 'Edit message' : 'Message',
                               hintStyle: const TextStyle(color: GlowColors.textMuted),
                               border: InputBorder.none,
+                              prefixIcon: widget.mediaPanel == null
+                                  ? null
+                                  : IconButton(
+                                      tooltip: _panel ? 'Keyboard' : 'Emoji, stickers and GIFs',
+                                      onPressed: _togglePanel,
+                                      icon: Icon(
+                                        _panel ? Icons.keyboard_rounded : Icons.emoji_emotions_outlined,
+                                        color: GlowColors.textMuted,
+                                      ),
+                                    ),
                               contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
                               suffixIcon: hasText && widget.onWritingTools != null
                                   ? IconButton(
@@ -290,6 +336,8 @@ class _ComposerState extends State<Composer> {
                 ],
               ),
             ),
+            if (_panel && widget.mediaPanel != null)
+              widget.mediaPanel!(_keyboardHeight, _insertEmoji, () => setState(() => _panel = false)),
           ],
         ),
       ),

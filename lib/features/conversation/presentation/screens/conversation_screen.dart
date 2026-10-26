@@ -415,6 +415,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                             : null,
                         onDictate: () => extensions.onDictate(context, chat, _text),
                         onWritingTools: extensions.writingTools(context, _text),
+                        mediaPanel: extensions.mediaPanel(context, chat),
                         recordingOverlay: extensions.recordingOverlay(context, chat),
                         orbMode: extensions.orbMode(context, chat),
                         loadPreview: _cubit.linkPreview,

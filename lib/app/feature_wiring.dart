@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../features/media_panel/data/media_panel_repository.dart';
 import '../features/profile/data/user_profile_repository.dart';
 import '../core/media/audio_playback.dart';
 import '../core/media/ffmpeg_service.dart';
@@ -77,6 +78,9 @@ final appNavigatorKey = GlobalKey<NavigatorState>();
 /// independent of each other.
 List<RepositoryProvider<Object>> featureProviders() => [
   RepositoryProvider<UserProfileRepository>(create: (c) => UserProfileRepository(c.read<TdClient>())),
+  RepositoryProvider<MediaPanelRepository>(
+    create: (c) => MediaPanelRepository(client: c.read<TdClient>(), prefs: c.read<AppPreferences>()),
+  ),
   RepositoryProvider<FfmpegService>(create: (_) => FfmpegService()..purgeTemp().ignore()),
   RepositoryProvider<MediaSender>(create: (c) => MediaSender(c.read<FfmpegService>())),
   RepositoryProvider<AudioPlayback>(
