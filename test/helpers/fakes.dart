@@ -276,3 +276,32 @@ td.Message fakeMessage(
         text: td.FormattedText(text: text, entities: const []),
       ),
 );
+
+/// A supergroup or channel with [status] for the signed-in account.
+td.Supergroup fakeSupergroup(
+  int id, {
+  bool isChannel = false,
+  td.ChatMemberStatus status = const td.ChatMemberStatusMember(memberUntilDate: 0),
+}) => td.Supergroup(
+  id: id,
+  date: 0,
+  status: status,
+  memberCount: 10,
+  boostLevel: 0,
+  hasAutomaticTranslation: false,
+  hasLinkedChat: false,
+  hasLocation: false,
+  signMessages: false,
+  showMessageSender: false,
+  joinToSendMessages: false,
+  joinByRequest: false,
+  isSlowModeEnabled: false,
+  isChannel: isChannel,
+  isBroadcastGroup: false,
+  isForum: false,
+  isDirectMessagesGroup: false,
+  isAdministeredDirectMessagesGroup: false,
+  hasDirectMessagesGroup: false,
+  hasForumTabs: false,
+  paidMessageStarCount: 0,
+);
