@@ -58,8 +58,11 @@ class ModelInstaller {
   }
 
   /// Path of the extracted model, extracting it first if needed.
-  Future<String> ensure(BundledModel model) =>
-      _inFlight[model.fileName] ??= _ensure(model).whenComplete(() => _inFlight.remove(model.fileName));
+  // The callback must not return the removed future: whenComplete would
+  // wait on it, i.e. on itself, forever.
+  Future<String> ensure(BundledModel model) => _inFlight[model.fileName] ??= _ensure(model).whenComplete(() {
+    _inFlight.remove(model.fileName);
+  });
 
   Future<String> _ensure(BundledModel model) async {
     final path = await pathFor(model);
