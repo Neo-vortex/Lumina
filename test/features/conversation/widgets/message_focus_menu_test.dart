@@ -153,4 +153,14 @@ void main() {
     expect(find.byKey(const ValueKey('ai-suggestion')), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp('AI suggestion')), findsOneWidget);
   });
+
+  testWidgets('with the keyboard open the whole menu stays above it', (tester) async {
+    tester.view.viewInsets = const FakeViewPadding(bottom: 900); // 300 dp keyboard
+    addTearDown(tester.view.resetViewInsets);
+    await open(tester);
+    final keyboardTop = 800 - 300.0;
+    final card = find.ancestor(of: find.text('Reply'), matching: find.byType(Material)).first;
+    expect(tester.getRect(card).bottom, lessThanOrEqualTo(keyboardTop));
+    expect(tester.getRect(find.byKey(const ValueKey('quick-reactions'))).top, greaterThanOrEqualTo(0));
+  });
 }

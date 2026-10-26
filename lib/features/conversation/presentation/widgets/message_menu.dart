@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -156,16 +157,18 @@ class _FocusMenuState extends State<_FocusMenu> {
     const pillH = 60.0;
     final rows = (widget.items.length / 2).ceil();
     final listH = rows * 48.0 + 52;
-    final bubbleH = anchor.height.clamp(40.0, screen.height * 0.35);
+    // Lay out in the space above the keyboard (or the system bar).
+    final topLimit = media.padding.top + 8;
+    final bottomLimit = screen.height - math.max(media.padding.bottom, media.viewInsets.bottom) - 8;
+    final room = bottomLimit - topLimit;
+    // Shrink the lifted bubble first, then let the actions scroll.
+    var bubbleH = anchor.height.clamp(40.0, screen.height * 0.35);
+    bubbleH = math.max(40.0, math.min(bubbleH, room - pillH - 16 - listH));
+    final maxListH = math.max(96.0, room - pillH - 16 - bubbleH);
+    final groupH = pillH + 8 + bubbleH + 8 + math.min(listH, maxListH);
     // Keep the bubble where it was when everything fits; otherwise slide the
-    // whole group just enough to stay on screen.
-    final top = (anchor.top - pillH).clamp(
-      media.padding.top + 8,
-      (screen.height - media.padding.bottom - 8 - pillH - bubbleH - 8 - listH).clamp(
-        media.padding.top + 8,
-        double.infinity,
-      ),
-    );
+    // whole group just enough to stay visible.
+    final top = (anchor.top - pillH).clamp(topLimit, math.max(topLimit, bottomLimit - groupH)).toDouble();
     final curve = CurvedAnimation(parent: widget.animation, curve: Curves.easeOutCubic);
     // Material: without it the lifted bubble's text fell back to Flutter's
     // yellow-underlined "no Material" style.
@@ -217,7 +220,10 @@ class _FocusMenuState extends State<_FocusMenu> {
                           ),
                         ),
                       const SizedBox(height: 8),
-                      _actions(),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxHeight: maxListH),
+                        child: SingleChildScrollView(child: _actions()),
+                      ),
                     ],
                   ),
                 ),
