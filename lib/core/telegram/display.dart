@@ -150,10 +150,10 @@ abstract final class Display {
       td.MessageLiveLocation() => 'Live location',
       td.MessageVenue() => 'Venue',
       td.MessageCall(:final isVideo) => isVideo ? 'Video call' : 'Call',
-      td.MessageExpiredPhoto() => 'Photo expired',
-      td.MessageExpiredVideo() => 'Video expired',
-      td.MessageExpiredVoiceNote() => 'Voice message expired',
-      td.MessageExpiredVideoNote() => 'Video message expired',
+      td.MessageExpiredPhoto() => 'Disappearing photo',
+      td.MessageExpiredVideo() => 'Disappearing video',
+      td.MessageExpiredVoiceNote() => 'Disappearing voice message',
+      td.MessageExpiredVideoNote() => 'Disappearing video message',
       _ => serviceText(cache, m) ?? 'Unsupported message',
     };
   }

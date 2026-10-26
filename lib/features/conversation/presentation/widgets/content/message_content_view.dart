@@ -7,6 +7,7 @@ import '../../../../../core/telegram/telegram_cache.dart';
 import 'audio_content.dart';
 import 'document_content.dart';
 import 'generic_content.dart';
+import 'expired_media_content.dart';
 import 'media_content.dart';
 import 'rich_cards_content.dart';
 import 'sticker_content.dart';
@@ -112,6 +113,15 @@ class MessageContentView extends StatelessWidget {
         footer: overlayFooter,
       ),
       td.MessageAnimatedEmoji(:final emoji) => BigEmojiContent(emoji: emoji, footer: footer),
+      td.MessageExpiredPhoto() ||
+      td.MessageExpiredVideo() ||
+      td.MessageExpiredVoiceNote() ||
+      td.MessageExpiredVideoNote() => ExpiredMediaContent(
+        content: m.content,
+        outgoing: outgoing,
+        color: textColor,
+        footer: footer,
+      ),
       _ => GenericContent(
         icon: genericIcon(m.content),
         title: Display.preview(context.read<TelegramCache>(), m),
