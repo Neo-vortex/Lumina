@@ -19,6 +19,7 @@ import '../../../home/presentation/widgets/bot_limitations_card.dart';
 import '../../bloc/chat_list_cubit.dart';
 import '../../data/chats_repository.dart';
 import '../widgets/chat_actions_sheet.dart';
+import '../widgets/chat_list_extensions.dart';
 import '../widgets/timeline_chat_row.dart';
 
 class ChatsScreen extends StatefulWidget {
@@ -103,6 +104,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                             child: ConnectionAwareTitle(title: 'Chats'),
                           ),
                   ),
+                  if (!_searching) ...ChatListExtensions.of(context).headerActions(context),
                   IconButton(
                     tooltip: _searching ? 'Close search' : 'Search',
                     icon: Icon(_searching ? Icons.close_rounded : Icons.search_rounded),

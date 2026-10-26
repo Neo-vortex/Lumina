@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/storage/app_preferences.dart';
 import '../../../../core/theme/glow_colors.dart';
 import '../../../chats/bloc/chat_list_cubit.dart';
 import '../../../chats/data/chats_repository.dart';
@@ -24,7 +25,9 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) => ChatListCubit(repository: context.read<ChatsRepository>())..start(),
+      create: (context) =>
+          ChatListCubit(repository: context.read<ChatsRepository>(), prefs: context.read<AppPreferences>())
+            ..start(),
       child: PopScope(
         canPop: _tab == 0,
         onPopInvokedWithResult: (didPop, _) {

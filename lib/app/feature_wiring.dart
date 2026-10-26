@@ -16,6 +16,7 @@ import '../features/assistant/data/action_extractor.dart';
 import '../features/auth/presentation/widgets/auth_scaffold.dart';
 import '../features/proxy/presentation/screens/proxy_screen.dart';
 import '../features/proxy/presentation/widgets/connection_settings.dart';
+import '../features/proxy/presentation/widgets/proxy_button.dart';
 import '../features/search/data/message_indexer.dart';
 import '../features/search/presentation/widgets/search_settings.dart';
 import '../features/transcription/data/transcription_center.dart';
@@ -35,6 +36,7 @@ import 'app_story_wiring.dart';
 import '../features/maintenance/data/storage_repository.dart';
 import '../features/maintenance/presentation/widgets/background_settings.dart';
 import '../features/maintenance/presentation/widgets/storage_settings.dart';
+import '../features/chats/presentation/widgets/chat_list_extensions.dart';
 import '../features/chats/presentation/widgets/chat_row_extensions.dart';
 import '../features/stories/data/stories_repository.dart';
 import '../features/stories/data/saved_stories_store.dart';
@@ -191,6 +193,7 @@ List<RepositoryProvider<Object>> featureProviders() => [
   RepositoryProvider<ChatInfoExtensions>(
     create: (c) => AppChatInfoExtensions(prefs: c.read<AppPreferences>()),
   ),
+  RepositoryProvider<ChatListExtensions>(create: (_) => const _ChatListExtensions()),
   RepositoryProvider<ChatRowExtensions>(
     create: (c) =>
         AppChatRowExtensions(stories: c.read<StoriesRepository>(), prefs: c.read<AppPreferences>()),
@@ -229,3 +232,10 @@ ComposeActions _composeActions(ComposeFlows flows) => ComposeActions([
     visible: storiesVisible,
   ),
 ]);
+
+class _ChatListExtensions extends ChatListExtensions {
+  const _ChatListExtensions();
+
+  @override
+  List<Widget> headerActions(BuildContext context) => const [ProxyButton()];
+}

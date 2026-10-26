@@ -463,6 +463,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_zxing:
+    dependency: "direct main"
+    description:
+      name: flutter_zxing
+      sha256: ee2b97bf69b01385b91497501c060f4e3b53686709892e005de10f3ad30eee98
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.1.0"
   frontend_server_client:
     dependency: transitive
     description:

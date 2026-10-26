@@ -36,4 +36,20 @@ void main() {
     expect(back.password, 'hunter2');
     expect(back.kind, ProxyKind.http);
   });
+
+  test('finds every proxy link in pasted text, skipping duplicates', () {
+    const text = '''
+Fresh proxies:
+1) tg://proxy?server=a.example&port=443&secret=ee01
+2) https://t.me/proxy?server=b.example&port=8443&secret=dd02.
+3) https://t.me/socks?server=c.example&port=1080
+again: tg://proxy?server=a.example&port=443&secret=ee01
+not a proxy: https://t.me/durov
+''';
+    final found = ProxyConfig.parseLinks(text);
+    expect(found.map((p) => p.server), ['a.example', 'b.example', 'c.example']);
+    expect(found[1].port, 8443);
+    expect(found[1].secret, 'dd02');
+    expect(ProxyConfig.parseLinks('nothing here'), isEmpty);
+  });
 }

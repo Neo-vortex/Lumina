@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
+import '../../../core/storage/app_preferences.dart';
 import '../../../core/tdlib/td_errors.dart';
 import '../../../core/telegram/telegram_cache.dart';
 import '../data/chats_repository.dart';
@@ -13,12 +14,17 @@ part 'chat_list_state.dart';
 /// `loadChats`. Cache bursts are coalesced into one emit per frame-ish
 /// window so a sync of hundreds of updates does not rebuild hundreds of times.
 class ChatListCubit extends Cubit<ChatListState> {
-  ChatListCubit({required this._repository, this._list = const td.ChatListMain()})
+  ChatListCubit({required this._repository, this._prefs, this._list = const td.ChatListMain()})
     : super(const ChatListState()) {
     _subscription = _repository.cache.events.listen(_onCacheEvent);
+    _prefs?.changes.addListener(_rebuild);
   }
 
   final ChatsRepository _repository;
+
+  /// Optional so tests and secondary lists can skip the "hide proxy
+  /// sponsor" filter.
+  final AppPreferences? _prefs;
   final td.ChatList _list;
   StreamSubscription<CacheEvent>? _subscription;
   Timer? _coalesce;
@@ -66,12 +72,21 @@ class ChatListCubit extends Cubit<ChatListState> {
 
   void _rebuild() {
     if (isClosed) return;
-    emit(state.copyWith(chats: _repository.cache.chatsIn(_list), revision: state.revision + 1));
+    final cache = _repository.cache;
+    var chats = cache.chatsIn(_list);
+    if (_prefs?.hideProxySponsor ?? false) {
+      chats = [
+        for (final c in chats)
+          if (!cache.isProxySponsored(c)) c,
+      ];
+    }
+    emit(state.copyWith(chats: chats, revision: state.revision + 1));
   }
 
   @override
   Future<void> close() async {
     _coalesce?.cancel();
+    _prefs?.changes.removeListener(_rebuild);
     await _subscription?.cancel();
     return super.close();
   }

@@ -64,8 +64,9 @@ class _TimelineChatRowState extends State<TimelineChatRow> with SingleTickerProv
     final last = chat.lastMessage;
     final lastDate = last != null ? Display.messageDate(last) : null;
     final unread = chat.unreadCount + (chat.isMarkedAsUnread && chat.unreadCount == 0 ? 1 : 0);
-    final muted = chat.notificationSettings.muteFor > 0;
+    final muted = cache.isMuted(chat);
     final pinned = cache.positionIn(chat, const td.ChatListMain())?.isPinned ?? false;
+    final sponsored = cache.isProxySponsored(chat);
     final peer = cache.peerUser(chat);
     final online =
         widget.showPresence && peer?.status is td.UserStatusOnline && peer?.type is! td.UserTypeBot;
@@ -127,6 +128,7 @@ class _TimelineChatRowState extends State<TimelineChatRow> with SingleTickerProv
       label: [
         chat.title,
         if (unread > 0) '$unread unread',
+        if (sponsored) 'proxy sponsor',
         if (muted) 'muted',
         if (pinned) 'pinned',
         if (lastDate != null) Display.listTime(lastDate, now),
@@ -183,6 +185,7 @@ class _TimelineChatRowState extends State<TimelineChatRow> with SingleTickerProv
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                           ),
                         ),
+                        if (sponsored) const _SponsorTag(),
                         if (muted)
                           const Padding(
                             padding: EdgeInsets.only(left: 4),
@@ -320,6 +323,27 @@ class _Badge extends StatelessWidget {
       child: Text(
         text,
         style: TextStyle(color: foreground, fontSize: 12, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+/// Marks the channel the active MTProto proxy promotes.
+class _SponsorTag extends StatelessWidget {
+  const _SponsorTag();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(left: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        border: Border.all(color: GlowColors.amber.withValues(alpha: 0.6)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: const Text(
+        'Proxy sponsor',
+        style: TextStyle(color: GlowColors.amber, fontSize: 11, fontWeight: FontWeight.w600),
       ),
     );
   }

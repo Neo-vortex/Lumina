@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 import 'package:lumina/app/feature_wiring.dart';
 import 'package:lumina/core/storage/app_preferences.dart';
+import 'package:lumina/features/proxy/data/proxy_config.dart';
 import 'package:lumina/features/proxy/data/proxy_repository.dart';
 import 'package:lumina/features/proxy/presentation/widgets/connection_settings.dart';
 
@@ -14,6 +15,17 @@ class ProxyClient extends FakeTdClient {
   @override
   Future<T> invoke<T extends td.TdObject>(td.TdFunction function, {Duration? timeout}) async {
     if (function is td.GetProxies) return td.AddedProxies(proxies: proxies) as T;
+    if (function is td.AddProxy) {
+      final p = td.AddedProxy(
+        id: proxies.length + 1,
+        lastUsedDate: 0,
+        isEnabled: function.enable,
+        comment: function.comment,
+        proxy: function.proxy,
+      );
+      proxies = [for (final o in proxies) function.enable ? o.copyWith(isEnabled: false) : o, p];
+      return p as T;
+    }
     return super.invoke(function, timeout: timeout);
   }
 }
@@ -66,5 +78,21 @@ void main() {
     expect(await callProxyFor(repo), isNull);
     final active = await repo.active();
     expect(ConnectionSettingsNotes.note(active, on: true), contains('only SOCKS5'));
+  });
+
+  test('adding a pasted list skips saved proxies and switches on a lone new one', () async {
+    client.proxies = [proxy(1, const td.ProxyTypeMtproto(secret: 'ab'), enabled: false)];
+    const saved = ProxyConfig(server: 'proxy.example', port: 1080, kind: ProxyKind.mtproto, secret: 'ab');
+    const fresh = ProxyConfig(server: 'b.example', port: 443, kind: ProxyKind.mtproto, secret: 'cd');
+    expect(await repo.addAll([saved, fresh]), 1);
+    expect(client.proxies.last.isEnabled, isTrue);
+    expect(repo.activeProxy.value?.server, 'b.example');
+
+    const more = [
+      ProxyConfig(server: 'c.example', port: 443, kind: ProxyKind.mtproto, secret: 'ef'),
+      ProxyConfig(server: 'd.example', port: 1080, kind: ProxyKind.socks5),
+    ];
+    expect(await repo.addAll(more), 2);
+    expect(client.proxies.where((p) => p.isEnabled).map((p) => p.proxy.server), ['b.example']);
   });
 }
