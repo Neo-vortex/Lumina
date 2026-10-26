@@ -382,6 +382,7 @@ does not copy Telegram's look.
 | Telegram cache + file store | ✅ | `lib/core/telegram/` |
 | Stream server (Range over TDLib) | ✅ (untested on device) | `lib/core/media/tdlib_stream_server.dart` |
 | Chat list (timeline ribbon, search, actions) | ✅ | `lib/features/chats/` |
+| Chat folders (lens, editor, Add to folder, tags, addlist invites, join sheet) | ✅ | `lib/features/folders/`, `lib/features/chats/presentation/widgets/lens_*`, spec `docs/superpowers/specs/2026-10-26-chat-folders-design.md` |
 | Conversation (bubbles, reply/edit/forward/pin/react/select, search, drafts, typing, schedule) | ✅ | `lib/features/conversation/` |
 | Ghost mode, ads toggle, sponsored messages | ✅ | prefs + settings + conversation |
 | Home shell (nav bar, compose orb radial menu) | ✅ (new message/group/channel/secret chat, Glimpses, post story) | `lib/features/home/` |
@@ -740,6 +741,8 @@ chat info, stories, storage, the attach hub, polls, music, send options, live lo
   in ghost mode) and clicks with `clickChatSponsoredMessage`.
 
 ## 8. Must verify on a real device
+
+- Chat folders: lens swipe and picker at 120 Hz; t.me/addlist from another app after enabling "Open by default"; non-Premium folder colours persisting across restarts; joining a shared folder and the "+N new" pill.
 
 - The real `libtdjson.so`: batching, isolate respawn, and process death
   going straight to `Ready`.
