@@ -375,6 +375,7 @@ class _GifTabState extends State<_GifTab> {
         child: LoopingGif(
           file: gif.animation,
           thumbnail: gif.thumbnail?.file,
+          paused: _scrolling,
           minithumbnail: gif.minithumbnail,
         ),
       ),
@@ -442,14 +443,25 @@ class _GifTabState extends State<_GifTab> {
     ],
   );
 
-  Widget _grid(int count, Widget Function(int) cell) => GridView.builder(
-    padding: const EdgeInsets.all(6),
-    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-      maxCrossAxisExtent: 130,
-      mainAxisSpacing: 6,
-      crossAxisSpacing: 6,
+  // GIFs pause while the grid scrolls (every visible one decodes video),
+  // and play again once it settles, like Telegram.
+  var _scrolling = false;
+
+  Widget _grid(int count, Widget Function(int) cell) => NotificationListener<ScrollNotification>(
+    onNotification: (n) {
+      if (n is ScrollStartNotification && !_scrolling) setState(() => _scrolling = true);
+      if (n is ScrollEndNotification && _scrolling) setState(() => _scrolling = false);
+      return false;
+    },
+    child: GridView.builder(
+      padding: const EdgeInsets.all(6),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 130,
+        mainAxisSpacing: 6,
+        crossAxisSpacing: 6,
+      ),
+      itemCount: count,
+      itemBuilder: (context, i) => cell(i),
     ),
-    itemCount: count,
-    itemBuilder: (context, i) => cell(i),
   );
 }
