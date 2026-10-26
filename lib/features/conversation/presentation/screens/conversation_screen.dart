@@ -233,6 +233,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
       properties: properties,
       reactions: _cubit.reactionChoices(m),
       quickReactions: prefs.quickReactions,
+      aiSuggestion: extensions.aiReaction(context, m),
       anchor: anchor,
       bubble: bubble,
       readStatus: m.isOutgoing && private ? repo.readStatus(chat.id, m.id) : null,

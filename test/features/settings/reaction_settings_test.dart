@@ -48,4 +48,12 @@ void main() {
     await tester.pump();
     expect(prefs.animatedEmoji, isFalse);
   });
+
+  testWidgets('AI reaction suggestion is on by default and can be switched off', (tester) async {
+    final prefs = await pump(tester);
+    expect(prefs.aiReactionSuggestion, isTrue);
+    await tester.tap(find.text('AI reaction suggestion'));
+    await tester.pump();
+    expect(prefs.aiReactionSuggestion, isFalse);
+  });
 }

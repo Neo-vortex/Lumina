@@ -48,6 +48,7 @@ Future<({MessageAction? action, String? reaction})?> showMessageMenu(
   Widget? bubble,
   Future<String?>? readStatus,
   Widget Function(String emoji, double size)? reactionIcon,
+  Future<String?>? aiSuggestion,
   List<ExtraMenuEntry> extras = const [],
 }) {
   HapticFeedback.selectionClick();
@@ -92,6 +93,7 @@ Future<({MessageAction? action, String? reaction})?> showMessageMenu(
         quick: quickReactions,
         readStatus: readStatus,
         reactionIcon: reactionIcon,
+        aiSuggestion: aiSuggestion,
         items: items,
       ),
     ),
@@ -108,6 +110,7 @@ class _FocusMenu extends StatefulWidget {
     required this.readStatus,
     required this.reactionIcon,
     required this.items,
+    this.aiSuggestion,
   });
 
   final Animation<double> animation;
@@ -119,12 +122,26 @@ class _FocusMenu extends StatefulWidget {
   final Widget Function(String emoji, double size)? reactionIcon;
   final List<(MessageAction, IconData, String, Color?)> items;
 
+  /// The on-device model's pick for this message; shown first, marked AI.
+  final Future<String?>? aiSuggestion;
+
   @override
   State<_FocusMenu> createState() => _FocusMenuState();
 }
 
 class _FocusMenuState extends State<_FocusMenu> {
   var _allReactions = false;
+  String? _ai;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.aiSuggestion
+        ?.then((e) {
+          if (mounted && e != null) setState(() => _ai = e);
+        })
+        .catchError((Object _) {});
+  }
 
   void _react(String e) => Navigator.pop(context, (action: null, reaction: e));
 
@@ -225,7 +242,14 @@ class _FocusMenuState extends State<_FocusMenu> {
         for (final e in widget.quick)
           if (available.isEmpty) e else ?available.where((a) => plain(a) == plain(e)).firstOrNull,
       ];
-      final quick = [...picks, ...available.where((a) => !picks.contains(a))].take(5).toList();
+      // The AI pick (if the chat allows it) leads; the rest fill to five.
+      final ai = _ai == null || available.isEmpty
+          ? _ai
+          : available.where((a) => plain(a) == plain(_ai!)).firstOrNull;
+      final quick = [
+        ?ai,
+        ...[...picks, ...available.where((a) => !picks.contains(a))].where((e) => e != ai),
+      ].take(5).toList();
       return Material(
         color: GlowColors.surfaceHigh,
         shape: RoundedRectangleBorder(
@@ -255,7 +279,16 @@ class _FocusMenuState extends State<_FocusMenu> {
                       const SizedBox(width: 6),
                       for (final e in quick)
                         Expanded(
-                          child: _ReactionButton(emoji: e, icon: _emoji(e, 38), onTap: _react),
+                          child: e == ai
+                              ? _AiReaction(
+                                  child: _ReactionButton(
+                                    emoji: e,
+                                    icon: _emoji(e, 38),
+                                    onTap: _react,
+                                    ai: true,
+                                  ),
+                                )
+                              : _ReactionButton(emoji: e, icon: _emoji(e, 38), onTap: _react),
                         ),
                       IconButton(
                         tooltip: 'More reactions',
@@ -337,17 +370,50 @@ class _FocusMenuState extends State<_FocusMenu> {
   );
 }
 
+/// The AI-suggested reaction: a magenta glow ring and a ✨ badge.
+class _AiReaction extends StatelessWidget {
+  const _AiReaction({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    key: const ValueKey('ai-suggestion'),
+    alignment: Alignment.center,
+    children: [
+      IgnorePointer(
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: GlowColors.magenta, width: 1.5),
+            boxShadow: glow(GlowColors.magenta, intensity: 0.6),
+          ),
+        ),
+      ),
+      child,
+      const Positioned(
+        top: 2,
+        right: 6,
+        child: IgnorePointer(child: Icon(Icons.auto_awesome_rounded, size: 13, color: GlowColors.magenta)),
+      ),
+    ],
+  );
+}
+
 class _ReactionButton extends StatelessWidget {
-  const _ReactionButton({required this.emoji, required this.icon, required this.onTap});
+  const _ReactionButton({required this.emoji, required this.icon, required this.onTap, this.ai = false});
 
   final String emoji;
   final Widget icon;
   final ValueChanged<String> onTap;
+  final bool ai;
 
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
-    label: 'React $emoji',
+    label: ai ? 'React $emoji (AI suggestion)' : 'React $emoji',
     excludeSemantics: true,
     child: InkResponse(
       radius: 26,

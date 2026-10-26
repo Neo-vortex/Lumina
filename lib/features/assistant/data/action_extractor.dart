@@ -6,6 +6,7 @@ import 'package:llamadart/llamadart.dart';
 import '../../../core/models/bundled_models.dart';
 import '../domain/action_guardrails.dart';
 import '../domain/assistant_action.dart';
+import '../domain/reaction_suggestion.dart';
 import '../domain/writing_tool.dart';
 import 'assistant_prompt.dart';
 
@@ -143,6 +144,37 @@ class ActionExtractor {
           .text()
           .timeout(const Duration(seconds: 45));
       return cleanWritingOutput(raw);
+    } finally {
+      _running--;
+      _idle = Timer(const Duration(minutes: 2), unload);
+    }
+  }
+
+  /// The reaction the model suggests for [text] (one of [reactionLabels]),
+  /// or null when unsure or the model fails.
+  Future<String?> suggestReaction(String text) async {
+    _idle?.cancel();
+    _running++;
+    try {
+      final engine = await _ready(null);
+      final raw = await engine
+          .create(
+            [
+              LlamaChatMessage.fromText(role: LlamaChatRole.system, text: reactionSystemPrompt),
+              LlamaChatMessage.fromText(role: LlamaChatRole.user, text: text),
+            ],
+            params: const GenerationParams(maxTokens: 16, temp: 0, topK: 1),
+            responseFormat: const {
+              'type': 'json_schema',
+              'json_schema': {'name': 'reaction', 'schema': reactionSchema},
+            },
+            enableThinking: false,
+          )
+          .text()
+          .timeout(const Duration(seconds: 15));
+      return reactionFromModel(raw);
+    } catch (_) {
+      return null;
     } finally {
       _running--;
       _idle = Timer(const Duration(minutes: 2), unload);

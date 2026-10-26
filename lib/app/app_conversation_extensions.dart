@@ -163,6 +163,14 @@ class AppConversationExtensions extends ConversationExtensions {
           MediaPanel(chatId: chat.id, height: height, onEmoji: onEmoji, onSent: onSent);
 
   @override
+  Future<String?>? aiReaction(BuildContext context, td.Message message) {
+    if (!prefs.aiReactionSuggestion) return null;
+    final text = messageText(message)?.text.trim() ?? '';
+    if (text.isEmpty) return null;
+    return context.read<ActionExtractor>().suggestReaction(text);
+  }
+
+  @override
   VoidCallback? writingTools(BuildContext context, TextEditingController text) => () async {
     final extractor = context.read<ActionExtractor>();
     final draft = text.text.trim();

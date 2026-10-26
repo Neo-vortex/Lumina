@@ -43,6 +43,9 @@ class ConversationExtensions {
     td.Chat chat,
   ) => null;
 
+  /// The AI's suggested reaction for [message]; null when off or unavailable.
+  Future<String?>? aiReaction(BuildContext context, td.Message message) => null;
+
   /// Opens on-device writing help on the draft; null when unavailable.
   VoidCallback? writingTools(BuildContext context, TextEditingController text) => null;
 

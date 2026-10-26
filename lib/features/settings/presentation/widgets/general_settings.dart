@@ -124,6 +124,12 @@ class ReactionSettings extends StatelessWidget {
             onTap: () => _pick(context, prefs),
           ),
           SwitchListTile(
+            value: prefs.aiReactionSuggestion,
+            onChanged: (v) => prefs.aiReactionSuggestion = v,
+            title: const Text('AI reaction suggestion'),
+            subtitle: const Text('When you tap a message, the on-device AI suggests one reaction (marked ✨)'),
+          ),
+          SwitchListTile(
             value: prefs.animatedEmoji,
             onChanged: (v) => prefs.animatedEmoji = v,
             title: const Text('Animated emoji'),

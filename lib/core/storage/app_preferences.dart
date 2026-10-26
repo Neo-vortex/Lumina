@@ -77,6 +77,10 @@ class AppPreferences {
       _string('emoji.recent')?.split(' ').where((e) => e.isNotEmpty).toList() ?? const [];
   set recentEmoji(List<String> v) => _set('emoji.recent', v.join(' '));
 
+  /// The on-device model suggests a reaction when you tap a message.
+  bool get aiReactionSuggestion => _bool('reactions.ai', true);
+  set aiReactionSuggestion(bool v) => _set('reactions.ai', v);
+
   /// Play animated emoji, reactions and custom emoji; off shows them static.
   bool get animatedEmoji => _bool('emoji.animated', true);
   set animatedEmoji(bool v) => _set('emoji.animated', v);

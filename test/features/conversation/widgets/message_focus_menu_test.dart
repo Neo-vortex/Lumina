@@ -112,4 +112,45 @@ void main() {
     expect(find.ancestor(of: bubble, matching: find.byType(Material)), findsWidgets);
     expect(find.byType(BackdropFilter), findsOneWidget);
   });
+
+  testWidgets('an AI suggestion leads the pill, marked as AI', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MultiRepositoryProvider(
+        providers: [
+          RepositoryProvider.value(value: AppPreferences.inMemory()),
+          RepositoryProvider(create: (_) => FileStore(FakeTdClient())),
+        ],
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showMessageMenu(
+                context,
+                message: fakeMessage(1),
+                properties: null,
+                reactions: Future.value(['👍', '❤', '🤣', '😢']),
+                quickReactions: const ['👍', '❤'],
+                aiSuggestion: Future.value('🤣'),
+                protectedContent: false,
+              ),
+              child: const Text('go'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('go'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    final pill = find.byKey(const ValueKey('quick-reactions'));
+    final shown = tester
+        .widgetList<Text>(find.descendant(of: pill, matching: find.byType(Text)))
+        .map((t) => t.data)
+        .toList();
+    expect(shown.first, '🤣');
+    expect(find.byKey(const ValueKey('ai-suggestion')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('AI suggestion')), findsOneWidget);
+  });
 }
