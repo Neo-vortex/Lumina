@@ -66,10 +66,10 @@ void main() {
       client.emitUpdate(td.UpdateNewMessage(message: fakeMessage(4, date: 1761390240)));
       await tester.pump();
       expect(find.byType(MessageBubble), findsNWidgets(4));
-      final fade = tester.widget<FadeTransition>(
-        find.descendant(of: find.byKey(const ValueKey(3)), matching: find.byType(FadeTransition)).first,
+      final fades = tester.widgetList<FadeTransition>(
+        find.descendant(of: find.byKey(const ValueKey(3)), matching: find.byType(FadeTransition)),
       );
-      expect(fade.opacity.value, 1);
+      expect(fades.where((f) => f.opacity.value < 1), isEmpty);
 
       await tester.pumpWidget(const SizedBox());
     },

@@ -18,6 +18,9 @@ import 'reactions_row.dart';
 /// Delivery state of an outgoing message.
 enum Delivery { pending, failed, sent, read }
 
+/// Shared: building a [DateFormat] parses its pattern each time.
+final _hm = DateFormat.Hm();
+
 /// A glowing message bubble (spec §9.2).
 class MessageBubble extends StatefulWidget {
   const MessageBubble({
@@ -57,6 +60,14 @@ class MessageBubble extends StatefulWidget {
 
 class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateMixin {
   late final AnimationController _entrance = AnimationController(vsync: this, duration: Motion.standard);
+  late final CurvedAnimation _entranceCurve = CurvedAnimation(parent: _entrance, curve: Motion.enter);
+  late final Animation<Offset> _slide = Tween(
+    begin: const Offset(0, 0.25),
+    end: Offset.zero,
+  ).animate(_entranceCurve);
+
+  /// Only bubbles that play the entrance get the fade and slide wrappers.
+  bool _animates = false;
   late final AnimationController _bloom = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 900),
@@ -75,6 +86,7 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
     if (_entered) return;
     _entered = true;
     if (widget.animateIn && Motion.ambientEnabled(context)) {
+      _animates = true;
       _entrance.forward();
       if (widget.row.primary.isOutgoing) _bloom.forward();
     } else {
@@ -84,6 +96,7 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
 
   @override
   void dispose() {
+    if (_animates) _entranceCurve.dispose();
     _entrance.dispose();
     _bloom.dispose();
     super.dispose();
@@ -319,22 +332,18 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
       label: _semanticLabel(cache, m, delivery, outgoing),
       onLongPressHint: 'message actions',
       customSemanticsActions: {const CustomSemanticsAction(label: 'Reply'): widget.onReply},
-      child: FadeTransition(
-        opacity: _entrance,
-        child: SlideTransition(
-          position: Tween(
-            begin: const Offset(0, 0.25),
-            end: Offset.zero,
-          ).animate(CurvedAnimation(parent: _entrance, curve: Motion.enter)),
-          child: swipe,
-        ),
-      ),
+      child: _animates
+          ? FadeTransition(
+              opacity: _entrance,
+              child: SlideTransition(position: _slide, child: swipe),
+            )
+          : swipe,
     );
   }
 
   String _semanticLabel(TelegramCache cache, td.Message m, Delivery delivery, bool outgoing) {
     final who = outgoing ? 'You' : Display.senderName(cache, m.senderId);
-    final time = DateFormat.Hm().format(Display.messageDate(m));
+    final time = _hm.format(Display.messageDate(m));
     final state = outgoing
         ? switch (delivery) {
             Delivery.read => ', read',
@@ -375,7 +384,7 @@ class _Footer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final time = DateFormat.Hm().format(Display.messageDate(message));
+    final time = _hm.format(Display.messageDate(message));
     return ExcludeSemantics(
       child: Row(
         mainAxisSize: MainAxisSize.min,

@@ -8,20 +8,20 @@ import 'package:lumina/features/conversation/presentation/widgets/message_rows.d
 import '../../../helpers/fakes.dart';
 
 void main() {
-  testWidgets('with animations disabled a new bubble appears at once, no entrance slide', (tester) async {
+  Future<void> pump(WidgetTester tester, {required bool animateIn, bool disableAnimations = false}) async {
     await tester.pumpWidget(
       RepositoryProvider(
         create: (_) => TelegramCache(FakeTdClient()),
         child: MaterialApp(
           home: MediaQuery(
-            data: const MediaQueryData(disableAnimations: true),
+            data: MediaQueryData(disableAnimations: disableAnimations),
             child: Scaffold(
               body: MessageBubble(
                 row: BubbleRow(messages: [fakeMessage(1)], firstInRun: true, lastInRun: true),
                 chat: fakeChat(1),
                 isGroup: false,
                 isChannel: false,
-                animateIn: true,
+                animateIn: animateIn,
                 highlighted: false,
                 selected: false,
                 selecting: false,
@@ -36,9 +36,21 @@ void main() {
         ),
       ),
     );
-    final fade = tester.widget<FadeTransition>(
-      find.descendant(of: find.byType(MessageBubble), matching: find.byType(FadeTransition)).first,
+  }
+
+  testWidgets('with animations disabled a new bubble appears at once, no entrance slide', (tester) async {
+    await pump(tester, animateIn: true, disableAnimations: true);
+    expect(
+      find.descendant(of: find.byType(MessageBubble), matching: find.byType(SlideTransition)),
+      findsNothing,
     );
-    expect(fade.opacity.value, 1);
+  });
+
+  testWidgets('a bubble that does not animate in carries no fade or slide wrappers', (tester) async {
+    await pump(tester, animateIn: false);
+    expect(
+      find.descendant(of: find.byType(MessageBubble), matching: find.byType(SlideTransition)),
+      findsNothing,
+    );
   });
 }
