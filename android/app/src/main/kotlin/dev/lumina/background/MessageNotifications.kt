@@ -204,6 +204,13 @@ class MessageNotifications(private val context: Context, messenger: BinaryMessen
         }
 
         /** A notification tap asked to open a chat (MainActivity forwards it). */
+        /** A tg:// or t.me link opened from another app. */
+        fun openLink(url: String) {
+            val event = mapOf("type" to "link", "url" to url)
+            val target = instance
+            if (target != null) target.deliver(event) else synchronized(pending) { pending += event }
+        }
+
         fun openChat(chatId: Long) {
             val event = mapOf("type" to "open", "chatId" to chatId)
             val target = instance

@@ -56,6 +56,25 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Telegram links Lumina handles itself (folders, proxies). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="tg" android:host="addlist"/>
+                <data android:scheme="tg" android:host="proxy"/>
+                <data android:scheme="tg" android:host="socks"/>
+            </intent-filter>
+            <!-- Off until the user enables it under "Open by default" (t.me can't be verified for us). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="t.me" android:pathPrefix="/addlist"/>
+                <data android:scheme="https" android:host="t.me" android:pathPrefix="/proxy"/>
+                <data android:scheme="https" android:host="t.me" android:pathPrefix="/socks"/>
+                <data android:scheme="https" android:host="telegram.me" android:pathPrefix="/addlist"/>
+            </intent-filter>
         </activity>
         <service
             android:name=".LiveLocationService"

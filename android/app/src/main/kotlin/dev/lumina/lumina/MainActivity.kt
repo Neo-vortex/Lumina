@@ -63,6 +63,10 @@ class MainActivity : FlutterActivity() {
             intent?.removeExtra(MessageNotifications.EXTRA_OPEN_CHAT)
             MessageNotifications.openChat(chat)
         }
+        if (intent != null && intent.action == Intent.ACTION_VIEW) {
+            intent.data?.let { MessageNotifications.openLink(it.toString()) }
+            intent.data = null
+        }
         val action = intent?.getStringExtra(CallChannel.EXTRA_CALL_ACTION) ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
