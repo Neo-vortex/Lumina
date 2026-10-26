@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../storage/app_preferences.dart';
+import 'internal_links.dart';
 
 /// Opens a link the way the user chose (Settings → Chats → "Open links
 /// in"): a Chromium Custom Tab by default, never an embedded WebView, or
@@ -11,6 +12,12 @@ import '../storage/app_preferences.dart';
 Future<bool> openLink(BuildContext context, String url) async {
   final uri = Uri.tryParse(url);
   if (uri == null) return false;
+  try {
+    if (await context.read<InternalLinks>().tryOpen(context, url)) return true;
+  } on ProviderNotFoundException {
+    // Tests and previews: no in-app handlers.
+  }
+  if (!context.mounted) return false;
   var external = false;
   try {
     external = context.read<AppPreferences>().openLinksExternally;

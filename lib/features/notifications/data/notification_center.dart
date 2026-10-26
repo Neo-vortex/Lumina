@@ -74,6 +74,7 @@ class NotificationCenter with WidgetsBindingObserver {
     required this._cache,
     required this._sink,
     this._openChat,
+    this._openLink,
     this._foreground,
   }) {
     _subs = [_client.updates.listen(_onUpdate), _sink.actions.listen(_onAction, onError: (_) {})];
@@ -87,6 +88,7 @@ class NotificationCenter with WidgetsBindingObserver {
   final TelegramCache _cache;
   final NotificationSink _sink;
   final void Function(int chatId)? _openChat;
+  final void Function(String url)? _openLink;
   final bool Function()? _foreground;
   late final List<StreamSubscription<Object?>> _subs;
   var _resumed = false;
@@ -163,6 +165,11 @@ class NotificationCenter with WidgetsBindingObserver {
   }
 
   Future<void> _onAction(Map<Object?, Object?> a) async {
+    if (a['type'] == 'link') {
+      final url = a['url'] as String?;
+      if (url != null) _openLink?.call(url);
+      return;
+    }
     final chatId = (a['chatId'] as num?)?.toInt();
     if (chatId == null) return;
     switch (a['type']) {

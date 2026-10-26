@@ -14,7 +14,10 @@ import '../core/models/bundled_models.dart';
 import '../features/proxy/data/proxy_repository.dart';
 import '../features/assistant/data/action_extractor.dart';
 import '../features/auth/presentation/widgets/auth_scaffold.dart';
+import '../core/telegram/internal_links.dart';
+import '../features/proxy/data/proxy_config.dart';
 import '../features/proxy/presentation/screens/proxy_screen.dart';
+import '../features/proxy/presentation/widgets/proxy_link_dialog.dart';
 import '../features/proxy/presentation/widgets/connection_settings.dart';
 import '../features/proxy/presentation/widgets/proxy_button.dart';
 import '../features/search/data/message_indexer.dart';
@@ -133,6 +136,7 @@ List<RepositoryProvider<Object>> featureProviders() => [
   ),
   // Not lazy: posts notifications from the moment TDLib is up, also when the
   // engine was started without UI by the background worker.
+  RepositoryProvider<InternalLinks>(create: (_) => InternalLinks(appLinkHandlers())),
   RepositoryProvider<NotificationCenter>(
     lazy: false,
     create: (c) => NotificationCenter(
@@ -140,6 +144,10 @@ List<RepositoryProvider<Object>> featureProviders() => [
       cache: c.read<TelegramCache>(),
       sink: ChannelNotificationSink(),
       openChat: (chatId) => appNavigatorKey.currentState?.push(ConversationScreen.route(chatId)),
+      openLink: (url) {
+        final context = appNavigatorKey.currentContext;
+        if (context != null) context.read<InternalLinks>().tryOpen(context, url).ignore();
+      },
     ),
     dispose: (n) => n.dispose(),
   ),
@@ -239,3 +247,11 @@ class _ChatListExtensions extends ChatListExtensions {
   @override
   List<Widget> headerActions(BuildContext context) => const [ProxyButton()];
 }
+
+/// Links Lumina opens itself. Folder links are added with the folders feature.
+List<InternalLinkHandler> appLinkHandlers() => [
+  InternalLinkHandler(
+    matches: (uri) => ProxyConfig.parseLink(uri.toString()) != null,
+    open: (context, uri) => confirmProxyLink(context, ProxyConfig.parseLink(uri.toString())!),
+  ),
+];
