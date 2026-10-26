@@ -6,8 +6,9 @@ import '../../data/proxy_config.dart';
 import '../../data/proxy_repository.dart';
 import '../screens/proxy_screen.dart';
 
-/// Chat list header button: glows while a proxy is on and opens the proxy
-/// list (scan, paste, switch).
+/// Chat list header button, shown only while connected through a proxy:
+/// a glowing shield that opens the proxy list (scan, paste, switch). With no
+/// proxy, the connection status capsule is the way in.
 class ProxyButton extends StatelessWidget {
   const ProxyButton({super.key});
 
@@ -16,15 +17,17 @@ class ProxyButton extends StatelessWidget {
     final repo = context.read<ProxyRepository>();
     return ValueListenableBuilder<ProxyConfig?>(
       valueListenable: repo.activeProxy,
-      builder: (context, active, _) => IconButton(
-        tooltip: active == null ? 'Proxy: off' : 'Proxy: ${active.server}',
-        icon: Icon(
-          active == null ? Icons.shield_outlined : Icons.shield_rounded,
-          color: active == null ? null : GlowColors.cyan,
-          shadows: active == null ? null : const [Shadow(color: GlowColors.cyan, blurRadius: 12)],
-        ),
-        onPressed: () => Navigator.of(context).push(ProxyScreen.route()),
-      ),
+      builder: (context, active, _) => active == null
+          ? const SizedBox.shrink()
+          : IconButton(
+              tooltip: 'Proxy: ${active.server}',
+              icon: const Icon(
+                Icons.shield_rounded,
+                color: GlowColors.cyan,
+                shadows: [Shadow(color: GlowColors.cyan, blurRadius: 12)],
+              ),
+              onPressed: () => Navigator.of(context).push(ProxyScreen.route()),
+            ),
     );
   }
 }

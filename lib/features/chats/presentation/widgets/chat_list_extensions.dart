@@ -57,6 +57,9 @@ class ChatListExtensions {
   /// Shown before the search button.
   List<Widget> headerActions(BuildContext context) => const [];
 
+  /// Tapping the connection status (connection and proxy settings).
+  void openConnectionSettings(BuildContext context) {}
+
   /// Rebuilds the lens when it fires (new chats in shared folders).
   Listenable? get lensListenable => null;
 

@@ -10,37 +10,50 @@ import '../../../helpers/fakes.dart';
 void main() {
   late FakeTdClient client;
 
-  Future<void> pump(WidgetTester tester) async {
+  Future<List<String>> pump(WidgetTester tester) async {
     client = FakeTdClient();
+    final taps = <String>[];
     await tester.pumpWidget(
       RepositoryProvider(
         create: (_) => TelegramCache(client),
-        child: const MaterialApp(
-          home: Scaffold(body: ConnectionAwareTitle(title: 'Chats')),
+        child: MaterialApp(
+          home: Scaffold(
+            body: ConnectionAwareTitle(title: 'Chats', onStatusTap: () => taps.add('status')),
+          ),
         ),
       ),
     );
+    return taps;
   }
 
-  testWidgets('spinner settles into a static icon after 3 s in one state', (tester) async {
-    await pump(tester);
-    expect(find.text('Connecting…'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+  testWidgets('the folder title stays; a status capsule sits beside it and opens connection settings', (
+    tester,
+  ) async {
+    final taps = await pump(tester);
+    expect(find.text('Chats'), findsOneWidget);
+    expect(find.text('Connecting'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing, reason: 'no Telegram-style spinner');
+    await tester.tap(find.text('Connecting'));
+    expect(taps, ['status']);
+  });
 
-    await tester.pump(const Duration(seconds: 3));
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+  testWidgets('the capsule pulses briefly, then rests: no frames at idle', (tester) async {
+    await pump(tester);
+    await tester.pump(const Duration(seconds: 4));
     expect(tester.binding.hasScheduledFrame, isFalse);
   });
 
-  testWidgets('a new state restarts the spinner', (tester) async {
+  testWidgets('each state has its own word; ready hides the capsule', (tester) async {
     await pump(tester);
-    await tester.pump(const Duration(seconds: 4));
-    client.emitUpdate(const td.UpdateConnectionState(state: td.ConnectionStateUpdating()));
+    client.emitUpdate(const td.UpdateConnectionState(state: td.ConnectionStateWaitingForNetwork()));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Updating…'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('No network'), findsOneWidget);
+    client.emitUpdate(const td.UpdateConnectionState(state: td.ConnectionStateReady()));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('No network'), findsNothing);
+    expect(find.text('Chats'), findsOneWidget);
     await tester.pump(const Duration(seconds: 4));
   });
 }

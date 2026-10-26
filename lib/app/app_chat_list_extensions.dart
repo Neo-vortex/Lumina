@@ -13,6 +13,7 @@ import '../features/folders/presentation/screens/folder_manager_screen.dart';
 import '../features/folders/presentation/widgets/add_to_folder_sheet.dart';
 import '../features/folders/presentation/widgets/folder_share_sheet.dart';
 import '../features/folders/presentation/widgets/join_folder_sheet.dart';
+import '../features/proxy/presentation/screens/proxy_screen.dart';
 import '../features/proxy/presentation/widgets/proxy_button.dart';
 
 /// Folders and the proxy button, plugged into the chat list.
@@ -24,6 +25,9 @@ class AppChatListExtensions extends ChatListExtensions {
 
   @override
   List<Widget> headerActions(BuildContext context) => const [ProxyButton()];
+
+  @override
+  void openConnectionSettings(BuildContext context) => Navigator.of(context).push(ProxyScreen.route());
 
   @override
   Listenable? get lensListenable => folders.newChats;

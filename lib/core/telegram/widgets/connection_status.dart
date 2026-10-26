@@ -7,49 +7,53 @@ import 'package:lumina_tdlib/api.dart' as td;
 import '../../theme/glow_colors.dart';
 import '../telegram_cache.dart';
 
-/// Title that turns into "Connecting…" / "Waiting for network…" while TDLib
-/// is not ready, with a soft pulsing dot (announced to TalkBack).
+/// The chat list title (the folder name, always shown) with a glowing
+/// status capsule beside it while TDLib isn't ready: a dot and one word in
+/// the state's colour. The dot pulses for a few seconds, then rests, so a
+/// slow proxy doesn't keep the screen drawing. Tapping the capsule runs
+/// [onStatusTap] (connection and proxy settings). Announced to TalkBack.
 class ConnectionAwareTitle extends StatefulWidget {
-  const ConnectionAwareTitle({super.key, required this.title, this.glow});
+  const ConnectionAwareTitle({super.key, required this.title, this.glow, this.onStatusTap});
 
   final String title;
   final Color? glow;
+  final VoidCallback? onStatusTap;
 
   @override
   State<ConnectionAwareTitle> createState() => _ConnectionAwareTitleState();
 }
 
-class _ConnectionAwareTitleState extends State<ConnectionAwareTitle> {
+class _ConnectionAwareTitleState extends State<ConnectionAwareTitle> with SingleTickerProviderStateMixin {
   StreamSubscription<CacheEvent>? _sub;
-  Timer? _settle;
+  late final _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
 
-  /// The spinner rests as a static icon after this long in one state, so a
-  /// slow proxy doesn't keep the screen producing frames for minutes.
-  bool _settled = false;
-
-  void _restartSettle() {
-    _settle?.cancel();
-    _settled = false;
-    _settle = Timer(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _settled = true);
+  void _restartPulse() {
+    _pulse
+      ..stop()
+      ..value = 0;
+    // Three breaths (~3 s), then the dot holds still.
+    _pulse.repeat(reverse: true, count: 3).whenCompleteOrCancel(() {
+      if (mounted) _pulse.value = 1;
     });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _sub ??= context
-        .read<TelegramCache>()
-        .events
-        .where((e) => e is ConnectionChanged)
-        .listen((_) => setState(_restartSettle));
-    if (_settle == null) _restartSettle();
+    if (_sub == null) {
+      _sub = context
+          .read<TelegramCache>()
+          .events
+          .where((e) => e is ConnectionChanged)
+          .listen((_) => setState(_restartPulse));
+      _restartPulse();
+    }
   }
 
   @override
   void dispose() {
     _sub?.cancel();
-    _settle?.cancel();
+    _pulse.dispose();
     super.dispose();
   }
 
@@ -58,42 +62,92 @@ class _ConnectionAwareTitleState extends State<ConnectionAwareTitle> {
     final state = context.read<TelegramCache>().connectionState;
     final status = switch (state) {
       td.ConnectionStateReady() => null,
-      td.ConnectionStateWaitingForNetwork() => 'Waiting for network…',
-      td.ConnectionStateConnectingToProxy() => 'Connecting to proxy…',
-      td.ConnectionStateConnecting() => 'Connecting…',
-      td.ConnectionStateUpdating() => 'Updating…',
+      td.ConnectionStateWaitingForNetwork() => ('No network', GlowColors.coral, 'Waiting for network'),
+      td.ConnectionStateConnectingToProxy() => ('Proxy…', GlowColors.violet, 'Connecting to proxy'),
+      td.ConnectionStateConnecting() => ('Connecting', GlowColors.amber, 'Connecting'),
+      td.ConnectionStateUpdating() => ('Updating', GlowColors.cyan, 'Updating'),
     };
-    return Semantics(
-      liveRegion: status != null,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
-        child: status == null
-            ? Text(
-                widget.title,
-                key: const ValueKey('title'),
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  shadows: widget.glow == null
-                      ? null
-                      : [Shadow(color: widget.glow!.withValues(alpha: 0.7), blurRadius: 14)],
-                ),
-              )
-            : Row(
-                key: ValueKey(status),
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox.square(
-                    dimension: 14,
-                    child: _settled
-                        ? const Icon(Icons.cloud_sync_outlined, size: 14, color: GlowColors.amber)
-                        : const CircularProgressIndicator(strokeWidth: 2, color: GlowColors.amber),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: Text(
+            widget.title,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+              shadows: widget.glow == null
+                  ? null
+                  : [Shadow(color: widget.glow!.withValues(alpha: 0.7), blurRadius: 14)],
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
+          child: status == null
+              ? const SizedBox.shrink()
+              : Padding(
+                  padding: const EdgeInsets.only(left: 10),
+                  child: Semantics(
+                    liveRegion: true,
+                    button: widget.onStatusTap != null,
+                    label: '${status.$3}. Double tap for connection settings',
+                    excludeSemantics: true,
+                    child: GestureDetector(
+                      onTap: widget.onStatusTap,
+                      child: _Capsule(label: status.$1, color: status.$2, pulse: _pulse),
+                    ),
                   ),
-                  const SizedBox(width: 10),
-                  Text(status, style: const TextStyle(fontSize: 17, color: GlowColors.amber)),
-                ],
-              ),
-      ),
+                ),
+        ),
+      ],
     );
   }
+}
+
+class _Capsule extends StatelessWidget {
+  const _Capsule({required this.label, required this.color, required this.pulse});
+
+  final String label;
+  final Color color;
+  final Animation<double> pulse;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.fromLTRB(8, 4, 10, 4),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.14),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: color.withValues(alpha: 0.5)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedBuilder(
+          animation: pulse,
+          builder: (context, _) => Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color,
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.35 + 0.5 * pulse.value),
+                  blurRadius: 4 + 6 * pulse.value,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+      ],
+    ),
+  );
 }

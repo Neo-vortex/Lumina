@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/telegram/widgets/connection_status.dart';
 import '../../domain/lens_entry.dart';
+import 'chat_list_extensions.dart';
 
 /// "Work ▾": the current lens, glowing in its colour. Tap opens the picker.
 class LensTitle extends StatelessWidget {
@@ -17,7 +18,11 @@ class LensTitle extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Flexible(
-          child: ConnectionAwareTitle(title: entry.title, glow: onTap == null ? null : color),
+          child: ConnectionAwareTitle(
+            title: entry.title,
+            glow: onTap == null ? null : color,
+            onStatusTap: () => ChatListExtensions.of(context).openConnectionSettings(context),
+          ),
         ),
         if (onTap != null) Icon(Icons.expand_more_rounded, color: color),
       ],
