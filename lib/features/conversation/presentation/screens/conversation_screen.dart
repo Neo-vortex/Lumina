@@ -298,6 +298,18 @@ class _ConversationScreenState extends State<ConversationScreen> {
     return BlocConsumer<ConversationCubit, ConversationState>(
       listenWhen: (a, b) => a.anchor?.serial != b.anchor?.serial && b.anchor != null,
       listener: (context, state) => _scrollToAnchor(state.anchor!.messageId),
+      // The scaffold (header, pinned banner, composer) rebuilds only for what
+      // it shows; the message list has its own builder.
+      buildWhen: (a, b) =>
+          !identical(a.chat, b.chat) ||
+          a.revision != b.revision ||
+          a.initialLoading != b.initialLoading ||
+          a.selecting != b.selecting ||
+          a.selected.length != b.selected.length ||
+          a.pinned != b.pinned ||
+          a.replyTo != b.replyTo ||
+          a.replyQuote != b.replyQuote ||
+          a.editing != b.editing,
       builder: (context, state) {
         final chat = state.chat ?? cache.chats[state.chatId];
         if (chat == null) {
@@ -305,13 +317,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
             body: Center(child: CircularProgressIndicator(color: GlowColors.violet)),
           );
         }
-        if (!_initialised && !state.initialLoading) {
-          _initialised = true;
-          _seenAtOpen.addAll(state.messages.map((m) => m.id));
-          WidgetsBinding.instance.addPostFrameCallback((_) => _reportVisible());
-        }
-        _updateRows(state);
-        _adsOffset = state.hasNewer ? 0 : state.sponsored.length;
         final isGroup =
             chat.type is td.ChatTypeBasicGroup ||
             (chat.type is td.ChatTypeSupergroup && !cache.isChannel(chat));
@@ -369,60 +374,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                           ? () => _cubit.unpin(state.pinned!)
                           : null,
                     ),
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        if (state.initialLoading)
-                          const Center(child: CircularProgressIndicator(color: GlowColors.violet))
-                        else
-                          NotificationListener<ScrollNotification>(
-                            onNotification: (n) {
-                              if (n.metrics.extentAfter < 800) _cubit.loadOlder();
-                              if (n.metrics.extentBefore < 300 && state.hasNewer) _cubit.loadNewer();
-                              if (n is ScrollEndNotification) _reportVisible();
-                              return false;
-                            },
-                            child: SuperListView.builder(
-                              reverse: true,
-                              controller: _scroll,
-                              listController: _list,
-                              padding: const EdgeInsets.only(top: 12, bottom: 8),
-                              itemCount: _rows.length + (state.hasOlder ? 1 : 0) + _adsOffset,
-                              itemBuilder: (context, i) {
-                                final ads = _adsOffset;
-                                if (i < ads) {
-                                  final ad = state.sponsored[i];
-                                  _cubit.sponsoredVisible(ad);
-                                  return SponsoredCard(ad: ad, onOpen: () => _cubit.sponsoredClicked(ad));
-                                }
-                                i -= ads;
-                                if (i >= _rows.length) {
-                                  return const Padding(
-                                    padding: EdgeInsets.all(16),
-                                    child: Center(
-                                      child: SizedBox.square(
-                                        dimension: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: GlowColors.violet,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }
-                                return _buildRow(_rows[i], chat, state, isGroup, isChannel);
-                              },
-                            ),
-                          ),
-                        if (_showJump || state.hasNewer)
-                          Positioned(
-                            right: 16,
-                            bottom: 16,
-                            child: _JumpButton(unread: chat.unreadCount, onTap: _cubit.jumpToLatest),
-                          ),
-                      ],
-                    ),
-                  ),
+                  Expanded(child: _messageList(cache, isGroup, isChannel)),
                   if (canPost)
                     ListenableBuilder(
                       listenable: extensions.composerListenable,
@@ -458,6 +410,80 @@ class _ConversationScreenState extends State<ConversationScreen> {
       },
     );
   }
+
+  Widget _messageList(TelegramCache cache, bool isGroup, bool isChannel) =>
+      BlocBuilder<ConversationCubit, ConversationState>(
+        buildWhen: (a, b) =>
+            !identical(a.messages, b.messages) ||
+            !identical(a.chat, b.chat) ||
+            !identical(a.sponsored, b.sponsored) ||
+            a.revision != b.revision ||
+            a.firstUnreadId != b.firstUnreadId ||
+            a.highlightId != b.highlightId ||
+            a.selected != b.selected ||
+            a.hasOlder != b.hasOlder ||
+            a.hasNewer != b.hasNewer ||
+            a.initialLoading != b.initialLoading,
+        builder: (context, state) {
+          final chat = state.chat ?? cache.chats[state.chatId]!;
+          if (!_initialised && !state.initialLoading) {
+            _initialised = true;
+            _seenAtOpen.addAll(state.messages.map((m) => m.id));
+            WidgetsBinding.instance.addPostFrameCallback((_) => _reportVisible());
+          }
+          _updateRows(state);
+          _adsOffset = state.hasNewer ? 0 : state.sponsored.length;
+          return Stack(
+            children: [
+              if (state.initialLoading)
+                const Center(child: CircularProgressIndicator(color: GlowColors.violet))
+              else
+                NotificationListener<ScrollNotification>(
+                  onNotification: (n) {
+                    if (n.metrics.extentAfter < 800) _cubit.loadOlder();
+                    if (n.metrics.extentBefore < 300 && state.hasNewer) _cubit.loadNewer();
+                    if (n is ScrollEndNotification) _reportVisible();
+                    return false;
+                  },
+                  child: SuperListView.builder(
+                    reverse: true,
+                    controller: _scroll,
+                    listController: _list,
+                    padding: const EdgeInsets.only(top: 12, bottom: 8),
+                    itemCount: _rows.length + (state.hasOlder ? 1 : 0) + _adsOffset,
+                    itemBuilder: (context, i) {
+                      final ads = _adsOffset;
+                      if (i < ads) {
+                        final ad = state.sponsored[i];
+                        _cubit.sponsoredVisible(ad);
+                        return SponsoredCard(ad: ad, onOpen: () => _cubit.sponsoredClicked(ad));
+                      }
+                      i -= ads;
+                      if (i >= _rows.length) {
+                        return const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Center(
+                            child: SizedBox.square(
+                              dimension: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: GlowColors.violet),
+                            ),
+                          ),
+                        );
+                      }
+                      return _buildRow(_rows[i], chat, state, isGroup, isChannel);
+                    },
+                  ),
+                ),
+              if (_showJump || state.hasNewer)
+                Positioned(
+                  right: 16,
+                  bottom: 16,
+                  child: _JumpButton(unread: chat.unreadCount, onTap: _cubit.jumpToLatest),
+                ),
+            ],
+          );
+        },
+      );
 
   Widget _buildRow(MessageRow row, td.Chat chat, ConversationState state, bool isGroup, bool isChannel) {
     return switch (row) {
