@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -49,27 +50,44 @@ class _SendOrbState extends State<SendOrb> with TickerProviderStateMixin {
     _sync();
   }
 
+  /// True while the text is changing. The wave (and the full-charge pulse)
+  /// only run then: a still composer, e.g. holding a restored draft, must
+  /// not redraw the screen at the display rate.
+  var _typing = false;
+  Timer? _settle;
+
   @override
   void didUpdateWidget(SendOrb oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.charge != widget.charge) {
+      _typing = true;
+      _settle?.cancel();
+      _settle = Timer(const Duration(milliseconds: 1500), () {
+        if (!mounted) return;
+        _typing = false;
+        _sync();
+      });
+    }
     _sync();
   }
 
   void _sync() {
     final ambient = Motion.ambientEnabled(context);
-    final pulsing = ambient && (widget.charge >= 1 || widget.mode == OrbMode.stop);
+    final pulsing = ambient && ((_typing && widget.charge >= 1) || widget.mode == OrbMode.stop);
     if (pulsing && !_pulse.isAnimating) {
       _pulse.repeat(reverse: true);
     } else if (!pulsing && _pulse.isAnimating) {
       _pulse.stop();
       _pulse.value = 0;
     }
-    if (ambient && widget.charge > 0 && !_wave.isAnimating) _wave.repeat();
-    if ((!ambient || widget.charge == 0) && _wave.isAnimating) _wave.stop();
+    final waving = ambient && _typing && widget.charge > 0;
+    if (waving && !_wave.isAnimating) _wave.repeat();
+    if (!waving && _wave.isAnimating) _wave.stop();
   }
 
   @override
   void dispose() {
+    _settle?.cancel();
     _pulse.dispose();
     _wave.dispose();
     super.dispose();
