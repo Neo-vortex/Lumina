@@ -15,6 +15,7 @@ import '../../../../../core/telegram/widgets/looping_gif.dart';
 import '../../../../../core/telegram/widgets/td_file_image.dart';
 import '../../../../../core/theme/glow_colors.dart';
 import '../../../../media/presentation/screens/media_viewer_screen.dart';
+import '../../../../media/presentation/widgets/media_flight.dart';
 import '../../../bloc/conversation_cubit.dart';
 
 const _maxMediaHeight = 340.0;
@@ -151,6 +152,28 @@ class MediaTile extends StatefulWidget {
 class _MediaTileState extends State<MediaTile> {
   var _revealed = false;
   var _gifPaused = false;
+  final _flightKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    MediaFlight.register(widget.message.id, _flightKey);
+  }
+
+  @override
+  void didUpdateWidget(MediaTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.message.id != widget.message.id) {
+      MediaFlight.unregister(oldWidget.message.id, _flightKey);
+      MediaFlight.register(widget.message.id, _flightKey);
+    }
+  }
+
+  @override
+  void dispose() {
+    MediaFlight.unregister(widget.message.id, _flightKey);
+    super.dispose();
+  }
 
   /// Galleries (compact) always load; chat bubbles ask the gate.
   bool _allows(MediaKind kind, td.File f) =>
@@ -199,9 +222,13 @@ class _MediaTileState extends State<MediaTile> {
           widget.onTap();
         }
       },
-      child: Hero(
-        tag: 'media-${m.id}',
+      // The viewer flies the picture to and from here; while it does, the
+      // tile steps aside (no Hero: the tile is never remounted).
+      child: ValueListenableBuilder<int?>(
+        valueListenable: MediaFlight.hidden,
+        builder: (context, hidden, child) => Opacity(opacity: hidden == m.id ? 0 : 1, child: child),
         child: Stack(
+          key: _flightKey,
           fit: StackFit.expand,
           children: [
             if (covered)

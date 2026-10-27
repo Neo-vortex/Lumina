@@ -42,6 +42,8 @@ void main() {
       ),
     );
     await tester.pump();
+    // The chrome and caption come in once the opening flight lands.
+    await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Sunset at the lake'), findsOneWidget);
     final scrim = tester.widget<Container>(find.byKey(const ValueKey('caption')));
     final colors = ((scrim.decoration as BoxDecoration).gradient as LinearGradient).colors;
