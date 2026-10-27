@@ -174,4 +174,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(picked, isNull);
   });
+
+  testWidgets('the background is blurred from the first frame, not faded in', (tester) async {
+    await pump(tester);
+    final picker = open(const Offset(300, 100));
+    await tester.pump();
+    expect(find.byType(BackdropFilter), findsOneWidget);
+    expect(
+      find.ancestor(of: find.byType(BackdropFilter), matching: find.byType(FadeTransition)),
+      findsNothing,
+      reason: 'a fading blur looks like the blur arriving late',
+    );
+    picker.cancel();
+    await tester.pump(const Duration(milliseconds: 300));
+  });
 }

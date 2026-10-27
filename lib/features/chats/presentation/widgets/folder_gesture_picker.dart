@@ -213,36 +213,47 @@ class _PickerViewState extends State<_PickerView> with TickerProviderStateMixin 
       child: Semantics(
         label: 'Folder picker. Slide to a folder and release',
         liveRegion: true,
-        child: FadeTransition(
-          opacity: CurvedAnimation(parent: _appear, curve: Motion.enter),
-          child: Stack(
-            children: [
-              const Positioned.fill(child: RepaintBoundary(child: _Backdrop())),
-              Positioned.fill(
-                child: AnimatedOpacity(
-                  duration: Motion.micro,
-                  opacity: cancelled ? 0.4 : 1,
-                  child: ListenableBuilder(
-                    listenable: Listenable.merge([_finger, _scrolled]),
-                    builder: (context, _) => Stack(
-                      children: [
-                        for (var i = 0; i < widget.entries.length; i++)
-                          _name(i, _finger.value, ambient, size),
-                      ],
+        // The blur is there at once; only the names and preview fade in.
+        child: Stack(
+          children: [
+            const Positioned.fill(child: RepaintBoundary(child: _Backdrop())),
+            Positioned.fill(
+              child: FadeTransition(
+                opacity: CurvedAnimation(parent: _appear, curve: Motion.enter),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: AnimatedOpacity(
+                        duration: Motion.micro,
+                        opacity: cancelled ? 0.4 : 1,
+                        child: ListenableBuilder(
+                          listenable: Listenable.merge([_finger, _scrolled]),
+                          builder: (context, _) => Stack(
+                            children: [
+                              for (var i = 0; i < widget.entries.length; i++)
+                                _name(i, _finger.value, ambient, size),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    if (!cancelled && _highlight != null) _previewCard(size),
+                    if (cancelled)
+                      const Center(
+                        child: Text(
+                          'Release to cancel',
+                          style: TextStyle(
+                            color: GlowColors.textMuted,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              if (!cancelled && _highlight != null) _previewCard(size),
-              if (cancelled)
-                const Center(
-                  child: Text(
-                    'Release to cancel',
-                    style: TextStyle(color: GlowColors.textMuted, fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -266,17 +277,23 @@ class _PickerViewState extends State<_PickerView> with TickerProviderStateMixin 
       textDirection: right ? TextDirection.rtl : TextDirection.ltr,
       children: [
         Flexible(
+          // Fades in quickly and out gently, so leaving a folder is soft.
           child: AnimatedContainer(
-            duration: Motion.micro,
+            duration: highlighted ? Motion.micro : Motion.screen,
+            curve: highlighted ? Motion.enter : Curves.easeOutCubic,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
-              color: highlighted ? color.withValues(alpha: 0.22) : Colors.transparent,
-              border: Border.all(color: highlighted ? color.withValues(alpha: 0.8) : Colors.transparent),
-              boxShadow: highlighted ? glow(color, intensity: 0.8) : null,
+              color: color.withValues(alpha: highlighted ? 0.22 : 0),
+              border: Border.all(color: color.withValues(alpha: highlighted ? 0.8 : 0)),
+              // Same single shadow either way, so it fades rather than pops.
+              boxShadow: highlighted
+                  ? glow(color, intensity: 0.8)
+                  : [BoxShadow(color: color.withValues(alpha: 0), blurRadius: 18)],
             ),
-            child: Text(
-              entry.title,
+            child: AnimatedDefaultTextStyle(
+              duration: highlighted ? Motion.micro : Motion.screen,
+              curve: Curves.easeOutCubic,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -284,6 +301,7 @@ class _PickerViewState extends State<_PickerView> with TickerProviderStateMixin 
                 fontSize: 17,
                 fontWeight: highlighted ? FontWeight.w700 : FontWeight.w500,
               ),
+              child: Text(entry.title),
             ),
           ),
         ),
