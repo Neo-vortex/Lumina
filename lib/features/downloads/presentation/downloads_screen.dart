@@ -9,6 +9,7 @@ import '../../../core/widgets/glow_sheet.dart';
 import '../bloc/downloads_cubit.dart';
 import '../data/download_policy.dart';
 import 'download_row.dart';
+import '../../../core/widgets/smooth_progress.dart';
 
 typedef OpenMessage = void Function(BuildContext context, int chatId, int messageId);
 
@@ -258,11 +259,14 @@ class _Header extends StatelessWidget {
           const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(
+            child: SmoothProgress(
               value: progress,
-              minHeight: 6,
-              color: GlowColors.cyan,
-              backgroundColor: GlowColors.outline,
+              builder: (context, v) => LinearProgressIndicator(
+                value: v,
+                minHeight: 6,
+                color: GlowColors.cyan,
+                backgroundColor: GlowColors.outline,
+              ),
             ),
           ),
         ],

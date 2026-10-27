@@ -4,6 +4,7 @@ import '../../../../core/media/waveform.dart';
 import '../../../../core/theme/glow_colors.dart';
 import '../../../voice/data/voice_recorder.dart';
 import '../../../voice/presentation/widgets/waveform_bars.dart';
+import '../../../../core/widgets/smooth_progress.dart';
 
 /// Shown while dictating: live level meter and "Listening…", or progress
 /// while Whisper turns the speech into text.
@@ -45,10 +46,10 @@ class DictationBar extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: transcribing
-                ? LinearProgressIndicator(
+                ? SmoothProgress(
                     value: progress > 0 ? progress : null,
-                    minHeight: 3,
-                    color: GlowColors.cyan,
+                    builder: (context, v) =>
+                        LinearProgressIndicator(value: v, minHeight: 3, color: GlowColors.cyan),
                   )
                 : WaveformBars(
                     values: Waveform.normalise(levels),

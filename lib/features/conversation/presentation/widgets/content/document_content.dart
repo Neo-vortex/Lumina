@@ -11,6 +11,7 @@ import '../../../../../core/telegram/widgets/file_progress.dart';
 import '../../../../../core/telegram/widgets/formatted_text_view.dart';
 import '../../../../../core/telegram/widgets/td_file_image.dart';
 import '../../../../../core/theme/glow_colors.dart';
+import '../../../../../core/widgets/smooth_progress.dart';
 
 /// A file: icon or thumbnail, name, size / progress. Tap downloads, then
 /// opens with the system handler.
@@ -101,7 +102,14 @@ class DocumentContent extends StatelessWidget {
                                   ),
                           ),
                           if (f.isDownloading || f.isUploading)
-                            CircularProgressIndicator(value: p, strokeWidth: 2.4, color: GlowColors.cyan),
+                            SmoothProgress(
+                              value: p,
+                              builder: (context, v) => CircularProgressIndicator(
+                                value: v,
+                                strokeWidth: 2.4,
+                                color: GlowColors.cyan,
+                              ),
+                            ),
                           if (!f.isDownloaded && !f.isDownloading && !f.isUploading)
                             Icon(Icons.download_rounded, color: textColor),
                         ],

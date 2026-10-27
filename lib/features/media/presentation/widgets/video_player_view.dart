@@ -14,6 +14,7 @@ import '../../../../core/telegram/file_store.dart';
 import '../../../../core/theme/glow_colors.dart';
 import 'play_toggle.dart';
 import 'video_dock.dart';
+import '../../../../core/widgets/smooth_progress.dart';
 
 /// libVLC playback with the spec's gestures (§7.1):
 /// * double-tap left/right: −/+10 s
@@ -460,11 +461,14 @@ class _BufferingIndicator extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             SizedBox.expand(
-              child: CircularProgressIndicator(
+              child: SmoothProgress(
                 value: known ? percent / 100 : null,
-                color: GlowColors.cyan,
-                backgroundColor: known ? Colors.white24 : null,
-                strokeWidth: 2.4,
+                builder: (context, v) => CircularProgressIndicator(
+                  value: v,
+                  color: GlowColors.cyan,
+                  backgroundColor: known ? Colors.white24 : null,
+                  strokeWidth: 2.4,
+                ),
               ),
             ),
             if (known)

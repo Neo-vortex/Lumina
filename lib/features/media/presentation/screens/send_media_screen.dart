@@ -12,6 +12,7 @@ import '../../../../core/widgets/glow_background.dart';
 import '../../../../core/widgets/send_options_sheet.dart';
 import '../../data/media_sender.dart';
 import '../widgets/video_convert_sheet.dart';
+import '../../../../core/widgets/smooth_progress.dart';
 
 /// What the review screen hands back to the conversation.
 class MediaSendRequest {
@@ -197,7 +198,10 @@ class _SendMediaScreenState extends State<SendMediaScreen> {
                   children: [
                     Semantics(liveRegion: true, child: Text(_status!)),
                     const SizedBox(height: 6),
-                    LinearProgressIndicator(value: _progress, color: GlowColors.violet),
+                    SmoothProgress(
+                      value: _progress,
+                      builder: (context, v) => LinearProgressIndicator(value: v, color: GlowColors.violet),
+                    ),
                     TextButton(
                       onPressed: () {
                         _cancel?.cancel();

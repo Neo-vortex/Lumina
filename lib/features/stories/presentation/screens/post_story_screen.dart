@@ -13,6 +13,7 @@ import '../../data/stories_repository.dart';
 import '../../domain/story_decoration.dart';
 import '../widgets/decoration_sheets.dart';
 import '../widgets/story_canvas.dart';
+import '../../../../core/widgets/smooth_progress.dart';
 
 /// Pick a photo or video, decorate it (stickers, text, reaction / link /
 /// location tags), add a caption, choose who sees it and who posts it.
@@ -359,10 +360,10 @@ class _PostStoryScreenState extends State<PostStoryScreen> {
                     icon: busy
                         ? SizedBox.square(
                             dimension: 20,
-                            child: CircularProgressIndicator(
+                            child: SmoothProgress(
                               value: _progress == 0 ? null : _progress,
-                              strokeWidth: 2.4,
-                              color: Colors.white,
+                              builder: (context, v) =>
+                                  CircularProgressIndicator(value: v, strokeWidth: 2.4, color: Colors.white),
                             ),
                           )
                         : const Icon(Icons.auto_awesome_rounded),

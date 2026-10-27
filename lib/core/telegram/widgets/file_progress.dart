@@ -5,6 +5,7 @@ import 'package:lumina_tdlib/api.dart' as td;
 import '../../theme/glow_colors.dart';
 import '../display.dart';
 import '../file_store.dart';
+import '../../widgets/smooth_progress.dart';
 
 /// Rebuilds with the latest state of a TDLib file.
 class FileBuilder extends StatefulWidget {
@@ -106,7 +107,11 @@ class TransferRing extends StatelessWidget {
                   if (active && p != null)
                     SizedBox.square(
                       dimension: size - 6,
-                      child: CircularProgressIndicator(value: p, strokeWidth: 2.6, color: GlowColors.cyan),
+                      child: SmoothProgress(
+                        value: p,
+                        builder: (context, v) =>
+                            CircularProgressIndicator(value: v, strokeWidth: 2.6, color: GlowColors.cyan),
+                      ),
                     ),
                   Icon(active ? Icons.close_rounded : idleIcon, color: Colors.white, size: size * 0.45),
                 ],

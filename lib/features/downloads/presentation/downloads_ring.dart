@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/theme/glow_colors.dart';
+import '../../../core/widgets/smooth_progress.dart';
 import '../bloc/downloads_cubit.dart';
 
 /// The chat list header's downloads button: a ring that fills with the
@@ -38,12 +39,15 @@ class DownloadsRing extends StatelessWidget {
             child: Center(
               child: SizedBox.square(
                 dimension: 30,
-                child: CustomPaint(
-                  painter: _RingPainter(progress: progress, color: color),
-                  child: Icon(
-                    paused ? Icons.pause_rounded : Icons.arrow_downward_rounded,
-                    size: 16,
-                    color: color,
+                child: SmoothProgress(
+                  value: progress,
+                  builder: (context, v) => CustomPaint(
+                    painter: _RingPainter(progress: v!, color: color),
+                    child: Icon(
+                      paused ? Icons.pause_rounded : Icons.arrow_downward_rounded,
+                      size: 16,
+                      color: color,
+                    ),
                   ),
                 ),
               ),

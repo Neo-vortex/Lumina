@@ -4,6 +4,7 @@ import 'package:lumina_tdlib/api.dart' as td;
 import '../../../../core/theme/glow_colors.dart';
 import '../../../../core/theme/motion.dart';
 import '../../data/transcription_center.dart';
+import '../../../../core/widgets/smooth_progress.dart';
 
 /// "Transcribe" button and the collapsible transcript under a voice
 /// message, with "Translate to English" (spec §8.2).
@@ -85,10 +86,9 @@ class TranscriptView extends StatelessWidget {
                 if (e.status == TranscriptStatus.working)
                   Padding(
                     padding: const EdgeInsets.only(top: 6, right: 8),
-                    child: LinearProgressIndicator(
+                    child: SmoothProgress(
                       value: e.progress > 0 ? e.progress : null,
-                      minHeight: 2,
-                      color: color,
+                      builder: (context, v) => LinearProgressIndicator(value: v, minHeight: 2, color: color),
                     ),
                   ),
                 if (e.status == TranscriptStatus.failed)
