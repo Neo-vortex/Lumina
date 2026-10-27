@@ -31,8 +31,13 @@ void main() {
     expect(dim.color.a, closeTo(0.4, 0.01));
   });
 
-  testWidgets('a photo is blurred when asked', (tester) async {
+  testWidgets('a photo is decoded at screen size and blurred once, not per frame', (tester) async {
     await pump(tester, const ChatBackdrop(BackdropImage(path: '/me.jpg'), blur: 8));
-    expect(find.byType(ImageFiltered), findsOneWidget);
+    // No live blur layer re-rasterised every frame.
+    expect(find.byType(ImageFiltered), findsNothing);
+    expect(find.byType(BakedBackdropImage), findsOneWidget);
+    final baked = tester.widget<BakedBackdropImage>(find.byType(BakedBackdropImage));
+    expect(baked.blur, 8);
+    expect(baked.decodeWidth, lessThanOrEqualTo(800 * 3));
   });
 }
