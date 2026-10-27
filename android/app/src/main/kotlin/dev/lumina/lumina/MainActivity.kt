@@ -11,6 +11,7 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -43,6 +44,21 @@ class MainActivity : FlutterActivity() {
     override fun provideFlutterEngine(context: Context): FlutterEngine = LuminaEngine.ensure(context)
 
     override fun shouldDestroyEngineWithHost(): Boolean = false
+
+    // Flutter keeps "the framework handles back" across activity recreation
+    // only for engines found by cached id, and the framework sends it only
+    // when it changes. With our long-lived engine a recreated activity would
+    // let the system take back and close the app over an open chat, so the
+    // last value lives with the engine and is re-applied here.
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setFrameworkHandlesBack(frameworkHandlesBack)
+    }
+
+    override fun setFrameworkHandlesBack(frameworkHandlesBack: Boolean) {
+        Companion.frameworkHandlesBack = frameworkHandlesBack
+        super.setFrameworkHandlesBack(frameworkHandlesBack)
+    }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         super.cleanUpFlutterEngine(flutterEngine)
@@ -421,6 +437,9 @@ class MainActivity : FlutterActivity() {
     }
 
     companion object {
+        /** Last value the framework sent, for the engine that outlives this activity. */
+        private var frameworkHandlesBack = false
+
         private const val LOCATION_REQUEST = 4107
         private const val LIVE_REQUEST = 4109
         private const val PERMISSIONS_REQUEST = 4110

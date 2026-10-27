@@ -217,128 +217,141 @@ class _ComposerState extends State<Composer> {
     final inset = MediaQuery.viewInsetsOf(context).bottom;
     if (inset > 120) _keyboardHeight = inset;
 
-    return Material(
-      color: GlowColors.background,
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedSize(
-              duration: Motion.micro,
-              curve: Motion.enter,
-              child: contextMessage == null
-                  ? const SizedBox(width: double.infinity)
-                  : _ContextStrip(
-                      message: contextMessage,
-                      editing: widget.editing != null,
-                      quote: widget.editing == null ? widget.replyQuote : null,
-                      onCancel: widget.onCancelMode,
-                    ),
-            ),
-            AnimatedSize(
-              duration: Motion.micro,
-              curve: Motion.enter,
-              child: _preview == null || _preview!.url == _dismissedUrl || widget.recordingOverlay != null
-                  ? const SizedBox(width: double.infinity)
-                  : _PreviewStrip(
-                      preview: _preview!,
-                      large: _large ?? _preview!.showLargeMedia,
-                      above: _above,
-                      onToggleSize: _preview!.hasLargeMedia
-                          ? () => setState(() => _large = !(_large ?? _preview!.showLargeMedia))
-                          : null,
-                      onToggleAbove: () => setState(() => _above = !_above),
-                      onRemove: () => setState(() => _dismissedUrl = _preview!.url),
-                    ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  if (widget.recordingOverlay == null && widget.onAttach != null)
-                    IconButton(
-                      tooltip: 'Attach',
-                      onPressed: widget.onAttach,
-                      icon: const Icon(Icons.add_circle_outline_rounded, color: GlowColors.cyan),
-                    ),
-                  Expanded(
-                    child:
-                        widget.recordingOverlay ??
-                        Container(
-                          constraints: const BoxConstraints(minHeight: 48),
-                          decoration: BoxDecoration(
-                            color: GlowColors.surface,
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: GlowColors.outlineStrong),
-                          ),
-                          child: TextField(
-                            controller: widget.controller,
-                            focusNode: _focus,
-                            onTap: () {
-                              if (_panel) setState(() => _panel = false);
-                            },
-                            onChanged: widget.onChanged,
-                            minLines: 1,
-                            maxLines: 6,
-                            textCapitalization: TextCapitalization.sentences,
-                            keyboardType: TextInputType.multiline,
-                            contextMenuBuilder: (context, state) =>
-                                ComposerSelectionMenu(state: state, controller: widget.controller),
-                            decoration: InputDecoration(
-                              hintText: widget.editing != null ? 'Edit message' : 'Message',
-                              hintStyle: const TextStyle(color: GlowColors.textMuted),
-                              border: InputBorder.none,
-                              prefixIcon: widget.mediaPanel == null
-                                  ? null
-                                  : IconButton(
-                                      tooltip: _panel ? 'Keyboard' : 'Emoji, stickers and GIFs',
-                                      onPressed: _togglePanel,
-                                      icon: Icon(
-                                        _panel ? Icons.keyboard_rounded : Icons.emoji_emotions_outlined,
-                                        color: GlowColors.textMuted,
+    // Back peels one layer at a time: the panel, then the reply or edit,
+    // and only then leaves the chat.
+    return PopScope(
+      canPop: !_panel && contextMessage == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_panel) {
+          setState(() => _panel = false);
+        } else {
+          widget.onCancelMode();
+        }
+      },
+      child: Material(
+        color: GlowColors.background,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedSize(
+                duration: Motion.micro,
+                curve: Motion.enter,
+                child: contextMessage == null
+                    ? const SizedBox(width: double.infinity)
+                    : _ContextStrip(
+                        message: contextMessage,
+                        editing: widget.editing != null,
+                        quote: widget.editing == null ? widget.replyQuote : null,
+                        onCancel: widget.onCancelMode,
+                      ),
+              ),
+              AnimatedSize(
+                duration: Motion.micro,
+                curve: Motion.enter,
+                child: _preview == null || _preview!.url == _dismissedUrl || widget.recordingOverlay != null
+                    ? const SizedBox(width: double.infinity)
+                    : _PreviewStrip(
+                        preview: _preview!,
+                        large: _large ?? _preview!.showLargeMedia,
+                        above: _above,
+                        onToggleSize: _preview!.hasLargeMedia
+                            ? () => setState(() => _large = !(_large ?? _preview!.showLargeMedia))
+                            : null,
+                        onToggleAbove: () => setState(() => _above = !_above),
+                        onRemove: () => setState(() => _dismissedUrl = _preview!.url),
+                      ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (widget.recordingOverlay == null && widget.onAttach != null)
+                      IconButton(
+                        tooltip: 'Attach',
+                        onPressed: widget.onAttach,
+                        icon: const Icon(Icons.add_circle_outline_rounded, color: GlowColors.cyan),
+                      ),
+                    Expanded(
+                      child:
+                          widget.recordingOverlay ??
+                          Container(
+                            constraints: const BoxConstraints(minHeight: 48),
+                            decoration: BoxDecoration(
+                              color: GlowColors.surface,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(color: GlowColors.outlineStrong),
+                            ),
+                            child: TextField(
+                              controller: widget.controller,
+                              focusNode: _focus,
+                              onTap: () {
+                                if (_panel) setState(() => _panel = false);
+                              },
+                              onChanged: widget.onChanged,
+                              minLines: 1,
+                              maxLines: 6,
+                              textCapitalization: TextCapitalization.sentences,
+                              keyboardType: TextInputType.multiline,
+                              contextMenuBuilder: (context, state) =>
+                                  ComposerSelectionMenu(state: state, controller: widget.controller),
+                              decoration: InputDecoration(
+                                hintText: widget.editing != null ? 'Edit message' : 'Message',
+                                hintStyle: const TextStyle(color: GlowColors.textMuted),
+                                border: InputBorder.none,
+                                prefixIcon: widget.mediaPanel == null
+                                    ? null
+                                    : IconButton(
+                                        tooltip: _panel ? 'Keyboard' : 'Emoji, stickers and GIFs',
+                                        onPressed: _togglePanel,
+                                        icon: Icon(
+                                          _panel ? Icons.keyboard_rounded : Icons.emoji_emotions_outlined,
+                                          color: GlowColors.textMuted,
+                                        ),
                                       ),
-                                    ),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-                              suffixIcon: hasText && widget.onWritingTools != null
-                                  ? IconButton(
-                                      tooltip: 'Writing help',
-                                      onPressed: widget.onWritingTools,
-                                      icon: const Icon(
-                                        Icons.auto_awesome_rounded,
-                                        color: GlowColors.magenta,
-                                        size: 20,
-                                      ),
-                                    )
-                                  : null,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+                                suffixIcon: hasText && widget.onWritingTools != null
+                                    ? IconButton(
+                                        tooltip: 'Writing help',
+                                        onPressed: widget.onWritingTools,
+                                        icon: const Icon(
+                                          Icons.auto_awesome_rounded,
+                                          color: GlowColors.magenta,
+                                          size: 20,
+                                        ),
+                                      )
+                                    : null,
+                              ),
                             ),
                           ),
-                        ),
-                  ),
-                  const SizedBox(width: 8),
-                  SendOrb(
-                    mode: mode,
-                    charge: hasText ? (text.length / _fullCharge).clamp(0.08, 1.0) : 0,
-                    // A mode forced by an extension (recording) routes taps to it.
-                    onTap: widget.orbMode != null
-                        ? (widget.onVoice ?? () {})
-                        : switch (mode) {
-                            OrbMode.send => _send,
-                            OrbMode.mic => widget.onVoice ?? () {},
-                            OrbMode.stop => widget.onVoice ?? () {},
-                            OrbMode.busy => () {},
-                          },
-                    onLongPress: hasText && widget.editing == null
-                        ? _sendOptions
-                        : (!hasText ? widget.onDictate : null),
-                  ),
-                ],
+                    ),
+                    const SizedBox(width: 8),
+                    SendOrb(
+                      mode: mode,
+                      charge: hasText ? (text.length / _fullCharge).clamp(0.08, 1.0) : 0,
+                      // A mode forced by an extension (recording) routes taps to it.
+                      onTap: widget.orbMode != null
+                          ? (widget.onVoice ?? () {})
+                          : switch (mode) {
+                              OrbMode.send => _send,
+                              OrbMode.mic => widget.onVoice ?? () {},
+                              OrbMode.stop => widget.onVoice ?? () {},
+                              OrbMode.busy => () {},
+                            },
+                      onLongPress: hasText && widget.editing == null
+                          ? _sendOptions
+                          : (!hasText ? widget.onDictate : null),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            if (_panel && widget.mediaPanel != null)
-              widget.mediaPanel!(_keyboardHeight, _insertEmoji, () => setState(() => _panel = false)),
-          ],
+              if (_panel && widget.mediaPanel != null)
+                widget.mediaPanel!(_keyboardHeight, _insertEmoji, () => setState(() => _panel = false)),
+            ],
+          ),
         ),
       ),
     );
