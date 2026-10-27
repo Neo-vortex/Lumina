@@ -13,6 +13,9 @@ import '../core/tdlib/td_client.dart';
 import '../core/telegram/telegram_cache.dart';
 import '../core/telegram/file_store.dart';
 import '../core/models/bundled_models.dart';
+import '../features/auto_download/data/auto_download_service.dart';
+import '../features/auto_download/data/network_monitor.dart';
+import '../features/auto_download/presentation/auto_download_settings.dart';
 import '../features/proxy/data/proxy_repository.dart';
 import '../features/assistant/data/action_extractor.dart';
 import '../features/auth/presentation/widgets/auth_scaffold.dart';
@@ -118,6 +121,16 @@ List<RepositoryProvider<Object>> featureProviders() => [
     dispose: (i) => i.dispose(),
   ),
   RepositoryProvider<MessageSearch>(create: (c) => c.read<MessageIndexer>()),
+  RepositoryProvider<AutoDownloadService>(
+    lazy: false,
+    create: (c) => AutoDownloadService(
+      client: c.read<TdClient>(),
+      prefs: c.read<AppPreferences>(),
+      cache: c.read<TelegramCache>(),
+      network: PlatformNetworkMonitor(),
+    ),
+    dispose: (s) => s.dispose(),
+  ),
   RepositoryProvider<ModelInstaller>(
     lazy: false,
     // Shortly after launch, off the UI thread (the copy runs natively).
@@ -242,6 +255,7 @@ List<RepositoryProvider<Object>> featureProviders() => [
         SettingsEntry(SettingsCategory.media, (_) => const SpeechSettings()),
         SettingsEntry(SettingsCategory.notifications, (_) => const ConnectionModeSettings()),
         SettingsEntry(SettingsCategory.notifications, (_) => const BackgroundSettings()),
+        SettingsEntry(SettingsCategory.data, (_) => const AutoDownloadSettings()),
         SettingsEntry(SettingsCategory.data, (_) => const StorageSettings()),
         SettingsEntry(SettingsCategory.data, (_) => const SearchSettings()),
         SettingsEntry(SettingsCategory.connection, (_) => const ConnectionSettings()),

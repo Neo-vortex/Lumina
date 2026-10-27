@@ -56,6 +56,13 @@ class AppPreferences {
     }
   }
 
+  // ---- Auto-download -------------------------------------------------------
+
+  /// One network type's auto-download policy, as JSON (see
+  /// `AutoDownloadPolicy`); null until the user changes it.
+  String? autoDownloadPolicy(String network) => _string('autoDownload.$network');
+  void setAutoDownloadPolicy(String network, String json) => _set('autoDownload.$network', json);
+
   // ---- Swipe gestures -----------------------------------------------------
 
   MessageSwipe messageSwipe(SwipeSide side) =>

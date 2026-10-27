@@ -30,6 +30,7 @@ object LuminaEngine {
         val engine = FlutterEngine(app)
         calls = CallChannel(app, engine.dartExecutor.binaryMessenger, engine.renderer)
         MessageNotifications(app, engine.dartExecutor.binaryMessenger)
+        NetworkChannel(app, engine.dartExecutor.binaryMessenger)
         val loader = FlutterInjector.instance().flutterLoader()
         loader.startInitialization(app)
         loader.ensureInitializationComplete(app, null)

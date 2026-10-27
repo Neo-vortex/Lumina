@@ -76,7 +76,7 @@ class SettingsHub extends StatelessWidget {
     SettingsCategory.chats => caps.isBot ? 'Link previews' : 'Links, stories and channel ads',
     SettingsCategory.media => 'Playback ${prefs.playbackSpeed.toStringAsFixed(2)}× · offline speech',
     SettingsCategory.notifications => 'Staying connected without Google push',
-    SettingsCategory.data => 'Media cache and local message search',
+    SettingsCategory.data => 'Auto-download, media cache and local message search',
     SettingsCategory.connection => 'Proxy and phone calls',
   };
 
