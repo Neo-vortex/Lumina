@@ -116,8 +116,14 @@ class _PickerViewState extends State<_PickerView> with TickerProviderStateMixin 
   Duration _last = Duration.zero;
   var _done = false;
 
+  /// The finger must travel a little before the picker reacts, so holding
+  /// and letting go keeps the current folder and the list doesn't scroll
+  /// from where the title sits.
+  var _armed = false;
+  static const _armDistance = 24.0;
+
   FolderPickerLayout get layout => _layout!;
-  bool get _cancelled => layout.isCancel(_finger.value);
+  bool get _cancelled => _armed && layout.isCancel(_finger.value);
 
   @override
   void didChangeDependencies() {
@@ -136,9 +142,11 @@ class _PickerViewState extends State<_PickerView> with TickerProviderStateMixin 
       _layout = fresh.withScroll(c - size.height / 2);
       _ticker.start();
       _finger.addListener(_rehighlight);
-      _rehighlight();
+      // Moves that came before this first build (no setState: build follows).
+      _updateHighlight();
     } else {
       _layout = fresh;
+      _updateHighlight(); // rotation or insets: the slot under the finger moved
     }
   }
 
@@ -154,6 +162,7 @@ class _PickerViewState extends State<_PickerView> with TickerProviderStateMixin 
   void _tick(Duration elapsed) {
     final dt = (elapsed - _last).inMicroseconds / 1e6;
     _last = elapsed;
+    if (!_armed) return;
     final v = layout.scrollVelocity(_finger.value.dy);
     if (v == 0 || dt <= 0) return;
     final next = layout.withScroll(layout.scroll + v * dt);
@@ -164,12 +173,23 @@ class _PickerViewState extends State<_PickerView> with TickerProviderStateMixin 
   }
 
   void _rehighlight() {
-    if (_done) return;
+    if (_updateHighlight()) setState(() {});
+  }
+
+  /// Arms the picker once the finger has travelled, then tracks the slot
+  /// under it. True when something visible changed.
+  bool _updateHighlight() {
+    if (_done) return false;
+    var changed = false;
+    if (!_armed) {
+      if ((_finger.value - widget.start).distance < _armDistance) return false;
+      _armed = changed = true;
+    }
     final i = _cancelled ? null : layout.indexAt(_finger.value.dy);
-    if (i == _highlight) return;
+    if (i == _highlight) return changed;
     _highlight = i;
     if (i != null) HapticFeedback.selectionClick();
-    setState(() {});
+    return true;
   }
 
   void finish({required bool cancelled}) {
@@ -235,7 +255,7 @@ class _PickerViewState extends State<_PickerView> with TickerProviderStateMixin 
     final highlighted = i == _highlight && !_cancelled;
     final f = _cancelled
         ? 0.0
-        : ambient
+        : ambient && _armed
         ? l.focus(i, finger)
         : (highlighted ? 1.0 : 0.0);
     final right = l.rightEdge;

@@ -49,4 +49,26 @@ void main() {
     await g.up();
     expect(taps, 1, reason: 'tap-only titles keep today’s behaviour: a slow press still opens the list');
   });
+
+  testWidgets('if holding is switched off mid-hold, the hold is cancelled', (tester) async {
+    final events = <String>[];
+    Widget title({required bool hold}) => host(
+      LensTitle(
+        entry: entry,
+        color: Colors.purple,
+        onTap: () {},
+        onHoldStart: hold ? (_) => events.add('start') : null,
+        onHoldMove: (_) => events.add('move'),
+        onHoldEnd: (_) => events.add('end'),
+        onHoldCancel: () => events.add('cancel'),
+      ),
+    );
+    await tester.pumpWidget(title(hold: true));
+    final g = await tester.startGesture(tester.getCenter(find.text('All chats')));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(events, ['start']);
+    await tester.pumpWidget(title(hold: false)); // e.g. folders dropped to one
+    expect(events, ['start', 'cancel']);
+    await g.up();
+  });
 }

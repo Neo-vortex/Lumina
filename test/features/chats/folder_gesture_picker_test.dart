@@ -43,14 +43,15 @@ void main() {
     );
   }
 
-  FolderGesturePicker open(Offset start) => FolderGesturePicker.open(
-    ctx,
-    entries: entries,
-    current: 0,
-    colorOf: (_) => GlowColors.violet,
-    start: start,
-    onPicked: (i) => picked = i,
-  );
+  FolderGesturePicker open(Offset start, {List<LensEntry> list = entries, int current = 0}) =>
+      FolderGesturePicker.open(
+        ctx,
+        entries: list,
+        current: current,
+        colorOf: (_) => GlowColors.violet,
+        start: start,
+        onPicked: (i) => picked = i,
+      );
 
   // Screen is 360x800 logical; press on the right half → list on the right.
   FolderPickerLayout layoutFor(WidgetTester tester) => FolderPickerLayout(
@@ -144,5 +145,33 @@ void main() {
     picker.end();
     await tester.pump(const Duration(milliseconds: 300));
     expect(picked, 1);
+  });
+
+  testWidgets('holding and releasing without moving keeps the current folder', (tester) async {
+    await pump(tester);
+    final picker = open(const Offset(40, 20), current: 2);
+    await tester.pump(const Duration(milliseconds: 300));
+    picker.end();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(picked, isNull);
+  });
+
+  testWidgets('a long list does not scroll away before the finger moves', (tester) async {
+    await pump(tester);
+    final many = [
+      for (var i = 0; i < 30; i++)
+        LensEntry(
+          list: td.ChatListFolder(chatFolderId: i + 1),
+          title: 'F$i',
+        ),
+    ];
+    final picker = open(const Offset(40, 20), list: many, current: 20);
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.text('F20'), findsOneWidget);
+    final y = tester.getCenter(find.text('F20')).dy;
+    expect(y, inInclusiveRange(200, 600), reason: 'the current folder stays in view, mid-screen');
+    picker.end();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(picked, isNull);
   });
 }

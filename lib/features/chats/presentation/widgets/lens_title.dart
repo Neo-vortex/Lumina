@@ -63,20 +63,66 @@ class LensTitle extends StatelessWidget {
     );
   }
 
-  Widget _hold(Widget child) {
-    if (onHoldStart == null) return child;
-    return RawGestureDetector(
-      gestures: {
-        LongPressGestureRecognizer: GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
-          () => LongPressGestureRecognizer(duration: const Duration(milliseconds: 250)),
-          (r) => r
-            ..onLongPressStart = onHoldStart
-            ..onLongPressMoveUpdate = onHoldMove
-            ..onLongPressEnd = onHoldEnd
-            ..onLongPressCancel = onHoldCancel,
-        ),
-      },
-      child: child,
-    );
+  Widget _hold(Widget child) => onHoldStart == null
+      ? child
+      : _HoldDetector(
+          onStart: onHoldStart!,
+          onMove: onHoldMove,
+          onEnd: onHoldEnd,
+          onCancel: onHoldCancel,
+          child: child,
+        );
+}
+
+/// The long-press driving the folder gesture picker. If it leaves the tree
+/// mid-hold (holding switched off, one folder left), the hold is cancelled
+/// rather than left hanging with the overlay up.
+class _HoldDetector extends StatefulWidget {
+  const _HoldDetector({required this.onStart, this.onMove, this.onEnd, this.onCancel, required this.child});
+
+  final GestureLongPressStartCallback onStart;
+  final GestureLongPressMoveUpdateCallback? onMove;
+  final GestureLongPressEndCallback? onEnd;
+  final VoidCallback? onCancel;
+  final Widget child;
+
+  @override
+  State<_HoldDetector> createState() => _HoldDetectorState();
+}
+
+class _HoldDetectorState extends State<_HoldDetector> {
+  var _holding = false;
+
+  @override
+  void dispose() {
+    if (_holding) widget.onCancel?.call();
+    super.dispose();
   }
+
+  @override
+  Widget build(BuildContext context) => RawGestureDetector(
+    gestures: {
+      LongPressGestureRecognizer: GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
+        () => LongPressGestureRecognizer(duration: const Duration(milliseconds: 250)),
+        (r) => r
+          ..onLongPressStart = (d) {
+            _holding = true;
+            widget.onStart(d);
+          }
+          ..onLongPressMoveUpdate = (d) {
+            widget.onMove?.call(d);
+          }
+          ..onLongPressEnd = (d) {
+            _holding = false;
+            widget.onEnd?.call(d);
+          }
+          ..onLongPressCancel = () {
+            if (!_holding) return;
+            _holding = false;
+            widget.onCancel?.call();
+          },
+      ),
+    },
+    child: widget.child,
+  );
 }
