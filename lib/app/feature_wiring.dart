@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../features/media_panel/data/media_panel_repository.dart';
 import '../features/profile/data/user_profile_repository.dart';
@@ -16,6 +17,8 @@ import '../core/models/bundled_models.dart';
 import '../core/telegram/auto_download_gate.dart';
 import '../features/assistant/presentation/ai_settings.dart';
 import '../features/auto_download/data/auto_download_service.dart';
+import '../features/bots/data/bot_start_links.dart';
+import '../features/bots/data/bots_repository.dart';
 import '../features/auto_download/data/network_monitor.dart';
 import '../features/auto_download/presentation/auto_download_settings.dart';
 import '../features/proxy/data/proxy_repository.dart';
@@ -123,6 +126,8 @@ List<RepositoryProvider<Object>> featureProviders() => [
     dispose: (i) => i.dispose(),
   ),
   RepositoryProvider<MessageSearch>(create: (c) => c.read<MessageIndexer>()),
+  RepositoryProvider<BotsRepository>(create: (c) => BotsRepository(c.read<TdClient>())),
+  RepositoryProvider<BotStartLinks>(create: (c) => BotStartLinks(c.read<TdClient>())),
   RepositoryProvider<AutoDownloadService>(
     lazy: false,
     create: (c) => AutoDownloadService(
@@ -291,6 +296,17 @@ ComposeActions _composeActions(ComposeFlows flows) => ComposeActions([
 
 /// Links Lumina opens itself: folder invites and proxies.
 List<InternalLinkHandler> appLinkHandlers() => [
+  InternalLinkHandler(
+    matches: (uri) => BotStartLinks.parse(uri) != null,
+    open: (context, uri) async {
+      final chatId = await context.read<BotStartLinks>().resolve(uri);
+      if (chatId != null && context.mounted) {
+        await Navigator.of(context).push(ConversationScreen.route(chatId));
+      } else if (context.mounted) {
+        await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+      }
+    },
+  ),
   InternalLinkHandler(
     matches: (uri) => addlistSlug(uri.toString()) != null,
     open: (context, uri) => showJoinFolderSheet(context, url: addlistUrl(addlistSlug(uri.toString())!)),
