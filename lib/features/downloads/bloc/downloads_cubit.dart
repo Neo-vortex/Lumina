@@ -34,6 +34,11 @@ class DownloadsState {
 
   bool get anyActive => active.isNotEmpty;
 
+  /// The active downloads as the Wi-Fi policy needs them.
+  List<({int id, bool paused})> get activeStates => [
+    for (final i in active) (id: i.fileId, paused: i.isPaused),
+  ];
+
   /// Narrowed by the filter chips or the search field (reordering is off).
   bool get isFiltered => filter != DownloadFilter.all || query.trim().isNotEmpty;
 
@@ -73,7 +78,10 @@ class DownloadsCubit extends Cubit<DownloadsState> {
   DownloadsCubit({required DownloadsRepository repository, required this._files, DateTime Function()? now})
     : _repo = repository,
       _now = now ?? DateTime.now,
-      super(const DownloadsState());
+      super(const DownloadsState()) {
+    // From the start, so totals that arrive before the first load count.
+    _updates = _repo.updates.listen(_onUpdate);
+  }
 
   final DownloadsRepository _repo;
   final FileStore _files;
@@ -91,7 +99,6 @@ class DownloadsCubit extends Cubit<DownloadsState> {
   void screenHidden() => _screens--;
 
   Future<void> start() async {
-    _updates ??= _repo.updates.listen(_onUpdate);
     await _sync();
   }
 
@@ -119,21 +126,32 @@ class DownloadsCubit extends Cubit<DownloadsState> {
     return f == null ? i : i.copyWith(file: f);
   }
 
+  var _loadingMore = false;
+
+  /// The next page of finished downloads; one request at a time.
   Future<void> loadMoreCompleted() async {
-    if (!state.hasMoreCompleted) return;
-    final page = await _repo.search(onlyCompleted: true, offset: _completedOffset, limit: 30);
-    _completedOffset = page.nextOffset;
-    final known = {for (final i in state.completed) i.fileId};
-    emit(
-      state.copyWith(
-        completed: [
-          ...state.completed,
-          for (final d in page.files)
-            if (!known.contains(d.fileId)) _withFile(DownloadItem.of(d)),
-        ],
-        hasMoreCompleted: page.nextOffset.isNotEmpty,
-      ),
-    );
+    if (!state.hasMoreCompleted || _loadingMore) return;
+    _loadingMore = true;
+    try {
+      final page = await _repo.search(onlyCompleted: true, offset: _completedOffset, limit: 30);
+      _completedOffset = page.nextOffset;
+      if (isClosed) return;
+      final known = {for (final i in state.completed) i.fileId};
+      emit(
+        state.copyWith(
+          completed: [
+            ...state.completed,
+            for (final d in page.files)
+              if (!known.contains(d.fileId)) _withFile(DownloadItem.of(d)),
+          ],
+          hasMoreCompleted: page.nextOffset.isNotEmpty,
+        ),
+      );
+    } on Exception {
+      // The next scroll to the end tries again.
+    } finally {
+      _loadingMore = false;
+    }
   }
 
   void _onUpdate(td.Update u) {
@@ -254,6 +272,8 @@ class DownloadsCubit extends Cubit<DownloadsState> {
     emit(state.copyWith(active: active));
     await _guard(() async {
       for (var i = 0; i < active.length; i++) {
+        // Setting a priority restarts a download: leave paused ones be.
+        if (active[i].isPaused) continue;
         await _repo.setPriority(active[i].fileId, (32 - i).clamp(1, 32));
       }
     });

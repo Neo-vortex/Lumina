@@ -143,4 +143,20 @@ void main() {
     final p = {for (final d in client.sentOf<td.DownloadFile>()) d.fileId: d.priority};
     expect(p, {3: 32, 1: 31, 2: 30});
   });
+
+  test('reordering never touches paused downloads (setting a priority would resume them)', () async {
+    await start(active: [dl(1), dl(2, paused: true), dl(3)]);
+    await cubit.reorder(2, 0);
+    final touched = client.sentOf<td.DownloadFile>().map((d) => d.fileId).toSet();
+    expect(touched, {3, 1});
+  });
+
+  test('loading more finished downloads runs once at a time and survives errors', () async {
+    await start(done: [dl(3, complete: 1)], more: 'next');
+    await Future.wait([cubit.loadMoreCompleted(), cubit.loadMoreCompleted(), cubit.loadMoreCompleted()]);
+    expect(client.sentOf<td.SearchFileDownloads>().where((s) => s.offset == 'next'), hasLength(1));
+    client.respond = (_) => const td.TdError(code: 500, message: 'down');
+    cubit.emit(cubit.state.copyWith(hasMoreCompleted: true));
+    await cubit.loadMoreCompleted(); // no throw
+  });
 }

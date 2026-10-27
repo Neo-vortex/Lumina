@@ -25,7 +25,9 @@ class AutoDownloadNetworkWatch implements NetworkWatch {
 }
 
 /// Wi-Fi-only downloads: paused by Lumina off Wi-Fi ("Waiting for Wi-Fi"),
-/// resumed on Wi-Fi. A pause the user made is never undone here.
+/// resumed on Wi-Fi. Only downloads Lumina paused itself are resumed (they
+/// are remembered across restarts); anything already paused when Lumina
+/// looks (the user, Pause all) is left alone.
 class DownloadPolicy {
   DownloadPolicy({required DownloadsRepository repository, required this._prefs, required this.network})
     : _repo = repository;
@@ -33,20 +35,19 @@ class DownloadPolicy {
   final DownloadsRepository _repo;
   final AppPreferences _prefs;
   final NetworkWatch network;
-  final _waiting = <int>{};
-  final _userPaused = <int>{};
   final _changes = _Changes();
 
   Listenable get changes => _changes;
 
   bool isWifiOnly(int fileId) => _prefs.downloadsWifiOnly.contains(fileId);
 
-  bool isWaitingForWifi(int fileId) => _waiting.contains(fileId);
+  bool isWaitingForWifi(int fileId) => _prefs.downloadsWaiting.contains(fileId);
 
   Future<void> setWifiOnly(int fileId, bool on) async {
     final ids = _prefs.downloadsWifiOnly;
     on ? ids.add(fileId) : ids.remove(fileId);
     _prefs.setDownloadsWifiOnly(ids);
+    if (!on) _setWaiting(fileId, false);
     _notify();
   }
 
@@ -55,22 +56,37 @@ class DownloadPolicy {
     if (_prefs.downloadsWifiOnlyDefault && !isWifiOnly(fileId)) setWifiOnly(fileId, true);
   }
 
-  void userPaused(int fileId, bool paused) {
-    paused ? _userPaused.add(fileId) : _userPaused.remove(fileId);
-    if (paused) _waiting.remove(fileId);
+  /// The user paused a waiting download: it now stays paused on Wi-Fi too.
+  void userPaused(int fileId) {
+    _setWaiting(fileId, false);
+    _notify();
   }
 
-  /// Pauses or resumes the Wi-Fi-only downloads among [activeFileIds] for
-  /// the current network. Only files whose waiting state changes are touched.
-  Future<void> apply(Iterable<int> activeFileIds) async {
+  /// The user resumed a Wi-Fi-only download by hand: it may use mobile data.
+  Future<void> userResumed(int fileId) async {
+    if (isWifiOnly(fileId)) await setWifiOnly(fileId, false);
+  }
+
+  void _setWaiting(int fileId, bool waiting) {
+    final ids = _prefs.downloadsWaiting;
+    if (waiting ? ids.add(fileId) : ids.remove(fileId)) _prefs.setDownloadsWaiting(ids);
+  }
+
+  /// Pauses or resumes the Wi-Fi-only downloads among [active] (with
+  /// TDLib's paused state) for the current network.
+  Future<void> apply(Iterable<({int id, bool paused})> active) async {
     final flagged = _prefs.downloadsWifiOnly;
-    for (final id in activeFileIds) {
-      if (!flagged.contains(id) || _userPaused.contains(id)) continue;
-      if (!network.onWifi && _waiting.add(id)) {
-        await _repo.setPaused(id, true);
-        _notify();
-      } else if (network.onWifi && _waiting.remove(id)) {
-        await _repo.setPaused(id, false);
+    final waiting = _prefs.downloadsWaiting;
+    for (final d in active) {
+      if (!network.onWifi) {
+        if (flagged.contains(d.id) && !d.paused && !waiting.contains(d.id)) {
+          _setWaiting(d.id, true);
+          await _repo.setPaused(d.id, true);
+          _notify();
+        }
+      } else if (waiting.contains(d.id)) {
+        _setWaiting(d.id, false);
+        await _repo.setPaused(d.id, false);
         _notify();
       }
     }

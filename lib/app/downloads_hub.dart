@@ -8,8 +8,9 @@ import '../features/downloads/bloc/downloads_cubit.dart';
 import '../features/downloads/data/download_notifier.dart';
 import '../features/downloads/data/download_policy.dart';
 
-/// Ties the Downloads list to the app: loads it once TDLib is logged in and
-/// keeps Wi-Fi-only downloads in step with the network.
+/// Ties the Downloads list to the app: loads it once TDLib is logged in
+/// (also when it already was), and keeps Wi-Fi-only downloads in step with
+/// the network and with new downloads.
 class DownloadsHub {
   DownloadsHub({
     required TdClient client,
@@ -26,13 +27,22 @@ class DownloadsHub {
     _auth = client.updates.listen((u) {
       switch (u) {
         case td.UpdateAuthorizationState(authorizationState: td.AuthorizationStateReady()):
-          cubit.start().then((_) => _apply()).ignore();
+          _start();
         case td.UpdateFileAddedToDownloads(:final fileDownload):
           policy.onAdded(fileDownload.fileId);
-          _apply();
         default:
           break;
       }
+    });
+    // Ready may have come before this hub existed.
+    _checkReady(client);
+    // Re-check whenever the set of active downloads or their pause state
+    // changes (a new download, a resume), not on every progress tick.
+    _list = cubit.stream.listen((s) {
+      final key = s.activeStates.map((d) => '${d.id}${d.paused ? 'p' : ''}').join(',');
+      if (key == _lastKey) return;
+      _lastKey = key;
+      _apply();
     });
     policy.network.changes.addListener(_apply);
   }
@@ -40,13 +50,32 @@ class DownloadsHub {
   final DownloadsCubit cubit;
   final DownloadPolicy policy;
   late final StreamSubscription<td.Update> _auth;
+  late final StreamSubscription<DownloadsState> _list;
   late final DownloadNotifier _notifier;
+  String? _lastKey;
+  var _started = false;
 
-  void _apply() => policy.apply(cubit.state.active.map((i) => i.fileId)).ignore();
+  Future<void> _checkReady(TdClient client) async {
+    try {
+      final s = await client.invoke<td.AuthorizationState>(const td.GetAuthorizationState());
+      if (s is td.AuthorizationStateReady) _start();
+    } catch (_) {
+      // Not running yet: the Ready update will come.
+    }
+  }
+
+  void _start() {
+    if (_started) return;
+    _started = true;
+    cubit.start().ignore();
+  }
+
+  void _apply() => policy.apply(cubit.state.activeStates).ignore();
 
   void dispose() {
     _notifier.dispose();
     _auth.cancel();
+    _list.cancel();
     policy.network.changes.removeListener(_apply);
     policy.dispose();
   }

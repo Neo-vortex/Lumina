@@ -71,6 +71,12 @@ class AppPreferences {
   };
   void setDownloadsWifiOnly(Set<int> ids) => _set('downloads.wifiOnlyFiles', ids.join(' '));
 
+  /// Wi-Fi-only downloads Lumina paused off Wi-Fi (resumed on Wi-Fi).
+  Set<int> get downloadsWaiting => {
+    for (final s in (_string('downloads.waiting') ?? '').split(' ')) ?int.tryParse(s),
+  };
+  void setDownloadsWaiting(Set<int> ids) => _set('downloads.waiting', ids.join(' '));
+
   // ---- Folder picker --------------------------------------------------------
 
   /// Hold-and-swipe picker (default) or the classic drop-down list.

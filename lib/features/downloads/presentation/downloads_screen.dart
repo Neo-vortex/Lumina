@@ -48,10 +48,10 @@ class DownloadsScreen extends StatelessWidget {
     final cubit = context.read<DownloadsCubit>();
     if (policy.isWaitingForWifi(i.fileId)) {
       // Already paused by Lumina; now the user wants it to stay paused.
-      policy.userPaused(i.fileId, true);
+      policy.userPaused(i.fileId);
       return;
     }
-    policy.userPaused(i.fileId, !i.isPaused);
+    if (i.isPaused) policy.userResumed(i.fileId).ignore();
     _run(context, () => cubit.togglePaused(i));
   }
 
@@ -85,7 +85,7 @@ class DownloadsScreen extends StatelessWidget {
                 value: policy.isWifiOnly(i.fileId),
                 onChanged: (v) async {
                   await policy.setWifiOnly(i.fileId, v);
-                  await policy.apply(cubit.state.active.map((x) => x.fileId));
+                  await policy.apply(cubit.state.activeStates);
                 },
               ),
             if (!i.isCompleted)
