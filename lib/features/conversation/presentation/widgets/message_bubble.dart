@@ -23,6 +23,8 @@ enum Delivery { pending, failed, sent, read }
 /// Shared: building a [DateFormat] parses its pattern each time.
 final _hm = DateFormat.Hm();
 
+const _glowRadius = BorderRadius.all(Radius.circular(16));
+
 /// A glowing message bubble (spec §9.2).
 class MessageBubble extends StatefulWidget {
   const MessageBubble({
@@ -190,14 +192,11 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
             ? Curves.easeOut.transform(1 - _bloom.value) * (_bloom.isAnimating ? 1 : 0)
             : 0.0;
         final dragGlow = (_drag.abs() / _replyThreshold).clamp(0.0, 1.0);
-        return Container(
+        final body = Container(
           key: _bubbleKey,
           constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * (media ? 0.78 : 0.8)),
           decoration: bare
-              ? BoxDecoration(
-                  borderRadius: radius,
-                  boxShadow: [if (widget.highlighted) ...glow(GlowColors.violet, intensity: 0.9)],
-                )
+              ? BoxDecoration(borderRadius: radius)
               : BoxDecoration(
                   gradient: outgoing
                       ? GlowColors.outgoing
@@ -214,19 +213,30 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
                     color: edgeColor,
                     width: delivery == Delivery.read || widget.highlighted ? 1.4 : 1,
                   ),
-                  boxShadow: [
-                    if (delivery == Delivery.read && outgoing) ...glow(GlowColors.cyan, intensity: 0.25),
-                    if (widget.highlighted) ...glow(GlowColors.violet, intensity: 0.9),
-                    if (bloom > 0) ...glow(GlowColors.amber, intensity: bloom),
-                    if (dragGlow > 0)
-                      ...glow(outgoing ? GlowColors.amber : GlowColors.cyan, intensity: dragGlow),
-                  ],
                 ),
           child: child,
         );
+        final shadows = [
+          if (!bare && delivery == Delivery.read && outgoing) ...glow(GlowColors.cyan, intensity: 0.25),
+          if (widget.highlighted) ...glow(GlowColors.violet, intensity: 0.9),
+          if (!bare && bloom > 0) ...glow(GlowColors.amber, intensity: bloom),
+          if (!bare && dragGlow > 0)
+            ...glow(outgoing ? GlowColors.amber : GlowColors.cyan, intensity: dragGlow),
+        ];
+        // The glow uses even corners: Impeller blurs an even rounded rect
+        // analytically but takes an offscreen pass for mixed radii, on every
+        // scroll frame. At this blur the corner difference doesn't show.
+        // Always present, so a glow coming or going never remounts the bubble.
+        return DecoratedBox(
+          decoration: BoxDecoration(borderRadius: _glowRadius, boxShadow: shadows),
+          child: body,
+        );
       },
+      // Text sits well inside the corners; only edge-to-edge content (media,
+      // cards) needs the clip, a stencil pass per bubble per frame otherwise.
       child: ClipRRect(
         borderRadius: radius,
+        clipBehavior: m.content is td.MessageText ? Clip.none : Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
