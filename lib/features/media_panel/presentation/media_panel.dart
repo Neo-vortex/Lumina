@@ -453,15 +453,21 @@ class _GifTabState extends State<_GifTab> {
       if (n is ScrollEndNotification && _scrolling) setState(() => _scrolling = false);
       return false;
     },
-    child: GridView.builder(
-      padding: const EdgeInsets.all(6),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 130,
-        mainAxisSpacing: 6,
-        crossAxisSpacing: 6,
+    // A decoder per GIF: past the phone's limit they stall after a few
+    // frames, so only so many loop at once and none off screen.
+    child: GifBudget(
+      max: 8,
+      child: GridView.builder(
+        cacheExtent: 0,
+        padding: const EdgeInsets.all(6),
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 130,
+          mainAxisSpacing: 6,
+          crossAxisSpacing: 6,
+        ),
+        itemCount: count,
+        itemBuilder: (context, i) => cell(i),
       ),
-      itemCount: count,
-      itemBuilder: (context, i) => cell(i),
     ),
   );
 }
