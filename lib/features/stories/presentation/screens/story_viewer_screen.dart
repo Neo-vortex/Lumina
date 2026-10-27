@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
@@ -10,6 +11,7 @@ import '../../../../core/telegram/widgets/chat_avatar.dart';
 import '../../../../core/telegram/widgets/td_file_image.dart';
 import '../../../../core/theme/glow_colors.dart';
 import '../../../../core/theme/motion.dart';
+import '../../../media/presentation/widgets/media_geometry.dart';
 import '../../../media/presentation/widgets/video_player_view.dart';
 import '../../data/stories_repository.dart';
 import '../../domain/story_feed.dart';
@@ -32,7 +34,7 @@ class StoryViewerScreen extends StatefulWidget {
 
   static Route<void> route(List<int> chatIds, {int initial = 0}) => PageRouteBuilder(
     opaque: false,
-    barrierColor: Colors.black,
+    // The viewer draws its own backdrop, which a drag-down fades.
     transitionDuration: Motion.standard,
     pageBuilder: (_, _, _) => StoryViewerScreen(chatIds: chatIds, initial: initial),
     transitionsBuilder: (_, a, _, child) => FadeTransition(
@@ -48,19 +50,21 @@ class StoryViewerScreen extends StatefulWidget {
   State<StoryViewerScreen> createState() => _StoryViewerScreenState();
 }
 
-class _StoryViewerScreenState extends State<StoryViewerScreen> {
+class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTickerProviderStateMixin {
   late final _pages = PageController(initialPage: widget.initial);
   late int _current = widget.initial;
 
-  @override
-  void initState() {
-    super.initState();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-  }
+  /// Drag-down to close, the same feel as the media viewer: follows the
+  /// finger, shrinks, fades the backdrop; closes on distance or flick.
+  var _drag = 0.0;
+  var _dragFrom = 0.0;
+  var _closing = false;
+  late final AnimationController _spring = AnimationController(vsync: this)
+    ..addListener(() => setState(() => _drag = _dragFrom * (1 - _spring.value)));
 
   @override
   void dispose() {
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    _spring.dispose();
     _pages.dispose();
     super.dispose();
   }
@@ -77,22 +81,70 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
     if (_current > 0) _pages.previousPage(duration: Motion.standard, curve: Motion.move);
   }
 
+  void _dragBy(double dy) {
+    if (_closing) return;
+    _spring.stop();
+    setState(() => _drag = (_drag + dy).clamp(0.0, double.infinity));
+  }
+
+  void _dragEnd(double velocity) {
+    if (_closing || _drag == 0) return;
+    final height = MediaQuery.sizeOf(context).height;
+    if (shouldDismiss(offset: _drag, velocity: velocity, height: height)) {
+      _closing = true;
+      Navigator.of(context).maybePop();
+    } else {
+      _dragFrom = _drag;
+      _spring.value = 0;
+      _spring.animateWith(
+        SpringSimulation(const SpringDescription(mass: 1, stiffness: 520, damping: 46), 0, 1, 0),
+      );
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: Colors.black,
-    body: PageView.builder(
-      controller: _pages,
-      itemCount: widget.chatIds.length,
-      onPageChanged: (i) => setState(() => _current = i),
-      itemBuilder: (context, i) => _ChatStories(
-        key: ValueKey(widget.chatIds[i]),
-        chatId: widget.chatIds[i],
-        active: i == _current,
-        onFinished: _next,
-        onBeforeFirst: _previous,
-      ),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final height = MediaQuery.sizeOf(context).height;
+    final progress = (_drag / (height * 0.5)).clamp(0.0, 1.0);
+    final scale = 1 - 0.3 * progress;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: ColoredBox(color: Colors.black.withValues(alpha: 1 - progress)),
+        ),
+        Transform.translate(
+          offset: Offset(0, _drag),
+          child: Transform.scale(
+            scale: scale,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24 * progress),
+              child: Material(
+                color: Colors.black,
+                child: PageView.builder(
+                  controller: _pages,
+                  // Neighbours stay built and loaded, so a swipe never waits on
+                  // (or pops in) the next person's story.
+                  allowImplicitScrolling: true,
+                  itemCount: widget.chatIds.length,
+                  onPageChanged: (i) => setState(() => _current = i),
+                  itemBuilder: (context, i) => _ChatStories(
+                    key: ValueKey(widget.chatIds[i]),
+                    chatId: widget.chatIds[i],
+                    active: i == _current,
+                    suspended: _drag > 0,
+                    onFinished: _next,
+                    onBeforeFirst: _previous,
+                    onDismissDrag: _dragBy,
+                    onDismissEnd: _dragEnd,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _ChatStories extends StatefulWidget {
@@ -102,10 +154,18 @@ class _ChatStories extends StatefulWidget {
     required this.active,
     required this.onFinished,
     required this.onBeforeFirst,
+    required this.onDismissDrag,
+    required this.onDismissEnd,
+    this.suspended = false,
   });
 
   final int chatId;
   final bool active;
+
+  /// Paused without leaving (the viewer is being dragged down).
+  final bool suspended;
+  final ValueChanged<double> onDismissDrag;
+  final ValueChanged<double> onDismissEnd;
   final VoidCallback onFinished;
   final VoidCallback onBeforeFirst;
 
@@ -134,7 +194,10 @@ class _ChatStoriesState extends State<_ChatStories> with SingleTickerProviderSta
   final _reply = TextEditingController();
   final _replyFocus = FocusNode();
 
-  bool get _paused => _held || _replying || !widget.active;
+  var _dismissing = false;
+  var _dragUp = 0.0;
+
+  bool get _paused => _held || _replying || !widget.active || widget.suspended;
 
   @override
   void initState() {
@@ -148,6 +211,8 @@ class _ChatStoriesState extends State<_ChatStories> with SingleTickerProviderSta
     if (oldWidget.active != widget.active) {
       _syncTimer();
       if (widget.active) _markOpen();
+    } else if (oldWidget.suspended != widget.suspended) {
+      _syncTimer();
     }
   }
 
@@ -310,17 +375,28 @@ class _ChatStoriesState extends State<_ChatStories> with SingleTickerProviderSta
       },
       onLongPressStart: (_) => _hold(true),
       onLongPressEnd: (_) => _hold(false),
+      // Down follows the finger (the viewer shrinks away); up opens the reply.
+      onVerticalDragStart: (_) => _dragUp = 0,
+      onVerticalDragUpdate: (d) {
+        if (_replying) return;
+        final dy = d.primaryDelta ?? 0;
+        if (_dragUp == 0 && dy > 0 || _dismissing) {
+          _dismissing = true;
+          widget.onDismissDrag(dy);
+        } else {
+          _dragUp -= dy;
+        }
+      },
       onVerticalDragEnd: (d) {
         final v = d.primaryVelocity ?? 0;
-        if (v > 300) {
-          if (_replying) {
-            _closeReply();
-          } else {
-            Navigator.of(context).maybePop();
-          }
-        } else if (v < -300) {
+        if (_replying) {
+          if (v > 300) _closeReply();
+        } else if (_dismissing) {
+          widget.onDismissEnd(v);
+        } else if (_dragUp > 40 || v < -300) {
           _openReply();
         }
+        _dismissing = false;
       },
       child: Stack(
         fit: StackFit.expand,
