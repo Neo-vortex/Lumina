@@ -305,3 +305,35 @@ td.Supergroup fakeSupergroup(
   hasForumTabs: false,
   paidMessageStarCount: 0,
 );
+
+/// A user's full info with every flag off and nothing set.
+td.UserFullInfo fakeUserFullInfo({td.BotInfo? botInfo}) => td.UserFullInfo(
+  communityId: 0,
+  canBeCalled: true,
+  supportsVideoCalls: true,
+  hasPrivateCalls: false,
+  hasPrivateForwards: false,
+  hasRestrictedVoiceAndVideoNoteMessages: false,
+  hasPostedToProfileStories: false,
+  hasSponsoredMessagesEnabled: false,
+  needPhoneNumberPrivacyException: false,
+  setChatBackground: false,
+  usesUnofficialApp: false,
+  personalChatId: 0,
+  giftCount: 0,
+  groupInCommonCount: 0,
+  incomingPaidMessageStarCount: 0,
+  outgoingPaidMessageStarCount: 0,
+  giftSettings: const td.GiftSettings(
+    showGiftButton: false,
+    acceptedGiftTypes: td.AcceptedGiftTypes(
+      unlimitedGifts: true,
+      limitedGifts: true,
+      upgradedGifts: true,
+      giftsFromChannels: true,
+      premiumSubscription: true,
+    ),
+  ),
+  pendingRatingDate: 0,
+  botInfo: botInfo,
+);
