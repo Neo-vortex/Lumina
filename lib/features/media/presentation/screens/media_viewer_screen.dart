@@ -734,11 +734,13 @@ class _Picture extends StatelessWidget {
             placeholderBytes: mini,
             fullResolution: true,
             semanticLabel: 'Photo',
+            progressive: true,
           )
         else if (mini != null)
           Image.memory(mini, fit: BoxFit.fill, gaplessPlayback: true, filterQuality: FilterQuality.medium),
         if (pictures.full case final full?)
-          TdFileImage(file: full, fit: BoxFit.fill, priority: 32, fullResolution: true),
+          // Sharpens over the tile-size picture as the big one downloads.
+          TdFileImage(file: full, fit: BoxFit.fill, priority: 32, fullResolution: true, progressive: true),
       ],
     );
   }

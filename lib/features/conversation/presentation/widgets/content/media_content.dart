@@ -206,6 +206,7 @@ class _MediaTileState extends State<MediaTile> {
             autoDownload: v.isVideo || _allows(MediaKind.photos, v.file!),
             placeholderBytes: Display.minithumbnail(v.mini),
             semanticLabel: v.isVideo ? 'Video' : 'Photo',
+            progressive: !v.isVideo,
           )
         : (Display.minithumbnail(v.mini) != null
               ? Image.memory(Display.minithumbnail(v.mini)!, fit: BoxFit.cover)

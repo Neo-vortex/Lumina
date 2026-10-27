@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
 import '../file_store.dart';
+import 'progressive_image.dart';
 
 /// Image backed by a TDLib file: shows [placeholder] (usually the blurred
 /// minithumbnail) and swaps to the real image once TDLib has it locally.
@@ -20,6 +21,7 @@ class TdFileImage extends StatefulWidget {
     this.autoDownload = true,
     this.semanticLabel,
     this.fullResolution = false,
+    this.progressive = false,
   });
 
   final td.File file;
@@ -33,6 +35,11 @@ class TdFileImage extends StatefulWidget {
   /// at its laid-out size, which keeps big photos out of the image cache.
   final bool fullResolution;
 
+  /// Photos: a gaussian-blurred minithumbnail that sharpens with the
+  /// download (progressive JPEGs decode from their prefix), and the full
+  /// image fades in over it.
+  final bool progressive;
+
   @override
   State<TdFileImage> createState() => _TdFileImageState();
 }
@@ -40,6 +47,11 @@ class TdFileImage extends StatefulWidget {
 class _TdFileImageState extends State<TdFileImage> {
   late FileStore _files;
   Stream<td.File>? _stream;
+
+  /// Progressive mode: the full image is on screen, the placeholder can go.
+  var _fullShown = false;
+  final _placeholderKey = GlobalKey();
+  final _imageKey = GlobalKey();
 
   @override
   void didChangeDependencies() {
@@ -54,6 +66,7 @@ class _TdFileImageState extends State<TdFileImage> {
   void didUpdateWidget(TdFileImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.file.id != widget.file.id) {
+      _fullShown = false;
       _stream = _files.watch(widget.file.id);
       _maybeDownload();
     }
@@ -86,7 +99,9 @@ class _TdFileImageState extends State<TdFileImage> {
                 filterQuality: FilterQuality.medium,
               )
             : const SizedBox.expand();
-        if (!f.local.isDownloadingCompleted || f.local.path.isEmpty) {
+        final complete = f.local.isDownloadingCompleted && f.local.path.isNotEmpty;
+        if (widget.progressive) return _progressive(f, complete);
+        if (!complete) {
           return Semantics(label: widget.semanticLabel, image: true, child: placeholder);
         }
         Widget image(int? cacheWidth) => Image.file(
@@ -99,19 +114,69 @@ class _TdFileImageState extends State<TdFileImage> {
           errorBuilder: (_, _, _) => placeholder,
         );
         if (widget.fullResolution) return image(null);
-        return LayoutBuilder(
-          builder: (context, box) {
-            final side = switch (widget.fit) {
-              BoxFit.contain || BoxFit.fitWidth || BoxFit.scaleDown => box.maxWidth,
-              _ when !box.maxHeight.isFinite => box.maxWidth,
-              _ when !box.maxWidth.isFinite => box.maxHeight,
-              _ => box.maxWidth > box.maxHeight ? box.maxWidth : box.maxHeight,
-            };
-            if (!side.isFinite) return image(null);
-            return image((side * MediaQuery.devicePixelRatioOf(context)).round());
+        return _sized(image);
+      },
+    );
+  }
+
+  Widget _sized(Widget Function(int? cacheWidth) image) => LayoutBuilder(
+    builder: (context, box) {
+      final side = switch (widget.fit) {
+        BoxFit.contain || BoxFit.fitWidth || BoxFit.scaleDown => box.maxWidth,
+        _ when !box.maxHeight.isFinite => box.maxWidth,
+        _ when !box.maxWidth.isFinite => box.maxHeight,
+        _ => box.maxWidth > box.maxHeight ? box.maxWidth : box.maxHeight,
+      };
+      if (!side.isFinite) return image(null);
+      return image((side * MediaQuery.devicePixelRatioOf(context)).round());
+    },
+  );
+
+  /// Placeholder and image share one stack (keyed), so the sharpened
+  /// placeholder stays put under the full image until it has faded in.
+  Widget _progressive(td.File f, bool complete) {
+    Widget image(int? cacheWidth) => Image.file(
+      File(f.local.path),
+      key: _imageKey,
+      fit: widget.fit,
+      cacheWidth: cacheWidth,
+      gaplessPlayback: true,
+      semanticLabel: widget.semanticLabel,
+      frameBuilder: (context, child, frame, sync) {
+        if (sync || _fullShown) {
+          if (!_fullShown) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) setState(() => _fullShown = true);
+            });
+          }
+          return child;
+        }
+        if (frame == null) return const SizedBox.expand();
+        return FadeInOnce(
+          onDone: () {
+            if (mounted) setState(() => _fullShown = true);
           },
+          child: child,
         );
       },
+      errorBuilder: (_, _, _) => const SizedBox.expand(),
+    );
+    return Semantics(
+      label: widget.semanticLabel,
+      image: true,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (!_fullShown)
+            ProgressivePlaceholder(
+              key: _placeholderKey,
+              file: f,
+              minithumbnail: widget.placeholderBytes,
+              fit: widget.fit,
+            ),
+          if (complete) widget.fullResolution ? image(null) : _sized(image),
+        ],
+      ),
     );
   }
 }
