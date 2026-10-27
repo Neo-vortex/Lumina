@@ -3,6 +3,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../gestures/swipe_actions.dart';
 
+/// How the chat-list title switches folders.
+enum FolderPickerStyle { gesture, classic }
+
 /// Non-secret user preferences, persisted with shared_preferences. Listen to
 /// [changes] to react immediately.
 class AppPreferences {
@@ -55,6 +58,13 @@ class AppPreferences {
         await _prefs?.setString(key, v);
     }
   }
+
+  // ---- Folder picker --------------------------------------------------------
+
+  /// Hold-and-swipe picker (default) or the classic drop-down list.
+  FolderPickerStyle get folderPicker =>
+      _enum(FolderPickerStyle.values, 'chats.folderPicker') ?? FolderPickerStyle.gesture;
+  set folderPicker(FolderPickerStyle v) => _set('chats.folderPicker', v.name);
 
   // ---- On-device AI -------------------------------------------------------
 
