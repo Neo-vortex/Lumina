@@ -127,7 +127,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
   }
 
   void _reportVisible() {
-    if (!_list.isAttached) return;
+    // Mid anchor scroll the screen shows rows the user passes over (at open,
+    // the window's bottom); reading those would undercount the unread.
+    if (_anchoring > 0 || !_list.isAttached) return;
     final range = _list.visibleRange;
     if (range == null) return;
     final ids = <int>[];
@@ -145,15 +147,25 @@ class _ConversationScreenState extends State<ConversationScreen> {
     _cubit.visible(ids);
   }
 
+  /// Anchor scrolls in flight; the list reports what it shows once they land.
+  var _anchoring = 0;
+
   void _scrollToAnchor(int messageId) {
+    _anchoring++;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_list.isAttached) return;
+      if (!mounted || !_list.isAttached) {
+        _anchoring--;
+        return;
+      }
       final index = _rows.indexWhere(
         (r) =>
             (r is BubbleRow && r.messages.any((m) => m.id == messageId)) ||
             (r is ServiceRow && r.message.id == messageId),
       );
-      if (index < 0) return;
+      if (index < 0) {
+        _anchoring--;
+        return;
+      }
       if (Motion.ambientEnabled(context)) {
         _list.animateToItem(
           index: index + _adsOffset,
@@ -165,7 +177,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
       } else {
         _list.jumpToItem(index: index + _adsOffset, scrollController: _scroll, alignment: 0.5);
       }
-      Future.delayed(const Duration(milliseconds: 500), _reportVisible);
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _anchoring--;
+        if (mounted) _reportVisible();
+      });
     });
   }
 
