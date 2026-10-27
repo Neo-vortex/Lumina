@@ -56,10 +56,6 @@ files, analyzer clean). Nothing is pushed yet: `main` is ahead of
 6. **On-device GPU for SmolLM2** (`ComputeDevice.gpu`, CPU fallback,
    setting to force CPU) — optional now: CPU load is 0.9 s, generation
    0.5 s.
-7. **TDLib startup logging**: verbosity is lowered only after auth starts;
-   set it before the client is created so logcat stays quiet.
-8. **Swipe-to-react race**: two quick swipes within ~0.5 s can add twice
-   (interaction updates are coalesced); toggle from local state.
 9. **VLC smoothness, second try**: the SurfaceProducer rendering showed
    black/garbage on the owner's phone and was reverted to the platform
    view. Retry carefully (e.g. hybrid composition, or SurfaceProducer with
@@ -79,7 +75,8 @@ files, analyzer clean). Nothing is pushed yet: `main` is ahead of
 
 ## Done recently, not yet confirmed on the phone
 
-Inline keyboards under bot messages (glass pills; url/login/web app open
+TDLib log level set before the client exists (quiet startup), quick
+repeat reactions toggle from local state (no double add), inline keyboards under bot messages (glass pills; url/login/web app open
 the link, callbacks ask the bot with a spinner and answer as toast, glow
 sheet or link, copy text, open user, switch inline fills the composer;
 game/buy/password callbacks say "not supported yet"), chat backgrounds (Telegram, per chat, default with blur/dim; no black

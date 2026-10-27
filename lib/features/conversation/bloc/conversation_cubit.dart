@@ -404,22 +404,60 @@ class ConversationCubit extends Cubit<ConversationState> {
     await _refreshPinned();
   }
 
+  /// Reactions toggled here whose update may not have arrived yet, keyed by
+  /// message id and plain emoji: the emoji sent while chosen (null once
+  /// removed), and when. Quick repeat toggles trust this over the message
+  /// they were given, which may be stale (interaction updates coalesce).
+  final _localReactions = <(int, String), (String?, DateTime)>{};
+  final _reactionQueue = <(int, String), Future<void>>{};
+  static const _localReactionTtl = Duration(seconds: 5);
+
   /// Adds or removes [emoji] as a reaction. Matches the chat's reactions
   /// ignoring the emoji variation selector (Telegram's heart is a plain ❤,
   /// keyboards send ❤️). False when the chat doesn't allow it.
-  Future<bool> toggleReaction(td.Message m, String emoji) async {
+  Future<bool> toggleReaction(td.Message m, String emoji) {
+    final key = (m.id, emoji.replaceAll('\uFE0F', ''));
+    // One at a time per reaction, so each toggle sees the last one's result.
+    final result = (_reactionQueue[key] ?? Future<void>.value()).then((_) => _toggleReaction(m, emoji, key));
+    final done = _reactionQueue[key] = result.then<void>((_) {}, onError: (_) {});
+    unawaited(
+      done.then((_) {
+        if (identical(_reactionQueue[key], done)) _reactionQueue.remove(key);
+      }),
+    );
+    return result;
+  }
+
+  Future<bool> _toggleReaction(td.Message m, String emoji, (int, String) key) async {
     String plain(String e) => e.replaceAll('\uFE0F', '');
     final mine = m.interactionInfo?.reactions?.reactions.where((r) => r.isChosen).map((r) => r.type);
-    for (final t in mine ?? const <td.ReactionType>[]) {
-      if (t is td.ReactionTypeEmoji && plain(t.emoji) == plain(emoji)) {
-        await _repository.react(chatId, m.id, t, add: false);
-        return true;
+    final chosen = mine?.whereType<td.ReactionTypeEmoji>().where((t) => plain(t.emoji) == key.$2).firstOrNull;
+    final local = _localReactions[key];
+    final fresh = local != null && DateTime.now().difference(local.$2) < _localReactionTtl;
+    final current = fresh ? local.$1 : chosen?.emoji;
+    if (current != null) {
+      _localReactions[key] = (null, DateTime.now());
+      try {
+        await _repository.react(chatId, m.id, td.ReactionTypeEmoji(emoji: current), add: false);
+      } catch (_) {
+        _localReactions.remove(key);
+        rethrow;
       }
+      return true;
     }
-    final allowed = await reactionChoices(m);
-    final match = allowed.where((a) => plain(a) == plain(emoji)).firstOrNull;
-    if (match == null) return false;
-    await _repository.react(chatId, m.id, td.ReactionTypeEmoji(emoji: match), add: true);
+    try {
+      final allowed = await reactionChoices(m);
+      final match = allowed.where((a) => plain(a) == key.$2).firstOrNull;
+      if (match == null) {
+        _localReactions.remove(key);
+        return false;
+      }
+      _localReactions[key] = (match, DateTime.now());
+      await _repository.react(chatId, m.id, td.ReactionTypeEmoji(emoji: match), add: true);
+    } catch (_) {
+      _localReactions.remove(key);
+      rethrow;
+    }
     return true;
   }
 

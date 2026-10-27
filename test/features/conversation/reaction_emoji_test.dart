@@ -43,4 +43,19 @@ void main() {
     expect(client.sentOf<td.AddMessageReaction>(), isEmpty);
     await c.close();
   });
+
+  test('two quick swipes on a stale message add then remove, never add twice', () async {
+    final client = FakeTdClient()
+      ..respond = (f) => f is td.GetMessageAvailableReactions ? available(['❤']) : const td.Ok();
+    final c = cubit(client);
+    final stale = fakeMessage(5);
+    await Future.wait([c.toggleReaction(stale, '❤️'), c.toggleReaction(stale, '❤️')]);
+    expect(client.sentOf<td.AddMessageReaction>(), hasLength(1));
+    expect(client.sentOf<td.RemoveMessageReaction>(), hasLength(1));
+    expect(
+      (client.sentOf<td.RemoveMessageReaction>().single.reactionType as td.ReactionTypeEmoji).emoji,
+      '❤',
+    );
+    await c.close();
+  });
 }
