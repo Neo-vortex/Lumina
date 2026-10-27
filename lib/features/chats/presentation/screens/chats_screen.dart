@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../core/search/message_search.dart';
+import '../../../../core/storage/app_preferences.dart';
 import '../../../../core/telegram/display.dart';
 import '../../../../core/telegram/telegram_cache.dart';
 import '../../../../core/telegram/widgets/chat_avatar.dart';
@@ -17,6 +18,7 @@ import '../../../home/presentation/widgets/bot_limitations_card.dart';
 import '../../data/chats_repository.dart';
 import '../widgets/chat_list_extensions.dart';
 import '../widgets/chat_list_page.dart';
+import '../widgets/folder_gesture_picker.dart';
 import '../widgets/lens_picker.dart';
 import '../widgets/lens_title.dart';
 import '../../bloc/lens_cubit.dart';
@@ -31,6 +33,9 @@ class ChatsScreen extends StatefulWidget {
 }
 
 class _ChatsScreenState extends State<ChatsScreen> {
+  /// The hold-and-swipe folder picker while a finger drives it.
+  FolderGesturePicker? _gesture;
+
   final _search = TextEditingController();
   var _searching = false;
   var _botNoticeDismissed = false;
@@ -41,6 +46,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   @override
   void dispose() {
+    _gesture?.cancel();
     _search.dispose();
     _debounce?.cancel();
     _pages.dispose();
@@ -72,6 +78,30 @@ class _ChatsScreenState extends State<ChatsScreen> {
     ChatListExtensions.of(context).onLensOpened();
     final picked = await showLensPicker(context, entries: lens.entries, current: lens.index);
     if (picked != null && mounted) context.read<LensCubit>().select(picked);
+  }
+
+  bool _gesturePicker(BuildContext context) {
+    try {
+      return context.read<AppPreferences>().folderPicker == FolderPickerStyle.gesture;
+    } on ProviderNotFoundException {
+      return false;
+    }
+  }
+
+  void _holdLens(LensState lens, LongPressStartDetails d) {
+    final ext = ChatListExtensions.of(context);
+    _gesture?.cancel();
+    _gesture = FolderGesturePicker.open(
+      context,
+      entries: lens.entries,
+      current: lens.index,
+      colorOf: ext.lensColor,
+      start: d.globalPosition,
+      onPicked: (i) {
+        ext.onLensOpened();
+        context.read<LensCubit>().select(i);
+      },
+    );
   }
 
   Future<void> _submitSearch(String q) async {
@@ -140,6 +170,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                 entry: current,
                                 color: ext.lensColor(current),
                                 onTap: many ? () => _pickLens(lens) : null,
+                                onHoldStart: many && _gesturePicker(context)
+                                    ? (d) => _holdLens(lens, d)
+                                    : null,
+                                onHoldMove: (d) => _gesture?.move(d.globalPosition),
+                                onHoldEnd: (_) => _gesture?.end(),
+                                onHoldCancel: () => _gesture?.cancel(),
                               ),
                       ),
                       if (!_searching) ...ext.headerActions(context),

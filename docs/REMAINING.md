@@ -61,7 +61,8 @@ files, analyzer clean). Nothing is pushed yet: `main` is ahead of
 
 ## Done recently, not yet confirmed on the phone
 
-SmolLM2 on the GPU (Vulkan) with CPU fallback and a "Run AI on the CPU"
+Folder gesture picker (hold the folder title, slide along the edge list,
+release; Settings → Chats → Swipe folder picker, on by default), SmolLM2 on the GPU (Vulkan) with CPU fallback and a "Run AI on the CPU"
 setting showing where it runs, auto-download (downloads follow it: photos, GIFs, videos with optional
 start preload, files, voice, video messages, music; settings screen synced with
 TDLib (per network, presets, grid, size sliders, network type channel)), models extracted in the background 15 s after launch (AI action model,
