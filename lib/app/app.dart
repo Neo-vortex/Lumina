@@ -22,6 +22,8 @@ import '../features/proxy/data/proxy_repository.dart';
 import '../features/chats/data/chats_repository.dart';
 import '../features/conversation/data/messages_repository.dart';
 import 'auth_gate.dart';
+import '../features/downloads/bloc/downloads_cubit.dart';
+import 'downloads_hub.dart';
 import 'feature_wiring.dart';
 import 'lifecycle_watcher.dart';
 
@@ -74,6 +76,8 @@ class LuminaApp extends StatelessWidget {
             create: (context) =>
                 AuthBloc(repository: context.read<AuthRepository>())..add(const AuthStarted()),
           ),
+          // App-wide: the header ring and Settings show the same list.
+          BlocProvider<DownloadsCubit>(create: (context) => context.read<DownloadsHub>().cubit),
           // App-wide and not lazy: incoming calls ring wherever the user is.
           BlocProvider(
             lazy: false,

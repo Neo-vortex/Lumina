@@ -15,9 +15,16 @@ import '../core/telegram/telegram_cache.dart';
 import '../core/telegram/file_store.dart';
 import '../core/models/bundled_models.dart';
 import '../core/telegram/auto_download_gate.dart';
+import '../core/telegram/download_registry.dart';
 import '../features/assistant/presentation/ai_settings.dart';
 import '../features/auto_download/data/auto_download_service.dart';
 import '../features/bots/data/bot_start_links.dart';
+import '../features/downloads/bloc/downloads_cubit.dart';
+import '../features/downloads/data/download_policy.dart';
+import '../features/downloads/data/downloads_repository.dart';
+import '../features/downloads/data/tdlib_download_registry.dart';
+import '../features/downloads/presentation/downloads_settings.dart';
+import 'downloads_hub.dart';
 import '../features/bots/data/bots_repository.dart';
 import '../features/auto_download/data/network_monitor.dart';
 import '../features/auto_download/presentation/auto_download_settings.dart';
@@ -139,6 +146,24 @@ List<RepositoryProvider<Object>> featureProviders() => [
     dispose: (s) => s.dispose(),
   ),
   RepositoryProvider<AutoDownloadGate>(create: (c) => c.read<AutoDownloadService>()),
+  RepositoryProvider<DownloadsRepository>(create: (c) => DownloadsRepository(c.read<TdClient>())),
+  RepositoryProvider<DownloadRegistry>(create: (c) => TdlibDownloadRegistry(c.read<DownloadsRepository>())),
+  RepositoryProvider<DownloadPolicy>(
+    create: (c) => DownloadPolicy(
+      repository: c.read<DownloadsRepository>(),
+      prefs: c.read<AppPreferences>(),
+      network: AutoDownloadNetworkWatch(c.read<AutoDownloadService>()),
+    ),
+  ),
+  RepositoryProvider<DownloadsHub>(
+    lazy: false,
+    create: (c) => DownloadsHub(
+      client: c.read<TdClient>(),
+      cubit: DownloadsCubit(repository: c.read<DownloadsRepository>(), files: c.read<FileStore>()),
+      policy: c.read<DownloadPolicy>(),
+    ),
+    dispose: (h) => h.dispose(),
+  ),
   RepositoryProvider<ModelInstaller>(
     lazy: false,
     // Shortly after launch, off the UI thread (the copy runs natively).
@@ -265,6 +290,10 @@ List<RepositoryProvider<Object>> featureProviders() => [
         SettingsEntry(SettingsCategory.media, (_) => const AiSettings()),
         SettingsEntry(SettingsCategory.notifications, (_) => const ConnectionModeSettings()),
         SettingsEntry(SettingsCategory.notifications, (_) => const BackgroundSettings()),
+        SettingsEntry(
+          SettingsCategory.data,
+          (_) => const DownloadsSettings(openMessage: openDownloadMessage),
+        ),
         SettingsEntry(SettingsCategory.data, (_) => const AutoDownloadSettings()),
         SettingsEntry(SettingsCategory.data, (_) => const StorageSettings()),
         SettingsEntry(SettingsCategory.data, (_) => const SearchSettings()),
@@ -293,6 +322,10 @@ ComposeActions _composeActions(ComposeFlows flows) => ComposeActions([
     visible: storiesVisible,
   ),
 ]);
+
+/// From the Downloads screen to the message a file came from.
+void openDownloadMessage(BuildContext context, int chatId, int messageId) =>
+    Navigator.of(context).push(ConversationScreen.route(chatId, focusMessageId: messageId));
 
 /// Links Lumina opens itself: folder invites and proxies.
 List<InternalLinkHandler> appLinkHandlers() => [

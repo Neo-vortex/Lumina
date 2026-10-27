@@ -16,6 +16,10 @@ import '../features/folders/presentation/widgets/join_folder_sheet.dart';
 import '../features/proxy/presentation/screens/proxy_screen.dart';
 import '../features/proxy/presentation/widgets/proxy_button.dart';
 
+import '../features/downloads/presentation/downloads_ring.dart';
+import '../features/downloads/presentation/downloads_screen.dart';
+import 'feature_wiring.dart' show openDownloadMessage;
+
 /// Folders and the proxy button, plugged into the chat list.
 class AppChatListExtensions extends ChatListExtensions {
   AppChatListExtensions({required this.folders, required this.cache});
@@ -24,7 +28,12 @@ class AppChatListExtensions extends ChatListExtensions {
   final TelegramCache cache;
 
   @override
-  List<Widget> headerActions(BuildContext context) => const [ProxyButton()];
+  List<Widget> headerActions(BuildContext context) => [
+    DownloadsRing(
+      onOpen: () => Navigator.of(context).push(DownloadsScreen.route(openMessage: openDownloadMessage)),
+    ),
+    const ProxyButton(),
+  ];
 
   @override
   void openConnectionSettings(BuildContext context) => Navigator.of(context).push(ProxyScreen.route());
