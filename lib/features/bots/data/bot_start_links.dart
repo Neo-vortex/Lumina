@@ -25,8 +25,8 @@ class BotStartLinks {
     return (username: segments.single, parameter: start);
   }
 
-  /// The bot chat's id when [uri] is a start link to a bot (the parameter is
-  /// then pending for it), else null.
+  /// The chat [uri] points at, or null when it can't be found. For a bot the
+  /// parameter is then pending for its Start; other chats just open.
   Future<int?> resolve(Uri uri) async {
     final link = parse(uri);
     if (link == null) return null;
@@ -34,11 +34,9 @@ class BotStartLinks {
       final chat = await _client.invoke<td.Chat>(td.SearchPublicChat(username: link.username));
       if (chat.type case td.ChatTypePrivate(:final userId)) {
         final user = await _client.invoke<td.User>(td.GetUser(userId: userId));
-        if (user.type is! td.UserTypeBot) return null;
-        _pending[chat.id] = link.parameter;
-        return chat.id;
+        if (user.type is td.UserTypeBot) _pending[chat.id] = link.parameter;
       }
-      return null;
+      return chat.id;
     } on TdException {
       return null;
     }

@@ -41,12 +41,15 @@ class _BotWelcomeCardState extends State<BotWelcomeCard> {
     if (_sending) return;
     setState(() => _sending = true);
     final messenger = ScaffoldMessenger.maybeOf(context);
+    final links = context.read<BotStartLinks>();
     try {
       await context.read<BotsRepository>().start(
         botUserId: widget.botUserId,
         chatId: widget.chatId,
-        parameter: context.read<BotStartLinks>().take(widget.chatId) ?? '',
+        parameter: links.peek(widget.chatId) ?? '',
       );
+      // Only a /start that went out uses up the link's parameter.
+      links.take(widget.chatId);
     } on TdException catch (e) {
       if (mounted) setState(() => _sending = false);
       messenger?.showSnackBar(SnackBar(content: Text(e.message)));

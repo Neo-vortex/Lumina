@@ -90,4 +90,26 @@ void main() {
     await tester.pump();
     expect(client.sentOf<td.SendBotStartMessage>().single.parameter, '');
   });
+
+  testWidgets('a failed Start keeps the link parameter for the retry', (tester) async {
+    var fail = true;
+    client = FakeTdClient()
+      ..respond = (f) => switch (f) {
+        td.GetUserFullInfo() => fullWithBot(bot),
+        td.SearchPublicChat() => fakeChat(9),
+        td.GetUser() => fakeUser(bot: true).copyWith(id: 9),
+        td.SendBotStartMessage() when fail => const td.TdError(code: 429, message: 'Too Many Requests'),
+        td.SendBotStartMessage() => fakeMessage(1),
+        _ => const td.Ok(),
+      };
+    await pump(tester);
+    await links.resolve(Uri.parse('https://t.me/WeatherBot?start=ref42'));
+    await tester.tap(find.text('Start'));
+    await tester.pump();
+    await tester.pump();
+    fail = false;
+    await tester.tap(find.text('Start'));
+    await tester.pump();
+    expect(client.sentOf<td.SendBotStartMessage>().map((s) => s.parameter), ['ref42', 'ref42']);
+  });
 }

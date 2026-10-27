@@ -33,7 +33,7 @@ void main() {
     expect(links.take(9), isNull);
   });
 
-  test('a start link to a non-bot stores nothing', () async {
+  test('a start link to a non-bot opens its chat and stores nothing', () async {
     final client = FakeTdClient()
       ..respond = (f) => switch (f) {
         td.SearchPublicChat() => fakeChat(9),
@@ -41,8 +41,12 @@ void main() {
         _ => const td.Ok(),
       };
     final links = BotStartLinks(client);
-    expect(await links.resolve(Uri.parse('https://t.me/ada?start=x')), isNull);
-    expect(links.peek(9), isNull);
+    expect(
+      await links.resolve(Uri.parse('https://t.me/ada?start=x')),
+      9,
+      reason: 'the chat still opens in-app',
+    );
+    expect(links.peek(9), isNull, reason: 'but no start parameter is kept');
   });
 
   test('an unknown username resolves to nothing', () async {

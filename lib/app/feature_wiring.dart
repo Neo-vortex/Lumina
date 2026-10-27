@@ -303,7 +303,14 @@ List<InternalLinkHandler> appLinkHandlers() => [
       if (chatId != null && context.mounted) {
         await Navigator.of(context).push(ConversationScreen.route(chatId));
       } else if (context.mounted) {
-        await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+        // Not found: hand it on as openLink would (it can't be called here,
+        // it would come straight back to this handler).
+        final web = uri.scheme == 'http' || uri.scheme == 'https';
+        final external = context.read<AppPreferences>().openLinksExternally;
+        await launchUrl(
+          uri,
+          mode: web && !external ? LaunchMode.inAppBrowserView : LaunchMode.externalApplication,
+        );
       }
     },
   ),
