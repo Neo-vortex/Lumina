@@ -136,8 +136,9 @@ class _PlayingState extends State<_Playing> with SingleTickerProviderStateMixin 
         .initialize()
         .then((_) {
           if (!mounted) return;
-          if (!widget.paused) _c.play();
           setState(() => _ready = true);
+          // Whatever happened while initializing, follow the latest state.
+          _applyPaused();
         })
         .catchError((Object _) {});
     setState(() {});
@@ -146,13 +147,18 @@ class _PlayingState extends State<_Playing> with SingleTickerProviderStateMixin 
   @override
   void didUpdateWidget(_Playing old) {
     super.didUpdateWidget(old);
+    // Before the player is ready, initialize() applies the current state.
     if (old.paused == widget.paused || !_ready || _player == null) return;
+    _applyPaused();
+  }
+
+  void _applyPaused() {
     if (widget.paused) {
       _c.pause();
-      _frames.stop();
+      if (_frames.isActive) _frames.stop();
     } else {
       _c.play();
-      _frames.start();
+      if (!_frames.isActive) _frames.start();
     }
   }
 

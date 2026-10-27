@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumina/core/storage/app_preferences.dart';
 import 'package:lumina/core/telegram/file_store.dart';
+import 'package:lumina/core/telegram/widgets/looping_gif.dart';
 import 'package:lumina/features/media_panel/data/media_panel_repository.dart';
 import 'package:lumina/features/media_panel/presentation/media_panel.dart';
 import 'package:lumina_tdlib/api.dart' as td;
@@ -115,5 +116,30 @@ void main() {
     await tester.tap(find.bySemanticsLabel('GIF').first);
     await tester.pump();
     expect(h.client.sentOf<td.SendMessage>().single.inputMessageContent, isA<td.InputMessageAnimation>());
+  });
+
+  testWidgets('GIFs never stay paused after a scroll start that has no end', (tester) async {
+    await pump(tester);
+    await tester.tap(find.text('GIFs'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    bool paused() => tester.widget<LoopingGif>(find.byType(LoopingGif).first).paused;
+    expect(paused(), isFalse);
+    final grid = tester.element(find.byType(GridView));
+    ScrollStartNotification(
+      metrics: FixedScrollMetrics(
+        minScrollExtent: 0,
+        maxScrollExtent: 100,
+        pixels: 0,
+        viewportDimension: 300,
+        axisDirection: AxisDirection.down,
+        devicePixelRatio: 3,
+      ),
+      context: grid,
+    ).dispatch(grid);
+    await tester.pump();
+    expect(paused(), isTrue, reason: 'scrolling pauses the previews');
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(paused(), isFalse, reason: 'and they play again once things are quiet');
   });
 }

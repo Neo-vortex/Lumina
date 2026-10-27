@@ -347,6 +347,7 @@ class _GifTabState extends State<_GifTab> {
   @override
   void dispose() {
     _debounce?.cancel();
+    _settle?.cancel();
     super.dispose();
   }
 
@@ -446,11 +447,24 @@ class _GifTabState extends State<_GifTab> {
   // GIFs pause while the grid scrolls (every visible one decodes video),
   // and play again once it settles, like Telegram.
   var _scrolling = false;
+  Timer? _settle;
 
   Widget _grid(int count, Widget Function(int) cell) => NotificationListener<ScrollNotification>(
     onNotification: (n) {
-      if (n is ScrollStartNotification && !_scrolling) setState(() => _scrolling = true);
-      if (n is ScrollEndNotification && _scrolling) setState(() => _scrolling = false);
+      // Only the grid's own scrolling, and never left on: a start without
+      // its end (the panel settling, a refresh overscroll) froze every GIF
+      // a few frames in. Quiet for 250 ms counts as settled.
+      if (n.depth != 0) return false;
+      if (n is ScrollStartNotification || n is ScrollUpdateNotification) {
+        if (!_scrolling) setState(() => _scrolling = true);
+        _settle?.cancel();
+        _settle = Timer(const Duration(milliseconds: 250), () {
+          if (mounted && _scrolling) setState(() => _scrolling = false);
+        });
+      } else if (n is ScrollEndNotification && _scrolling) {
+        _settle?.cancel();
+        setState(() => _scrolling = false);
+      }
       return false;
     },
     // A decoder per GIF: past the phone's limit they stall after a few
