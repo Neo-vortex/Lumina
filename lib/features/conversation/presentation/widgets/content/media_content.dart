@@ -8,6 +8,7 @@ import 'package:lumina_tdlib/api.dart' as td;
 import '../../../../../core/telegram/auto_download_gate.dart';
 
 import '../../../../../core/telegram/display.dart';
+import '../../../../../core/telegram/download_registry.dart';
 import '../../../../../core/telegram/widgets/file_progress.dart';
 import '../../../../../core/telegram/widgets/formatted_text_view.dart';
 import '../../../../../core/telegram/widgets/looping_gif.dart';
@@ -249,9 +250,22 @@ class _MediaTileState extends State<MediaTile> {
                 ),
               ),
             if (!covered && !v.isVideo && v.file != null && !widget.compact)
-              Center(child: TransferRing(file: v.file!)),
+              Center(
+                child: TransferRing(
+                  file: v.file!,
+                  onStart: (f) => DownloadRegistry.of(context).track(f, widget.message),
+                ),
+              ),
             if (!covered && v.isVideo && v.media != null && !widget.compact)
-              Positioned(right: 8, top: 8, child: TransferRing(file: v.media!, size: 36)),
+              Positioned(
+                right: 8,
+                top: 8,
+                child: TransferRing(
+                  file: v.media!,
+                  size: 36,
+                  onStart: (f) => DownloadRegistry.of(context).track(f, widget.message),
+                ),
+              ),
           ],
         ),
       ),

@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 import 'package:open_filex/open_filex.dart';
 
+import '../../../../../core/telegram/download_registry.dart';
+
 import '../../../../../core/telegram/display.dart';
 import '../../../../../core/telegram/file_store.dart';
 import '../../../../../core/telegram/widgets/file_progress.dart';
@@ -20,9 +22,13 @@ class DocumentContent extends StatelessWidget {
     required this.textColor,
     required this.mutedColor,
     required this.footer,
+    this.message,
   });
 
   final td.Document document;
+
+  /// The message it came from (the Downloads list links back to it).
+  final td.Message? message;
   final td.FormattedText caption;
   final Color textColor;
   final Color mutedColor;
@@ -43,6 +49,7 @@ class DocumentContent extends StatelessWidget {
       await store.cancel(f.id);
     } else {
       await store.download(f.id, priority: 24);
+      if (message case final m? when context.mounted) DownloadRegistry.of(context).track(f, m);
     }
   }
 

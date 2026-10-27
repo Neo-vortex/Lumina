@@ -66,6 +66,7 @@ class MessageContentView extends StatelessWidget {
       ),
       td.MessageDocument(:final document, :final caption) => DocumentContent(
         document: document,
+        message: m,
         caption: caption,
         textColor: textColor,
         mutedColor: mutedColor,

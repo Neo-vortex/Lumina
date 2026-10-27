@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumina/core/tdlib/td_client.dart';
 import 'package:lumina/core/telegram/auto_download_gate.dart';
+import 'package:lumina/core/telegram/download_registry.dart';
 import 'package:lumina/core/telegram/file_store.dart';
 import 'package:lumina/features/conversation/presentation/widgets/content/auto_fetch.dart';
 import 'package:lumina/features/conversation/presentation/widgets/content/media_content.dart';
@@ -63,10 +64,22 @@ td.MessageContent video(td.File f) => td.MessageVideo(
   isSecret: false,
 );
 
+class _Registry implements DownloadRegistry {
+  final tracked = <(int, int)>[];
+
+  @override
+  void track(td.File file, td.Message message) => tracked.add((file.id, message.id));
+}
+
 void main() {
   late FakeTdClient client;
 
-  Future<void> pump(WidgetTester tester, AutoDownloadGate gate, td.MessageContent content) async {
+  Future<void> pump(
+    WidgetTester tester,
+    AutoDownloadGate gate,
+    td.MessageContent content, {
+    DownloadRegistry? registry,
+  }) async {
     client = FakeTdClient()..respond = (f) => idle(1, 1);
     await tester.pumpWidget(
       MultiRepositoryProvider(
@@ -74,6 +87,7 @@ void main() {
           RepositoryProvider<TdClient>.value(value: client),
           RepositoryProvider(create: (_) => FileStore(client)),
           RepositoryProvider<AutoDownloadGate>.value(value: gate),
+          if (registry != null) RepositoryProvider<DownloadRegistry>.value(value: registry),
         ],
         child: AutoFetch(
           messages: [fakeMessage(5, chatId: 3, content: content)],
@@ -89,6 +103,12 @@ void main() {
     await pump(tester, gate, voice(idle(11, 2000)));
     expect(gate.asked.single, (3, MediaKind.voice, 2000));
     expect(client.sentOf<td.DownloadFile>().single.fileId, 11);
+  });
+
+  testWidgets('auto-started downloads are registered with their message', (tester) async {
+    final registry = _Registry();
+    await pump(tester, _Gate({MediaKind.files}), document(idle(12, 5000000)), registry: registry);
+    expect(registry.tracked, [(12, 5)]);
   });
 
   testWidgets('a file the settings do not allow waits for a tap', (tester) async {

@@ -56,11 +56,20 @@ extension FileProgressX on td.File {
 /// Download/upload ring with a tap action (download, cancel), used on media
 /// and documents. Shows the size when idle.
 class TransferRing extends StatelessWidget {
-  const TransferRing({super.key, required this.file, this.size = 46, this.idleIcon = Icons.download_rounded});
+  const TransferRing({
+    super.key,
+    required this.file,
+    this.size = 46,
+    this.idleIcon = Icons.download_rounded,
+    this.onStart,
+  });
 
   final td.File file;
   final double size;
   final IconData idleIcon;
+
+  /// Called when a tap starts a download (the Downloads list records it).
+  final ValueChanged<td.File>? onStart;
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +87,14 @@ class TransferRing extends StatelessWidget {
               : 'Download, ${Display.fileSize(f.totalSize)}',
           excludeSemantics: true,
           child: GestureDetector(
-            onTap: () => active ? store.cancel(f.id) : store.download(f.id, priority: 24),
+            onTap: () {
+              if (active) {
+                store.cancel(f.id);
+              } else {
+                store.download(f.id, priority: 24);
+                onStart?.call(f);
+              }
+            },
             child: Container(
               width: size,
               height: size,

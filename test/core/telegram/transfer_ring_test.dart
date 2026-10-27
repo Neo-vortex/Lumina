@@ -74,4 +74,22 @@ void main() {
     await tester.pump();
     expect(identical(sb().stream, first), isTrue);
   });
+
+  testWidgets('a tap that starts a download reports it', (tester) async {
+    final client = FakeTdClient()..respond = (_) => downloading(size: 100);
+    final base = downloading(size: 100);
+    final idle = base.copyWith(local: base.local.copyWith(isDownloadingActive: false));
+    td.File? started;
+    await tester.pumpWidget(
+      RepositoryProvider(
+        create: (_) => FileStore(client),
+        child: MaterialApp(
+          home: TransferRing(file: idle, onStart: (f) => started = f),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(TransferRing));
+    await tester.pump();
+    expect(started?.id, idle.id);
+  });
 }

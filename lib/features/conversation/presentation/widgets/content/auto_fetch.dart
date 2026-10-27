@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../../core/telegram/auto_download_gate.dart';
+import '../../../../../core/telegram/download_registry.dart';
 import '../../../../../core/telegram/file_store.dart';
 
 /// Starts the downloads Settings → Auto-download allows for [messages] when
@@ -45,6 +46,7 @@ class _AutoFetchState extends State<AutoFetch> {
         final size = f.size > 0 ? f.size : f.expectedSize;
         if (gate.allows(chatId: m.chatId, media: kind, size: size)) {
           store.download(f.id, priority: 2).ignore();
+          DownloadRegistry.of(context).track(f, m);
         } else if (kind == MediaKind.videos && gate.preloadLargeVideos && local.downloadedPrefixSize == 0) {
           store.requestRange(f.id, 0, limit: AutoFetch.preloadBytes, priority: 1).ignore();
         }
