@@ -59,6 +59,19 @@ class AppPreferences {
     }
   }
 
+  // ---- Downloads ------------------------------------------------------------
+
+  /// New downloads wait for Wi-Fi.
+  bool get downloadsWifiOnlyDefault => _bool('downloads.wifiOnly', false);
+  set downloadsWifiOnlyDefault(bool v) => _set('downloads.wifiOnly', v);
+
+  /// Files (TDLib ids) that download on Wi-Fi only.
+  Set<int> get downloadsWifiOnly => {
+    for (final s in (_string('downloads.wifiOnlyFiles') ?? '').split(' '))
+      if (int.tryParse(s) case final id?) id,
+  };
+  void setDownloadsWifiOnly(Set<int> ids) => _set('downloads.wifiOnlyFiles', ids.join(' '));
+
   // ---- Folder picker --------------------------------------------------------
 
   /// Hold-and-swipe picker (default) or the classic drop-down list.

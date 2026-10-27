@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lumina/core/telegram/file_store.dart';
 import 'package:lumina/features/downloads/bloc/downloads_cubit.dart';
 import 'package:lumina/features/downloads/data/downloads_repository.dart';
-import 'package:lumina/features/downloads/domain/download_item.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../helpers/fakes.dart';

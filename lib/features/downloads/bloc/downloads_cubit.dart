@@ -70,14 +70,10 @@ class DownloadsState {
 /// The Downloads screen's model: a mirror of TDLib's download list kept
 /// current by its updates, plus totals, speed, filters and priorities.
 class DownloadsCubit extends Cubit<DownloadsState> {
-  DownloadsCubit({
-    required DownloadsRepository repository,
-    required FileStore files,
-    DateTime Function()? now,
-  }) : _repo = repository,
-       _files = files,
-       _now = now ?? DateTime.now,
-       super(const DownloadsState());
+  DownloadsCubit({required DownloadsRepository repository, required this._files, DateTime Function()? now})
+    : _repo = repository,
+      _now = now ?? DateTime.now,
+      super(const DownloadsState());
 
   final DownloadsRepository _repo;
   final FileStore _files;
