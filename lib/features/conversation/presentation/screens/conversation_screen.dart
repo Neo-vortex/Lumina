@@ -147,6 +147,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
     _cubit.visible(ids);
   }
 
+  static const _anchorAlignment = 0.82;
+  static const _anchorTopLine = Rect.fromLTWH(0, 0, 1, 24);
+
   /// Anchor scrolls in flight; the list reports what it shows once they land.
   var _anchoring = 0;
 
@@ -166,16 +169,28 @@ class _ConversationScreenState extends State<ConversationScreen> {
         _anchoring--;
         return;
       }
+      // Reveal the message's first line near the top (the list is reversed,
+      // so 1.0 is the top edge): centring the whole row put the start of a
+      // tall message above the screen. The newest row just sits at the bottom.
+      final newest = index == 0;
+      final alignment = newest ? 0.0 : _anchorAlignment;
+      final rect = newest ? null : _anchorTopLine;
       if (Motion.ambientEnabled(context)) {
         _list.animateToItem(
           index: index + _adsOffset,
           scrollController: _scroll,
-          alignment: 0.5,
+          alignment: alignment,
+          rect: rect,
           duration: (d) => Motion.screen,
           curve: (d) => Motion.move,
         );
       } else {
-        _list.jumpToItem(index: index + _adsOffset, scrollController: _scroll, alignment: 0.5);
+        _list.jumpToItem(
+          index: index + _adsOffset,
+          scrollController: _scroll,
+          alignment: alignment,
+          rect: rect,
+        );
       }
       Future.delayed(const Duration(milliseconds: 500), () {
         _anchoring--;
