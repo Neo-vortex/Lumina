@@ -12,6 +12,7 @@ import '../../../../core/storage/app_preferences.dart';
 import '../../../../core/telegram/display.dart';
 import '../../../../core/telegram/file_store.dart';
 import '../../../../core/theme/glow_colors.dart';
+import 'play_toggle.dart';
 import 'video_dock.dart';
 
 /// libVLC playback with the spec's gestures (§7.1):
@@ -247,8 +248,25 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
     widget.onControlsVisibilityChanged?.call(visible);
   }
 
+  final _playToggle = PlayToggle();
+
   void _togglePlay() {
-    _vlc.value.isPlaying ? _vlc.pause() : _vlc.play();
+    final v = _vlc.value;
+    switch (_playToggle.tap(
+      playing: v.isPlaying,
+      ended: v.isEnded,
+      position: v.position,
+      duration: v.duration,
+    )) {
+      case PlayAction.play:
+        _vlc.play();
+      case PlayAction.pause:
+        _vlc.pause();
+      case PlayAction.restart:
+        // VLC can't resume from "ended"; stopping rewinds it.
+        _vlc.stop().then((_) => _vlc.play()).ignore();
+    }
+    setState(() {});
     _setControlsVisible(true);
     _scheduleHide();
   }
@@ -310,81 +328,90 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
         final size = constraints.biggest;
         return Semantics(
           label: 'Video player. Double tap sides to skip 10 seconds',
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              _setControlsVisible(!_controlsVisible);
-              if (_controlsVisible) _scheduleHide();
-            },
-            onDoubleTapDown: (d) =>
-                _seekBy(Duration(seconds: d.localPosition.dx < size.width / 2 ? -10 : 10)),
-            onDoubleTap: () {},
-            onScaleStart: widget.showControls ? _onScaleStart : null,
-            onScaleUpdate: widget.showControls ? (d) => _onScaleUpdate(d, size) : null,
-            onScaleEnd: widget.showControls ? _onScaleEnd : null,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Center(
-                  child: Transform.scale(
-                    scale: _scale,
-                    child: VlcPlayer(
-                      controller: _vlc,
-                      aspectRatio: ratio,
-                      placeholder: const Center(child: CircularProgressIndicator(color: GlowColors.violet)),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  _setControlsVisible(!_controlsVisible);
+                  if (_controlsVisible) _scheduleHide();
+                },
+                onDoubleTapDown: (d) =>
+                    _seekBy(Duration(seconds: d.localPosition.dx < size.width / 2 ? -10 : 10)),
+                onDoubleTap: () {},
+                onScaleStart: widget.showControls ? _onScaleStart : null,
+                onScaleUpdate: widget.showControls ? (d) => _onScaleUpdate(d, size) : null,
+                onScaleEnd: widget.showControls ? _onScaleEnd : null,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Center(
+                      child: Transform.scale(
+                        scale: _scale,
+                        child: VlcPlayer(
+                          controller: _vlc,
+                          aspectRatio: ratio,
+                          placeholder: const Center(
+                            child: CircularProgressIndicator(color: GlowColors.violet),
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (v.isBuffering) Center(child: _BufferingIndicator(percent: v.bufferPercent)),
+                    if (_drag == _Drag.scrub)
+                      Center(child: _Bubble('${_fmt(_scrubTarget)} / ${_fmt(v.duration)}')),
+                    if (_toast != null) Align(alignment: const Alignment(0, -0.6), child: _Bubble(_toast!)),
+                  ],
+                ),
+              ),
+              // Outside the detector: its double tap would hold every
+              // dock tap for the double-tap timeout.
+              if (widget.showControls)
+                AnimatedOpacity(
+                  opacity: _controlsVisible ? 1 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: IgnorePointer(
+                    ignoring: !_controlsVisible,
+                    child: VideoDock(
+                      position: v.position,
+                      duration: v.duration,
+                      playing: _playToggle.shown(playing: v.isPlaying),
+                      speed: v.playbackSpeed,
+                      muted: _volume == 0,
+                      buffered: _download == null || v.duration == Duration.zero
+                          ? null
+                          : v.duration *
+                                _download!.bufferedAhead(
+                                  v.position.inMilliseconds / v.duration.inMilliseconds,
+                                ),
+                      downloaded: _download == null || _download!.complete ? null : _download!.downloaded,
+                      onPlayPause: () {
+                        _togglePlay();
+                        _scheduleHide();
+                      },
+                      onSeek: (d) {
+                        _vlc.seekTo(d);
+                        _scheduleHide();
+                      },
+                      onSeekBy: (d) {
+                        _seekBy(d);
+                        _scheduleHide();
+                      },
+                      onSpeed: (s) {
+                        _vlc.setPlaybackSpeed(s);
+                        _scheduleHide();
+                      },
+                      onMute: () {
+                        setState(() => _volume = _volume == 0 ? 100 : 0);
+                        _vlc.setVolume(_volume);
+                        _scheduleHide();
+                      },
+                      onFullscreen: _toggleFullscreen,
                     ),
                   ),
                 ),
-                if (v.isBuffering) Center(child: _BufferingIndicator(percent: v.bufferPercent)),
-                if (_drag == _Drag.scrub)
-                  Center(child: _Bubble('${_fmt(_scrubTarget)} / ${_fmt(v.duration)}')),
-                if (_toast != null) Align(alignment: const Alignment(0, -0.6), child: _Bubble(_toast!)),
-                if (widget.showControls)
-                  AnimatedOpacity(
-                    opacity: _controlsVisible ? 1 : 0,
-                    duration: const Duration(milliseconds: 200),
-                    child: IgnorePointer(
-                      ignoring: !_controlsVisible,
-                      child: VideoDock(
-                        position: v.position,
-                        duration: v.duration,
-                        playing: v.isPlaying,
-                        speed: v.playbackSpeed,
-                        muted: _volume == 0,
-                        buffered: _download == null || v.duration == Duration.zero
-                            ? null
-                            : v.duration *
-                                  _download!.bufferedAhead(
-                                    v.position.inMilliseconds / v.duration.inMilliseconds,
-                                  ),
-                        downloaded: _download == null || _download!.complete ? null : _download!.downloaded,
-                        onPlayPause: () {
-                          _togglePlay();
-                          _scheduleHide();
-                        },
-                        onSeek: (d) {
-                          _vlc.seekTo(d);
-                          _scheduleHide();
-                        },
-                        onSeekBy: (d) {
-                          _seekBy(d);
-                          _scheduleHide();
-                        },
-                        onSpeed: (s) {
-                          _vlc.setPlaybackSpeed(s);
-                          _scheduleHide();
-                        },
-                        onMute: () {
-                          setState(() => _volume = _volume == 0 ? 100 : 0);
-                          _vlc.setVolume(_volume);
-                          _scheduleHide();
-                        },
-                        onFullscreen: _toggleFullscreen,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+            ],
           ),
         );
       },
