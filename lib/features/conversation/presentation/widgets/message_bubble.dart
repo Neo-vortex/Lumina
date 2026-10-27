@@ -47,6 +47,8 @@ class MessageBubble extends StatefulWidget {
     required this.onReplyQuoteTap,
     required this.onReaction,
     this.onSwitchInline,
+    this.pendingReactions = const {},
+    this.reactionBurst,
   });
 
   final BubbleRow row;
@@ -74,6 +76,12 @@ class MessageBubble extends StatefulWidget {
 
   /// Puts a bot's "switch inline" query into the composer.
   final ValueChanged<String>? onSwitchInline;
+
+  /// This message's reactions waiting for TDLib (plain emoji): they glow.
+  final Set<String> pendingReactions;
+
+  /// A reaction just confirmed here: its chip plays the full effect.
+  final ({String emoji, int serial})? reactionBurst;
 
   @override
   State<MessageBubble> createState() => _MessageBubbleState();
@@ -305,7 +313,12 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
         if (reactions.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 4),
-            child: ReactionsRow(reactions: reactions, onTap: widget.onReaction),
+            child: ReactionsRow(
+              reactions: reactions,
+              onTap: widget.onReaction,
+              pending: widget.pendingReactions,
+              burst: widget.reactionBurst,
+            ),
           ),
       ],
     );

@@ -21,6 +21,8 @@ class ConversationState {
     this.error,
     this.revision = 0,
     this.sponsored = const [],
+    this.pendingReactions = const {},
+    this.reactionBurst,
   });
 
   final int chatId;
@@ -62,6 +64,13 @@ class ConversationState {
   /// Channel sponsored messages, shown below the newest post.
   final List<td.SponsoredMessage> sponsored;
 
+  /// Reactions sent and not answered yet, as "messageId|emoji" (no variation
+  /// selector): their chips glow until TDLib answers.
+  final Set<String> pendingReactions;
+
+  /// A reaction TDLib just confirmed: its chip plays the full effect once.
+  final ({int messageId, String emoji, int serial})? reactionBurst;
+
   /// Bumped when cache data the screen shows changes (read state, typing,
   /// users) without the message list changing.
   final int revision;
@@ -69,6 +78,8 @@ class ConversationState {
   bool get selecting => selected.isNotEmpty;
 
   ConversationState copyWith({
+    Set<String>? pendingReactions,
+    ({int messageId, String emoji, int serial})? Function()? reactionBurst,
     td.Chat? chat,
     List<td.Message>? messages,
     bool? initialLoading,
@@ -108,5 +119,7 @@ class ConversationState {
     error: error != null ? error() : this.error,
     revision: revision ?? this.revision,
     sponsored: sponsored ?? this.sponsored,
+    pendingReactions: pendingReactions ?? this.pendingReactions,
+    reactionBurst: reactionBurst != null ? reactionBurst() : this.reactionBurst,
   );
 }

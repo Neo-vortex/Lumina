@@ -9,6 +9,7 @@ import 'package:super_sliver_list/super_sliver_list.dart';
 import '../../../../core/storage/app_preferences.dart';
 import '../../../../core/tdlib/td_client.dart';
 import '../../../../core/telegram/display.dart';
+import '../../../../core/telegram/file_store.dart';
 import '../../../../core/telegram/permissions.dart';
 import '../../../../core/telegram/telegram_cache.dart';
 import '../../../../core/theme/glow_colors.dart';
@@ -227,6 +228,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
   /// Reacts, telling the user when it couldn't (not allowed here, offline).
   Future<void> _react(td.Message m, String emoji) async {
     final messenger = ScaffoldMessenger.of(context);
+    // Fetch the effect while the chip glows, so it plays the moment TDLib
+    // confirms.
+    _prefetchEffect(emoji);
     try {
       if (!await _cubit.toggleReaction(m, emoji)) {
         messenger.showSnackBar(SnackBar(content: Text('$emoji isn\'t allowed as a reaction in this chat')));
@@ -236,6 +240,21 @@ class _ConversationScreenState extends State<ConversationScreen> {
     } on TdException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
     }
+  }
+
+  void _prefetchEffect(String emoji) {
+    final FileStore files;
+    try {
+      files = context.read<FileStore>();
+    } on ProviderNotFoundException {
+      return;
+    }
+    context.read<MessagesRepository>().emojiReaction(emoji).then((r) {
+      if (r == null) return;
+      for (final s in [r.effectAnimation, r.activateAnimation]) {
+        if (!s.sticker.local.isDownloadingCompleted) files.download(s.sticker.id, priority: 24).ignore();
+      }
+    }).ignore();
   }
 
   /// Long-press starts (or extends) multi-select, like Telegram.
@@ -501,7 +520,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
             a.selected != b.selected ||
             a.hasOlder != b.hasOlder ||
             a.hasNewer != b.hasNewer ||
-            a.initialLoading != b.initialLoading,
+            a.initialLoading != b.initialLoading ||
+            !identical(a.pendingReactions, b.pendingReactions) ||
+            a.reactionBurst != b.reactionBurst,
         builder: (context, state) {
           final chat = state.chat ?? cache.chats[state.chatId]!;
           if (!_initialised && !state.initialLoading) {
@@ -607,6 +628,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
           if (state.selecting) _cubit.toggleSelected(row.primary);
         },
         onReplyQuoteTap: _cubit.jumpTo,
+        pendingReactions: {
+          for (final p in state.pendingReactions)
+            if (p.startsWith('${row.primary.id}|')) p.substring(p.indexOf('|') + 1),
+        },
+        reactionBurst: switch (state.reactionBurst) {
+          final b? when b.messageId == row.primary.id => (emoji: b.emoji, serial: b.serial),
+          _ => null,
+        },
         onReaction: (emoji) => _react(row.primary, emoji),
         onSwitchInline: (query) {
           final text = '$query ';

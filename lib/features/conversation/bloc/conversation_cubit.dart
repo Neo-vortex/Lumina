@@ -418,7 +418,20 @@ class ConversationCubit extends Cubit<ConversationState> {
   Future<bool> toggleReaction(td.Message m, String emoji) {
     final key = (m.id, emoji.replaceAll('\uFE0F', ''));
     // One at a time per reaction, so each toggle sees the last one's result.
-    final result = (_reactionQueue[key] ?? Future<void>.value()).then((_) => _toggleReaction(m, emoji, key));
+    final pending = '${key.$1}|${key.$2}';
+    emit(state.copyWith(pendingReactions: {...state.pendingReactions, pending}));
+    final result = (_reactionQueue[key] ?? Future<void>.value())
+        .then((_) => _toggleReaction(m, emoji, key))
+        .then(
+          (added) {
+            _settleReaction(pending, burst: added == true ? key : null);
+            return added != null;
+          },
+          onError: (Object e) {
+            _settleReaction(pending);
+            throw e;
+          },
+        );
     final done = _reactionQueue[key] = result.then<void>((_) {}, onError: (_) {});
     unawaited(
       done.then((_) {
@@ -428,7 +441,8 @@ class ConversationCubit extends Cubit<ConversationState> {
     return result;
   }
 
-  Future<bool> _toggleReaction(td.Message m, String emoji, (int, String) key) async {
+  /// True when added, false when removed, null when the chat refuses it.
+  Future<bool?> _toggleReaction(td.Message m, String emoji, (int, String) key) async {
     String plain(String e) => e.replaceAll('\uFE0F', '');
     final mine = m.interactionInfo?.reactions?.reactions.where((r) => r.isChosen).map((r) => r.type);
     final chosen = mine?.whereType<td.ReactionTypeEmoji>().where((t) => plain(t.emoji) == key.$2).firstOrNull;
@@ -443,14 +457,14 @@ class ConversationCubit extends Cubit<ConversationState> {
         _localReactions.remove(key);
         rethrow;
       }
-      return true;
+      return false;
     }
     try {
       final allowed = await reactionChoices(m);
       final match = allowed.where((a) => plain(a) == key.$2).firstOrNull;
       if (match == null) {
         _localReactions.remove(key);
-        return false;
+        return null;
       }
       _localReactions[key] = (match, DateTime.now());
       await _repository.react(chatId, m.id, td.ReactionTypeEmoji(emoji: match), add: true);
@@ -459,6 +473,36 @@ class ConversationCubit extends Cubit<ConversationState> {
       rethrow;
     }
     return true;
+  }
+
+  bool isReactionPending(int messageId, String emoji) =>
+      state.pendingReactions.contains('$messageId|${emoji.replaceAll('\uFE0F', '')}');
+
+  var _burstSerial = 0;
+  Timer? _burstClear;
+
+  /// The answer is in: TDLib's held-back counts apply now, with the burst.
+  void _settleReaction(String pending, {(int, String)? burst}) {
+    if (isClosed) return;
+    final messageId = int.parse(pending.split('|').first);
+    final held = _pendingInfo.remove(messageId);
+    emit(
+      state.copyWith(
+        pendingReactions: {...state.pendingReactions}..remove(pending),
+        messages: held == null
+            ? null
+            : [for (final m in state.messages) m.id == messageId ? m.copyWith(interactionInfo: held) : m],
+        reactionBurst: burst == null
+            ? null
+            : () => (messageId: burst.$1, emoji: burst.$2, serial: ++_burstSerial),
+      ),
+    );
+    if (burst != null) {
+      _burstClear?.cancel();
+      _burstClear = Timer(const Duration(seconds: 3), () {
+        if (!isClosed) emit(state.copyWith(reactionBurst: () => null));
+      });
+    }
   }
 
   Future<List<String>> reactionChoices(td.Message m) async {
@@ -560,8 +604,13 @@ class ConversationCubit extends Cubit<ConversationState> {
   void _flushInfo() {
     _infoFlush = null;
     if (isClosed || _pendingInfo.isEmpty) return;
-    final pending = Map.of(_pendingInfo);
-    _pendingInfo.clear();
+    // Counts for a message with a reaction in flight wait for its answer.
+    final waiting = {for (final p in state.pendingReactions) int.parse(p.split('|').first)};
+    final pending = {
+      for (final e in _pendingInfo.entries)
+        if (!waiting.contains(e.key)) e.key: e.value,
+    };
+    _pendingInfo.removeWhere((id, _) => !waiting.contains(id));
     if (!state.messages.any((m) => pending.containsKey(m.id))) return;
     emit(
       state.copyWith(
@@ -614,6 +663,7 @@ class ConversationCubit extends Cubit<ConversationState> {
     _viewDebounce?.cancel();
     _highlightTimer?.cancel();
     _infoFlush?.cancel();
+    _burstClear?.cancel();
     await _updates.cancel();
     await _cacheEvents.cancel();
     _repository.closeChat(chatId).ignore();
