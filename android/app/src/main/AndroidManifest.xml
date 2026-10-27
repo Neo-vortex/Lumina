@@ -120,6 +120,9 @@
         <receiver
             android:name="dev.lumina.background.MessageNotifications$ActionReceiver"
             android:exported="false"/>
+        <receiver
+            android:name="dev.lumina.background.DownloadNotifications$ActionReceiver"
+            android:exported="false"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -19,8 +19,9 @@ class DownloadsScreen extends StatelessWidget {
 
   final OpenMessage openMessage;
 
-  static Route<void> route({required OpenMessage openMessage}) =>
-      MaterialPageRoute(builder: (_) => DownloadsScreen(openMessage: openMessage));
+  static Route<void> route({required OpenMessage openMessage}) => MaterialPageRoute(
+    builder: (_) => _Visible(child: DownloadsScreen(openMessage: openMessage)),
+  );
 
   void _toast(BuildContext context, String text) =>
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(text)));
@@ -389,4 +390,27 @@ class _RemoveSheetState extends State<_RemoveSheet> {
       ],
     ),
   );
+}
+
+/// Tells the cubit the screen is up, so finished files don't also notify.
+class _Visible extends StatefulWidget {
+  const _Visible({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_Visible> createState() => _VisibleState();
+}
+
+class _VisibleState extends State<_Visible> {
+  late final DownloadsCubit _cubit = context.read<DownloadsCubit>()..screenShown();
+
+  @override
+  void dispose() {
+    _cubit.screenHidden();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

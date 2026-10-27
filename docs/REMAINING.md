@@ -61,7 +61,9 @@ files, analyzer clean). Nothing is pushed yet: `main` is ahead of
 
 ## Done recently, not yet confirmed on the phone
 
-Bot welcome card with Start (and t.me/bot?start= links), bot section in the profile, Folder gesture picker (hold the folder title, slide along the edge list,
+Download manager (header ring while downloading, Settings → Data & storage →
+Downloads; pause/resume, pause all, drag to reorder = priority, filters, search,
+Wi-Fi only, progress + "Downloaded" notifications), Bot welcome card with Start (and t.me/bot?start= links), bot section in the profile, Folder gesture picker (hold the folder title, slide along the edge list,
 release; Settings → Chats → Swipe folder picker, on by default), SmolLM2 on the GPU (Vulkan) with CPU fallback and a "Run AI on the CPU"
 setting showing where it runs, auto-download (downloads follow it: photos, GIFs, videos with optional
 start preload, files, voice, video messages, music; settings screen synced with

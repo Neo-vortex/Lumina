@@ -80,6 +80,10 @@ class MainActivity : FlutterActivity() {
 
     /** Opened from a call notification: show over the lock screen and pass on Accept / Decline. */
     private fun handleCallIntent(intent: Intent?) {
+        intent?.getStringExtra(dev.lumina.background.DownloadNotifications.EXTRA_OPEN_DOWNLOAD)?.let {
+            intent.removeExtra(dev.lumina.background.DownloadNotifications.EXTRA_OPEN_DOWNLOAD)
+            dev.lumina.background.DownloadNotifications.openDownload(it)
+        }
         val chat = intent?.getLongExtra(MessageNotifications.EXTRA_OPEN_CHAT, 0) ?: 0
         if (chat != 0L) {
             intent?.removeExtra(MessageNotifications.EXTRA_OPEN_CHAT)

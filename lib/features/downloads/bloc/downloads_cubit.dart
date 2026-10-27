@@ -83,6 +83,13 @@ class DownloadsCubit extends Cubit<DownloadsState> {
   final _progress = <int, (int, DateTime)>{};
   final _rates = <int, double>{};
 
+  var _screens = 0;
+
+  /// Whether the Downloads screen is showing (no "Downloaded" notes then).
+  bool get screenVisible => _screens > 0;
+  void screenShown() => _screens++;
+  void screenHidden() => _screens--;
+
   Future<void> start() async {
     _updates ??= _repo.updates.listen(_onUpdate);
     await _sync();
