@@ -37,6 +37,7 @@ import '../features/conversation/presentation/widgets/send_orb.dart';
 import '../features/media/presentation/widgets/attach_sheet.dart';
 import '../features/transcription/data/transcription_center.dart';
 import '../features/transcription/data/whisper_service.dart';
+import '../features/bots/presentation/bot_welcome_card.dart';
 import '../features/transcription/presentation/widgets/dictation_bar.dart';
 import '../features/transcription/presentation/widgets/transcript_view.dart';
 import '../features/voice/data/voice_recorder.dart';
@@ -59,6 +60,17 @@ class AppConversationExtensions extends ConversationExtensions {
   final AppPreferences prefs;
   final ComposeFlows flows;
   final LiveLocationService liveLocations;
+
+  @override
+  Widget? emptyChat(BuildContext context, td.Chat chat) {
+    final userId = switch (chat.type) {
+      td.ChatTypePrivate(:final userId) => userId,
+      _ => null,
+    };
+    if (userId == null) return null;
+    if (context.read<TelegramCache>().users[userId]?.type is! td.UserTypeBot) return null;
+    return BotWelcomeCard(botUserId: userId, chatId: chat.id, title: chat.title);
+  }
 
   @override
   void openChatInfo(BuildContext context, td.Chat chat) {

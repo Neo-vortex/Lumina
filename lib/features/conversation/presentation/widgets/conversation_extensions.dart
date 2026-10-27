@@ -32,6 +32,10 @@ class ConversationExtensions {
   /// Extra header buttons (calls).
   List<Widget> headerActions(BuildContext context, td.Chat chat) => const [];
 
+  /// Shown in place of the message list while the chat has no messages
+  /// (a bot's welcome card); null shows the plain empty list.
+  Widget? emptyChat(BuildContext context, td.Chat chat) => null;
+
   void onAttach(BuildContext context, td.Chat chat) {}
 
   void onVoice(BuildContext context, td.Chat chat, TextEditingController text) {}

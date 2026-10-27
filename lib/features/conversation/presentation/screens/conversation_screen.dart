@@ -481,10 +481,17 @@ class _ConversationScreenState extends State<ConversationScreen> {
           }
           _updateRows(state);
           _adsOffset = state.hasNewer ? 0 : state.sponsored.length;
+          final empty = !state.initialLoading && _rows.isEmpty && !state.hasOlder
+              ? ConversationExtensions.of(context).emptyChat(context, chat)
+              : null;
           return Stack(
             children: [
               if (state.initialLoading)
                 const Center(child: CircularProgressIndicator(color: GlowColors.violet))
+              else if (empty != null)
+                Center(
+                  child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: empty),
+                )
               else
                 NotificationListener<ScrollNotification>(
                   onNotification: (n) {
