@@ -571,6 +571,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
         },
         onReplyQuoteTap: _cubit.jumpTo,
         onReaction: (emoji) => _react(row.primary, emoji),
+        onSwitchInline: (query) {
+          final text = '$query ';
+          _text.value = TextEditingValue(
+            text: text,
+            selection: TextSelection.collapsed(offset: text.length),
+          );
+        },
       ),
     };
   }

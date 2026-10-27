@@ -13,6 +13,7 @@ import '../../../../core/theme/glow_colors.dart';
 import '../../../../core/theme/motion.dart';
 import '../../bloc/conversation_cubit.dart';
 import 'content/message_content_view.dart';
+import 'inline_keyboard.dart';
 import 'message_rows.dart';
 import 'reactions_row.dart';
 
@@ -43,6 +44,7 @@ class MessageBubble extends StatefulWidget {
     this.onMenu,
     required this.onReplyQuoteTap,
     required this.onReaction,
+    this.onSwitchInline,
   });
 
   final BubbleRow row;
@@ -67,6 +69,9 @@ class MessageBubble extends StatefulWidget {
   final ValueChanged<Rect>? onMenu;
   final void Function(int messageId) onReplyQuoteTap;
   final void Function(String emoji) onReaction;
+
+  /// Puts a bot's "switch inline" query into the composer.
+  final ValueChanged<String>? onSwitchInline;
 
   @override
   State<MessageBubble> createState() => _MessageBubbleState();
@@ -122,6 +127,17 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
     td.MessageSendingStateFailed() => Delivery.failed,
     null => m.id <= widget.chat.lastReadOutboxMessageId ? Delivery.read : Delivery.sent,
   };
+
+  /// The bot behind a keyboard: the inline bot it came via, else the sender.
+  static String _botUsername(TelegramCache cache, td.Message m) {
+    final id = m.viaBotUserId != 0
+        ? m.viaBotUserId
+        : switch (m.senderId) {
+            td.MessageSenderUser(:final userId) => userId,
+            _ => 0,
+          };
+    return cache.users[id]?.usernames?.activeUsernames.firstOrNull ?? '';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -266,6 +282,16 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
       crossAxisAlignment: outgoing ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         bubble,
+        if (m.replyMarkup case final td.ReplyMarkupInlineKeyboard markup when markup.rows.isNotEmpty)
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.8),
+            child: InlineKeyboard(
+              message: m,
+              markup: markup,
+              botUsername: _botUsername(cache, m),
+              onSwitchInline: widget.onSwitchInline ?? (_) {},
+            ),
+          ),
         if (reactions.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 4),

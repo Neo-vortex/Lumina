@@ -31,18 +31,6 @@ files, analyzer clean). Nothing is pushed yet: `main` is ahead of
   a 1080x2400 @3x view for sheets; `GlowButton` shimmers, so don't use
   `pumpAndSettle`; run tests with `--timeout`.
 
-## In progress
-
-1. **Inline keyboards (bot buttons) in messages** — not started in code.
-   Render `message.replyMarkup` (`ReplyMarkupInlineKeyboard`) under the
-   bubble as glass pill rows. Actions: Url/LoginUrl → `openLink` (proxy
-   links already open the new proxy sheet with a live status check);
-   Callback → `GetCallbackQueryAnswer(payload: CallbackQueryPayloadData)`,
-   answer as snackbar / alert glow sheet / url; CopyText → clipboard;
-   User → open the private chat; SwitchInline → put `@bot query` in the
-   composer; WebApp → open url in browser for now; others → "not supported
-   yet". Spinner on a pending callback. Proxy channels need this.
-
 ## Next (agreed with the owner)
 
 2. **Full bot support with Lumina's own UI** — needs a design first:
@@ -91,7 +79,10 @@ files, analyzer clean). Nothing is pushed yet: `main` is ahead of
 
 ## Done recently, not yet confirmed on the phone
 
-Chat backgrounds (Telegram, per chat, default with blur/dim; no black
+Inline keyboards under bot messages (glass pills; url/login/web app open
+the link, callbacks ask the bot with a spinner and answer as toast, glow
+sheet or link, copy text, open user, switch inline fills the composer;
+game/buy/password callbacks say "not supported yet"), chat backgrounds (Telegram, per chat, default with blur/dim; no black
 flash, pre-blurred), media viewer captions (dark scrim, video tap swaps
 caption ↔ controls), proxy link sheet with status, emoji-only messages
 (still until tapped, double tap effect), inline GIFs (tap pauses) and GIF
