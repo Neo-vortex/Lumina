@@ -11,6 +11,9 @@ import 'package:lumina/features/profile/presentation/user_profile_screen.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../helpers/fakes.dart';
+import '../bots/bots_repository_test.dart' as bots;
+
+const botInfoFixture = bots.bot;
 
 td.ChatPhoto photo(int id) => td.ChatPhoto(id: id, addedDate: 0, sizes: const []);
 
@@ -52,10 +55,12 @@ void main() {
     WidgetTester tester, {
     td.ChatPhoto? personal,
     List<td.ChatPhoto> photos = const [],
+    bool bot = false,
   }) async {
     final client = FakeTdClient()
       ..respond = (f) => switch (f) {
-        td.GetUserFullInfo() => fullInfo(personal: personal),
+        td.GetUserFullInfo() =>
+          bot ? fullInfo(personal: personal).copyWith(botInfo: botInfoFixture) : fullInfo(personal: personal),
         td.GetUserProfilePhotos() => td.ChatPhotos(totalCount: photos.length, photos: photos),
         td.GetChatPostedToChatPageStories() => const td.Stories(
           totalCount: 0,
@@ -76,7 +81,7 @@ void main() {
         ),
         _ => const td.Ok(),
       };
-    final user = fakeUser().copyWith(
+    final user = fakeUser(bot: bot).copyWith(
       isContact: true,
       usernames: const td.Usernames(
         activeUsernames: ['ada_l'],
@@ -109,6 +114,7 @@ void main() {
             userId: 42,
             onMessage: (_) => calls.add('message'),
             onCall: (_, {required video}) => calls.add(video ? 'video' : 'voice'),
+            botSection: (_, _, _) => const Text('BOT SECTION'),
           ),
         ),
       ),
@@ -174,6 +180,16 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     expect(find.byType(ProfilePhotoViewer), findsOneWidget);
+  });
+
+  testWidgets('a regular user has no bot section', (tester) async {
+    await pump(tester);
+    expect(find.text('BOT SECTION'), findsNothing);
+  });
+
+  testWidgets('a bot shows the bot section', (tester) async {
+    await pump(tester, bot: true);
+    expect(find.text('BOT SECTION'), findsOneWidget);
   });
 }
 

@@ -32,6 +32,7 @@ class UserProfileScreen extends StatefulWidget {
     required this.onCall,
     this.onOpenChat,
     this.onShowQr,
+    this.botSection,
   });
 
   final int userId;
@@ -40,6 +41,10 @@ class UserProfileScreen extends StatefulWidget {
 
   /// Opens a chat by id (groups in common, a new secret chat).
   final ValueChanged<int>? onOpenChat;
+
+  /// A bot's own section (about, commands, privacy policy), built by the
+  /// bots feature; shown only for bots.
+  final Widget Function(BuildContext context, td.User user, td.UserFullInfo full)? botSection;
 
   /// Shows a QR code for a link.
   final void Function(String url, String title)? onShowQr;
@@ -337,6 +342,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             _InfoRow(icon: Icons.place_rounded, value: loc.address, label: 'Location'),
                         ],
                       ),
+                      if (widget.botSection case final section?
+                          when user.type is td.UserTypeBot && _full?.botInfo != null) ...[
+                        const SizedBox(height: 16),
+                        section(context, user, _full!),
+                      ],
                       if (_posts.isNotEmpty) ...[
                         const SizedBox(height: 16),
                         const Text(

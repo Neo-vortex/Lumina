@@ -33,7 +33,7 @@ files, analyzer clean). Nothing is pushed yet: `main` is ahead of
 
 ## Next (agreed with the owner)
 
-2. **Full bot support with Lumina's own UI** — needs a design first:
+2. **Full bot support with Lumina's own UI** (spec `docs/superpowers/specs/2026-10-27-bot-support-design.md`; 1/5 done: welcome card, start links, profile section; next: command palette) — needs a design first:
    reply keyboards (`ReplyMarkupShowKeyboard`) above the composer, the
    commands menu (`/` button, `GetCommands`/`botInfo.commands`), the bot's
    menu button and web apps (embedded vs browser), inline mode
@@ -61,7 +61,7 @@ files, analyzer clean). Nothing is pushed yet: `main` is ahead of
 
 ## Done recently, not yet confirmed on the phone
 
-Folder gesture picker (hold the folder title, slide along the edge list,
+Bot welcome card with Start (and t.me/bot?start= links), bot section in the profile, Folder gesture picker (hold the folder title, slide along the edge list,
 release; Settings → Chats → Swipe folder picker, on by default), SmolLM2 on the GPU (Vulkan) with CPU fallback and a "Run AI on the CPU"
 setting showing where it runs, auto-download (downloads follow it: photos, GIFs, videos with optional
 start preload, files, voice, video messages, music; settings screen synced with

@@ -37,6 +37,7 @@ import '../features/conversation/presentation/widgets/send_orb.dart';
 import '../features/media/presentation/widgets/attach_sheet.dart';
 import '../features/transcription/data/transcription_center.dart';
 import '../features/transcription/data/whisper_service.dart';
+import '../features/bots/presentation/bot_profile_section.dart';
 import '../features/bots/presentation/bot_welcome_card.dart';
 import '../features/transcription/presentation/widgets/dictation_bar.dart';
 import '../features/transcription/presentation/widgets/transcript_view.dart';
@@ -89,6 +90,7 @@ class AppConversationExtensions extends ConversationExtensions {
           userId: userId,
           // The chat is right behind the profile.
           onMessage: (_) => Navigator.of(context).maybePop(),
+          botSection: (context, user, full) => BotProfileSection(info: full.botInfo!),
           onCall: (id, {required video}) async {
             final messenger = ScaffoldMessenger.of(context);
             final error = await context.read<CallCubit>().startCall(id, video: video);
