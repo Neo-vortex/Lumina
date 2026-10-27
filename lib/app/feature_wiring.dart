@@ -118,7 +118,13 @@ List<RepositoryProvider<Object>> featureProviders() => [
     dispose: (i) => i.dispose(),
   ),
   RepositoryProvider<MessageSearch>(create: (c) => c.read<MessageIndexer>()),
-  RepositoryProvider<ModelInstaller>(create: (_) => ModelInstaller()),
+  RepositoryProvider<ModelInstaller>(
+    lazy: false,
+    // Shortly after launch, off the UI thread (the copy runs natively).
+    create: (_) =>
+        ModelInstaller()..schedulePreinstall(const [BundledModel.actionModel, BundledModel.whisperBase]),
+    dispose: (m) => m.dispose(),
+  ),
   RepositoryProvider<ActionExtractor>(
     create: (c) => ActionExtractor(c.read<ModelInstaller>()),
     dispose: (e) => e.unload(),

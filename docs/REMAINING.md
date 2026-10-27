@@ -51,8 +51,6 @@ files, analyzer clean). Nothing is pushed yet: `main` is ahead of
 4. **Sticker suggestions while typing an emoji** — needs a design (owner
    wants something more inventive than Telegram's strip). TDLib:
    `getStickers(stickerType, query: emoji)`.
-5. **Model extraction in the background** shortly after first launch
-   (option A agreed), so the first ✨/AI action doesn't wait.
 6. **On-device GPU for SmolLM2** (`ComputeDevice.gpu`, CPU fallback,
    setting to force CPU) — optional now: CPU load is 0.9 s, generation
    0.5 s.
@@ -75,7 +73,8 @@ files, analyzer clean). Nothing is pushed yet: `main` is ahead of
 
 ## Done recently, not yet confirmed on the phone
 
-TDLib log level set before the client exists (quiet startup), quick
+models extracted in the background 15 s after launch (AI action model,
+then Whisper), TDLib log level set before the client exists (quiet startup), quick
 repeat reactions toggle from local state (no double add), inline keyboards under bot messages (glass pills; url/login/web app open
 the link, callbacks ask the bot with a spinner and answer as toast, glow
 sheet or link, copy text, open user, switch inline fills the composer;

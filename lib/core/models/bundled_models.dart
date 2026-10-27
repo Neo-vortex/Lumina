@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
@@ -79,6 +80,30 @@ class ModelInstaller {
     }
     return path;
   }
+
+  Timer? _preinstall;
+
+  /// Extracts [models] one after another once [delay] has passed, so the
+  /// first ✨/speech action finds them ready. Already-extracted models cost
+  /// a size check. Cancelled by [dispose].
+  void schedulePreinstall(List<BundledModel> models, {Duration delay = const Duration(seconds: 15)}) {
+    _preinstall?.cancel();
+    _preinstall = Timer(delay, () => preinstall(models).ignore());
+  }
+
+  /// Extracts [models] in turn; failures (e.g. low space) are left for the
+  /// real use, which reports them.
+  Future<void> preinstall(List<BundledModel> models) async {
+    for (final model in models) {
+      try {
+        await ensure(model);
+      } catch (_) {
+        // Reported when the feature actually needs the model.
+      }
+    }
+  }
+
+  void dispose() => _preinstall?.cancel();
 
   Future<void> remove(BundledModel model) async {
     final f = File(await pathFor(model));
