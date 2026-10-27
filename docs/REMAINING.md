@@ -59,6 +59,39 @@ files, analyzer clean). Nothing is pushed yet: `main` is ahead of
     categorised milestones for the owner to pick from (don't build).
 13. Pattern backgrounds draw only their fill (pattern art not rendered).
 
+## Known problems (from reviews, not fixed yet)
+
+Download manager:
+- Search and filters only cover finished downloads already loaded (TDLib's
+  `searchFileDownloads(query:)` isn't used).
+- The speed figure can linger after the last download stops or pauses.
+- A "Downloaded" notification can carry an empty path when TDLib's final
+  `updateFile` arrives after the completion update; tapping then only opens
+  Lumina.
+- Completion notification ids (`4200 + fileId % 1000`) can collide.
+- Pause all from the notification is dropped if Android killed the process
+  (the receiver doesn't queue like `openDownload` does).
+- `screenHidden` can push the visibility counter below zero.
+- If a filter hides every loaded finished row, the next page never loads.
+- Full-size photos opened in the media viewer aren't listed (no Save action).
+
+Bots (piece 1):
+- A non-TDLib error leaves the welcome card's Start busy for good.
+- The welcome card needs the bot user cached; for a bot opened from a fresh
+  link it can appear only after the next rebuild.
+- The welcome card comes back after "Clear history" for a bot already
+  started.
+- The bot start-link handler sits first among link handlers (safe today).
+
+Folder gesture picker:
+- If folders change mid-gesture, the picker keeps the list it opened with.
+- The preview doesn't update with messages arriving mid-gesture.
+- TalkBack announces the picker, not the highlighted folder.
+- The blurred backdrop re-composites every frame while names move; check
+  cost on a low-end phone.
+- The list always sits on the left (the title is left-aligned); pick the
+  side from the first sideways movement if the owner prefers.
+
 ## Done recently, not yet confirmed on the phone
 
 Download manager (header ring while downloading, Settings → Data & storage →
