@@ -27,12 +27,8 @@ class AutoDownloadNetworkWatch implements NetworkWatch {
 /// Wi-Fi-only downloads: paused by Lumina off Wi-Fi ("Waiting for Wi-Fi"),
 /// resumed on Wi-Fi. A pause the user made is never undone here.
 class DownloadPolicy {
-  DownloadPolicy({
-    required DownloadsRepository repository,
-    required AppPreferences prefs,
-    required this.network,
-  }) : _repo = repository,
-       _prefs = prefs;
+  DownloadPolicy({required DownloadsRepository repository, required this._prefs, required this.network})
+    : _repo = repository;
 
   final DownloadsRepository _repo;
   final AppPreferences _prefs;

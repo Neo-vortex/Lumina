@@ -67,8 +67,7 @@ class AppPreferences {
 
   /// Files (TDLib ids) that download on Wi-Fi only.
   Set<int> get downloadsWifiOnly => {
-    for (final s in (_string('downloads.wifiOnlyFiles') ?? '').split(' '))
-      if (int.tryParse(s) case final id?) id,
+    for (final s in (_string('downloads.wifiOnlyFiles') ?? '').split(' ')) ?int.tryParse(s),
   };
   void setDownloadsWifiOnly(Set<int> ids) => _set('downloads.wifiOnlyFiles', ids.join(' '));
 
