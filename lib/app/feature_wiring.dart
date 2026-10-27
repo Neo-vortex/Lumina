@@ -13,6 +13,7 @@ import '../core/tdlib/td_client.dart';
 import '../core/telegram/telegram_cache.dart';
 import '../core/telegram/file_store.dart';
 import '../core/models/bundled_models.dart';
+import '../features/assistant/presentation/ai_settings.dart';
 import '../features/auto_download/data/auto_download_service.dart';
 import '../features/auto_download/data/network_monitor.dart';
 import '../features/auto_download/presentation/auto_download_settings.dart';
@@ -139,7 +140,8 @@ List<RepositoryProvider<Object>> featureProviders() => [
     dispose: (m) => m.dispose(),
   ),
   RepositoryProvider<ActionExtractor>(
-    create: (c) => ActionExtractor(c.read<ModelInstaller>()),
+    create: (c) =>
+        ActionExtractor(c.read<ModelInstaller>(), forceCpu: () => c.read<AppPreferences>().aiForceCpu),
     dispose: (e) => e.unload(),
   ),
   RepositoryProvider<WhisperService>(
@@ -253,6 +255,7 @@ List<RepositoryProvider<Object>> featureProviders() => [
       (context) => [
         SettingsEntry(SettingsCategory.chats, (_) => const FolderSettings(), forBots: false),
         SettingsEntry(SettingsCategory.media, (_) => const SpeechSettings()),
+        SettingsEntry(SettingsCategory.media, (_) => const AiSettings()),
         SettingsEntry(SettingsCategory.notifications, (_) => const ConnectionModeSettings()),
         SettingsEntry(SettingsCategory.notifications, (_) => const BackgroundSettings()),
         SettingsEntry(SettingsCategory.data, (_) => const AutoDownloadSettings()),

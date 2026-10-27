@@ -39,21 +39,15 @@ files, analyzer clean). Nothing is pushed yet: `main` is ahead of
    menu button and web apps (embedded vs browser), inline mode
    (`@bot query` results panel), /start for new bots, bot info in the
    profile.
-3. **Auto-download** (design approved): Settings → Data & storage →
-   Auto-download. Tabs Mobile / Wi-Fi / Roaming; grid of media (photos,
-   videos, files, voice, video messages, GIFs, music) × chat type
-   (contacts, private, groups, channels) with glowing toggles; log-scale
-   size sliders for videos and files (100 KB → 4 GB, snapping);
-   presets Off/Low/Medium/High/Custom; "preload larger videos". Sync with
-   TDLib `setAutoDownloadSettings` per network type and make the app's own
-   downloads follow it. Needs `ACCESS_NETWORK_STATE` (manifest is an owner
-   file: stage only your hunk) and a native network-type channel.
+3. **Auto-download, part 2**: the settings screen, TDLib sync and network
+   channel are done (`lib/features/auto_download/`). Left: make the app's
+   own downloads follow `AutoDownloadService.allows(...)` — `TdFileImage`
+   (photos), `LoopingGif`, voice/video notes/music/videos/files content
+   widgets (auto-start when allowed, otherwise the tap-to-download ring),
+   and `preloadLargeVideos` (request the first ~1 MB via `requestRange`).
 4. **Sticker suggestions while typing an emoji** — needs a design (owner
    wants something more inventive than Telegram's strip). TDLib:
    `getStickers(stickerType, query: emoji)`.
-6. **On-device GPU for SmolLM2** (`ComputeDevice.gpu`, CPU fallback,
-   setting to force CPU) — optional now: CPU load is 0.9 s, generation
-   0.5 s.
 9. **VLC smoothness, second try**: the SurfaceProducer rendering showed
    black/garbage on the owner's phone and was reverted to the platform
    view. Retry carefully (e.g. hybrid composition, or SurfaceProducer with
@@ -73,7 +67,9 @@ files, analyzer clean). Nothing is pushed yet: `main` is ahead of
 
 ## Done recently, not yet confirmed on the phone
 
-models extracted in the background 15 s after launch (AI action model,
+SmolLM2 on the GPU (Vulkan) with CPU fallback and a "Run AI on the CPU"
+setting showing where it runs, auto-download settings screen synced with
+TDLib (per network, presets, grid, size sliders, network type channel), models extracted in the background 15 s after launch (AI action model,
 then Whisper), TDLib log level set before the client exists (quiet startup), quick
 repeat reactions toggle from local state (no double add), inline keyboards under bot messages (glass pills; url/login/web app open
 the link, callbacks ask the bot with a spinner and answer as toast, glow

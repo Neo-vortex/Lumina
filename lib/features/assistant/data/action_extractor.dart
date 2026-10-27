@@ -30,21 +30,30 @@ class AssistantContext {
   final DateTime now;
 }
 
-/// Runs SmolLM2-360M-Instruct (bundled, Q4_0 GGUF) through llama.cpp on
-/// the CPU to label a message as a calendar event, alarm, reminder, note or
+/// Runs SmolLM2-360M-Instruct (bundled, Q4_0 GGUF) through llama.cpp,
+/// on the GPU (Vulkan) when it loads there, else the CPU, to label a message as a calendar event, alarm, reminder, note or
 /// nothing. Output is constrained to a JSON schema so it always parses;
 /// [ActionGuardrails] settle unambiguous phrasing and [DateResolver] works
 /// out dates and times.
 class ActionExtractor {
   ActionExtractor(
     this._models, {
-    Future<LlamaEngine> Function(String path)? loadEngine,
+    Future<LlamaEngine> Function(String path, ComputeDevice device)? loadEngine,
+    bool Function()? forceCpu,
     this.prepareTimeout = const Duration(minutes: 2),
     this.loadTimeout = const Duration(seconds: 45),
-  }) : _loadEngine = loadEngine ?? _llama;
+  }) : _loadEngine = loadEngine ?? _llama,
+       _forceCpu = forceCpu ?? (() => false);
 
   final ModelInstaller _models;
-  final Future<LlamaEngine> Function(String path) _loadEngine;
+  final Future<LlamaEngine> Function(String path, ComputeDevice device) _loadEngine;
+
+  /// Settings → Media & voice → "Run AI on the CPU".
+  final bool Function() _forceCpu;
+
+  /// Where the loaded model runs; null until loaded.
+  ComputeDevice? get device => _engine == null ? null : _device;
+  ComputeDevice? _device;
 
   /// First use copies the ~230 MB model out of the APK.
   final Duration prepareTimeout;
@@ -55,11 +64,11 @@ class ActionExtractor {
   Timer? _idle;
   var _running = 0;
 
-  static Future<LlamaEngine> _llama(String path) async {
+  static Future<LlamaEngine> _llama(String path, ComputeDevice device) async {
     final engine = LlamaEngine(LlamaBackend());
     await engine.setModel(
       LlamaModel(ModelSource.path(path)),
-      params: const ModelParams(contextSize: 2048, device: ComputeDevice.cpu),
+      params: ModelParams(contextSize: 2048, device: device),
     );
     return engine;
   }
@@ -72,7 +81,18 @@ class ActionExtractor {
       onStage?.call(ExtractStage.preparing);
       final path = await _models.ensure(BundledModel.actionModel).timeout(prepareTimeout);
       onStage?.call(ExtractStage.loading);
-      return _engine = await _loadEngine(path).timeout(loadTimeout);
+      if (!_forceCpu()) {
+        try {
+          final engine = await _loadEngine(path, ComputeDevice.gpu).timeout(loadTimeout);
+          _device = ComputeDevice.gpu;
+          return _engine = engine;
+        } on Exception {
+          // No usable GPU (or driver refused): the CPU always works.
+        }
+      }
+      final engine = await _loadEngine(path, ComputeDevice.cpu).timeout(loadTimeout);
+      _device = ComputeDevice.cpu;
+      return _engine = engine;
     }().whenComplete(() => _loading = null);
   }
 

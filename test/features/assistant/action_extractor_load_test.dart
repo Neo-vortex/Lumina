@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumina/core/models/bundled_models.dart';
 import 'package:lumina/features/assistant/data/action_extractor.dart';
+import 'package:llamadart/llamadart.dart';
 
 class _Installed extends ModelInstaller {
   @override
@@ -23,7 +24,7 @@ void main() {
     final stages = <ExtractStage>[];
     final extractor = ActionExtractor(
       _Installed(),
-      loadEngine: (_) {
+      loadEngine: (_, _) {
         loads++;
         return Completer<Never>().future; // never finishes
       },
@@ -37,6 +38,25 @@ void main() {
     expect(stages, [ExtractStage.preparing, ExtractStage.loading]);
 
     await expectLater(extractor.extract('lunch at 1', _ctx), throwsA(isA<TimeoutException>()));
-    expect(loads, 2, reason: 'a failed load must not stay cached');
+    // Each try: the GPU, then the CPU fallback.
+    expect(loads, 4, reason: 'a failed load must not stay cached');
+  });
+
+  test('loads on the GPU, falls back to the CPU when that fails, and can be forced to the CPU', () async {
+    final tried = <ComputeDevice>[];
+    Future<LlamaEngine> load(String _, ComputeDevice d) async {
+      tried.add(d);
+      // Stop after the device choice: no real engine in unit tests.
+      throw d == ComputeDevice.gpu ? LlamaUnsupportedException('no Vulkan') : StateError('cpu');
+    }
+
+    final extractor = ActionExtractor(_Installed(), loadEngine: load);
+    await expectLater(extractor.extract('x', _ctx), throwsStateError);
+    expect(tried, [ComputeDevice.gpu, ComputeDevice.cpu]);
+
+    tried.clear();
+    final cpuOnly = ActionExtractor(_Installed(), loadEngine: load, forceCpu: () => true);
+    await expectLater(cpuOnly.extract('x', _ctx), throwsStateError);
+    expect(tried, [ComputeDevice.cpu]);
   });
 }

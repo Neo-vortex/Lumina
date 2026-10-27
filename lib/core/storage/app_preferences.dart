@@ -56,6 +56,12 @@ class AppPreferences {
     }
   }
 
+  // ---- On-device AI -------------------------------------------------------
+
+  /// Keep the ✨ model on the CPU even when the GPU works.
+  bool get aiForceCpu => _bool('ai.forceCpu', false);
+  set aiForceCpu(bool v) => _set('ai.forceCpu', v);
+
   // ---- Auto-download -------------------------------------------------------
 
   /// One network type's auto-download policy, as JSON (see
