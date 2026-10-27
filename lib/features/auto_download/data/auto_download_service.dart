@@ -6,13 +6,14 @@ import 'package:lumina_tdlib/api.dart' as td;
 import '../../../core/storage/app_preferences.dart';
 import '../../../core/tdlib/td_client.dart';
 import '../../../core/telegram/telegram_cache.dart';
+import '../../../core/telegram/auto_download_gate.dart';
 import '../domain/auto_download_policy.dart';
 import 'network_monitor.dart';
 
 /// Settings → Data & storage → Auto-download: one [AutoDownloadPolicy] per
 /// network type, kept in sync with TDLib, and the answer to "may this be
 /// downloaded without asking?" for the network the phone is on now.
-class AutoDownloadService {
+class AutoDownloadService implements AutoDownloadGate {
   AutoDownloadService({
     required TdClient client,
     required this._prefs,
@@ -77,10 +78,12 @@ class AutoDownloadService {
   };
 
   /// Whether [media] of [size] bytes in [chatId] downloads without a tap.
+  @override
   bool allows({required int chatId, required MediaKind media, required int size}) =>
       policy(network).allows(media, chatKind(chatId), size: size);
 
   /// Whether the start of a video too large to auto-download is fetched.
+  @override
   bool get preloadLargeVideos => policy(network).preloadLargeVideos;
 
   static td.NetworkType _tdType(NetworkKind n) => switch (n) {

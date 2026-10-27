@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
+import '../../../../../core/telegram/auto_download_gate.dart';
+
 import '../../../../../core/telegram/display.dart';
 import '../../../../../core/telegram/widgets/file_progress.dart';
 import '../../../../../core/telegram/widgets/formatted_text_view.dart';
@@ -149,6 +151,12 @@ class _MediaTileState extends State<MediaTile> {
   var _revealed = false;
   var _gifPaused = false;
 
+  /// Galleries (compact) always load; chat bubbles ask the gate.
+  bool _allows(MediaKind kind, td.File f) =>
+      widget.compact ||
+      AutoDownloadGate.of(context)
+          .allows(chatId: widget.message.chatId, media: kind, size: f.size > 0 ? f.size : f.expectedSize);
+
   @override
   Widget build(BuildContext context) {
     final m = widget.message;
@@ -159,10 +167,19 @@ class _MediaTileState extends State<MediaTile> {
     // GIFs loop silently in place, like Telegram; no big player.
     final gif = m.content is td.MessageAnimation && !covered;
     final image = gif
-        ? LoopingGif(file: v.media!, thumbnail: v.file, minithumbnail: v.mini, paused: _gifPaused)
+        ? LoopingGif(
+            file: v.media!,
+            thumbnail: v.file,
+            minithumbnail: v.mini,
+            paused: _gifPaused,
+            autoDownload: _allows(MediaKind.gifs, v.media!),
+          )
         : v.file != null
         ? TdFileImage(
             file: v.file!,
+            // Video thumbnails are small and always load; photos follow
+            // Settings → Auto-download (the ring downloads on tap).
+            autoDownload: v.isVideo || _allows(MediaKind.photos, v.file!),
             placeholderBytes: Display.minithumbnail(v.mini),
             semanticLabel: v.isVideo ? 'Video' : 'Photo',
           )

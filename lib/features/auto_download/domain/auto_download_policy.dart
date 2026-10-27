@@ -3,6 +3,10 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../core/telegram/auto_download_gate.dart';
+
+export '../../../core/telegram/auto_download_gate.dart' show MediaKind;
+
 /// The network the phone is on, as auto-download distinguishes it.
 enum NetworkKind {
   mobile('Mobile'),
@@ -10,19 +14,6 @@ enum NetworkKind {
   roaming('Roaming');
 
   const NetworkKind(this.label);
-  final String label;
-}
-
-enum MediaKind {
-  photos('Photos'),
-  videos('Videos'),
-  files('Files'),
-  voice('Voice messages'),
-  videoMessages('Video messages'),
-  gifs('GIFs'),
-  music('Music');
-
-  const MediaKind(this.label);
   final String label;
 }
 

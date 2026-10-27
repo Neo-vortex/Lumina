@@ -39,12 +39,6 @@ files, analyzer clean). Nothing is pushed yet: `main` is ahead of
    menu button and web apps (embedded vs browser), inline mode
    (`@bot query` results panel), /start for new bots, bot info in the
    profile.
-3. **Auto-download, part 2**: the settings screen, TDLib sync and network
-   channel are done (`lib/features/auto_download/`). Left: make the app's
-   own downloads follow `AutoDownloadService.allows(...)` — `TdFileImage`
-   (photos), `LoopingGif`, voice/video notes/music/videos/files content
-   widgets (auto-start when allowed, otherwise the tap-to-download ring),
-   and `preloadLargeVideos` (request the first ~1 MB via `requestRange`).
 4. **Sticker suggestions while typing an emoji** — needs a design (owner
    wants something more inventive than Telegram's strip). TDLib:
    `getStickers(stickerType, query: emoji)`.
@@ -68,8 +62,9 @@ files, analyzer clean). Nothing is pushed yet: `main` is ahead of
 ## Done recently, not yet confirmed on the phone
 
 SmolLM2 on the GPU (Vulkan) with CPU fallback and a "Run AI on the CPU"
-setting showing where it runs, auto-download settings screen synced with
-TDLib (per network, presets, grid, size sliders, network type channel), models extracted in the background 15 s after launch (AI action model,
+setting showing where it runs, auto-download (downloads follow it: photos, GIFs, videos with optional
+start preload, files, voice, video messages, music; settings screen synced with
+TDLib (per network, presets, grid, size sliders, network type channel)), models extracted in the background 15 s after launch (AI action model,
 then Whisper), TDLib log level set before the client exists (quiet startup), quick
 repeat reactions toggle from local state (no double add), inline keyboards under bot messages (glass pills; url/login/web app open
 the link, callbacks ask the bot with a spinner and answer as toast, glow

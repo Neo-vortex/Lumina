@@ -5,6 +5,7 @@ import 'package:lumina_tdlib/api.dart' as td;
 import '../../../../../core/telegram/display.dart';
 import '../../../../../core/telegram/telegram_cache.dart';
 import 'audio_content.dart';
+import 'auto_fetch.dart';
 import 'document_content.dart';
 import 'generic_content.dart';
 import 'expired_media_content.dart';
@@ -44,7 +45,9 @@ class MessageContentView extends StatelessWidget {
   final Widget overlayFooter;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => AutoFetch(messages: messages, child: _content(context));
+
+  Widget _content(BuildContext context) {
     final m = messages.last;
     if (messages.length > 1 && messages.every((x) => visualOf(x.content) != null)) {
       return MediaCluster(messages: messages, textColor: textColor, footer: overlayFooter);

@@ -26,6 +26,7 @@ class LoopingGif extends StatelessWidget {
     this.minithumbnail,
     this.player,
     this.paused = false,
+    this.autoDownload = true,
   });
 
   final td.File file;
@@ -35,6 +36,9 @@ class LoopingGif extends StatelessWidget {
 
   /// Held still (tapped to pause in chat).
   final bool paused;
+
+  /// Download the clip on sight; off, it waits for the transfer ring.
+  final bool autoDownload;
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +57,9 @@ class LoopingGif extends StatelessWidget {
               player: player ?? VideoPlayerController.file,
               paused: paused,
             )
-          : _Fetch(file: f, child: still),
+          : autoDownload
+          ? _Fetch(file: f, child: still)
+          : still,
     );
   }
 }
