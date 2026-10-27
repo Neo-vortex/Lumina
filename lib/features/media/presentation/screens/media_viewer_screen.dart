@@ -150,27 +150,54 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
                         ],
                       ),
                       const Spacer(),
-                      if (caption != null && caption.text.isNotEmpty)
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 72),
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                              colors: [Color(0xCC000000), Color(0x00000000)],
-                            ),
-                          ),
-                          child: FormattedTextView(
-                            caption,
-                            style: const TextStyle(color: Colors.white, fontSize: 15),
-                          ),
-                        ),
                     ],
                   ),
                 ),
               ),
             ),
+            // Videos: the caption shows while the controls are hidden and
+            // gives way to them on a tap. Photos: it follows the top bar.
+            if (caption != null && caption.text.isNotEmpty)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: AnimatedOpacity(
+                  opacity: (m.content is td.MessageVideo ? !_chrome : _chrome) ? 1 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: IgnorePointer(
+                    child: Container(
+                      key: const ValueKey('caption'),
+                      width: double.infinity,
+                      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.35),
+                      padding: const EdgeInsets.fromLTRB(16, 32, 16, 28),
+                      decoration: const BoxDecoration(
+                        // Deep enough that white text reads over any frame.
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [Color(0xF2000000), Color(0xB3000000), Color(0x00000000)],
+                          stops: [0, 0.65, 1],
+                        ),
+                      ),
+                      child: SafeArea(
+                        top: false,
+                        child: SingleChildScrollView(
+                          child: FormattedTextView(
+                            caption,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              height: 1.35,
+                              shadows: [Shadow(color: Colors.black, blurRadius: 6)],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
