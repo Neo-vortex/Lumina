@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../core/config/app_config.dart';
@@ -34,7 +33,6 @@ class AuthRepository {
 
   Future<void> start() async {
     await _client.start();
-    await _client.execute(td.SetLogVerbosityLevel(newVerbosityLevel: kReleaseMode ? 1 : 2));
   }
 
   Future<void> sendTdlibParameters() async {

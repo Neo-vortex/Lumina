@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 
@@ -18,5 +19,11 @@ Future<void> main() async {
   // One TdClient per process. After Android kills the process this simply
   // runs again; TDLib reloads the session from its database and goes
   // straight to authorizationStateReady.
-  runApp(LuminaApp(client: TdIsolateClient(), paths: paths, preferences: preferences));
+  runApp(
+    LuminaApp(
+      client: TdIsolateClient(logVerbosity: kReleaseMode ? 1 : 2),
+      paths: paths,
+      preferences: preferences,
+    ),
+  );
 }

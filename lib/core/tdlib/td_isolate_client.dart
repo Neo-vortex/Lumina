@@ -17,7 +17,11 @@ import 'isolates/td_messages.dart';
 ///
 /// The UI isolate only sees typed objects and never touches FFI or TDLib JSON.
 class TdIsolateClient implements TdClient {
-  TdIsolateClient();
+  TdIsolateClient({this.logVerbosity});
+
+  /// TDLib's log level, set before the client is created so its startup
+  /// stays out of logcat. Null keeps TDLib's default.
+  final int? logVerbosity;
 
   final _router = InvokeRouter();
   final _updates = StreamController<td.Update>.broadcast();
@@ -56,6 +60,9 @@ class TdIsolateClient implements TdClient {
     if (_subscription != null) return;
     _subscription = _fromBackground.listen(_onBackgroundMessage);
     await Future.wait([_spawnReceiver(), _spawnSender()]);
+    if (logVerbosity case final level?) {
+      await execute(td.SetLogVerbosityLevel(newVerbosityLevel: level));
+    }
     await _createClient();
   }
 
