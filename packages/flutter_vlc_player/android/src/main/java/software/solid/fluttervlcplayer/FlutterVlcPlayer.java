@@ -1,7 +1,9 @@
 package software.solid.fluttervlcplayer;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.net.Uri;
+import android.util.Base64;
 import android.util.Log;
 import android.view.View;
 
@@ -12,8 +14,8 @@ import org.videolan.libvlc.Media;
 import org.videolan.libvlc.MediaPlayer;
 import org.videolan.libvlc.RendererDiscoverer;
 import org.videolan.libvlc.RendererItem;
-import org.videolan.libvlc.interfaces.IVLCVout;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,12 +33,8 @@ final class FlutterVlcPlayer implements PlatformView {
     private final boolean debug = false;
     //
     private final Context context;
-    // Lumina: VLC renders straight into a Flutter texture (SurfaceProducer)
-    // shown by a Texture widget. The platform view is only an empty
-    // placeholder that keeps the plugin's creation flow.
-    private final View placeholder;
-    private final TextureRegistry.SurfaceProducer producer;
-    private int videoWidth = 1, videoHeight = 1;
+    private final VLCTextureView textureView;
+    private final TextureRegistry.SurfaceTextureEntry textureEntry;
     //
     private final QueuingEventSink mediaEventSink = new QueuingEventSink();
     private final EventChannel mediaEventChannel;
@@ -54,7 +52,7 @@ final class FlutterVlcPlayer implements PlatformView {
     // Platform view
     @Override
     public View getView() {
-        return placeholder;
+        return textureView;
     }
 
     @Override
@@ -62,7 +60,8 @@ final class FlutterVlcPlayer implements PlatformView {
         if (isDisposed)
             return;
         //
-        producer.setCallback(null);
+        textureView.dispose();
+        textureEntry.release();
         mediaEventChannel.setStreamHandler(null);
         rendererEventChannel.setStreamHandler(null);
         if (mediaPlayer != null) {
@@ -111,22 +110,11 @@ final class FlutterVlcPlayer implements PlatformView {
                     }
                 });
         //
-        placeholder = new View(context);
-        producer = textureRegistry.createSurfaceProducer();
-        producer.setSize(videoWidth, videoHeight);
-        producer.setCallback(
-                new TextureRegistry.SurfaceProducer.Callback() {
-                    @Override
-                    public void onSurfaceAvailable() {
-                        // The surface was recreated (app resumed): draw into the new one.
-                        attachSurface();
-                    }
-
-                    @Override
-                    public void onSurfaceCleanup() {
-                        if (mediaPlayer != null) mediaPlayer.getVLCVout().detachViews();
-                    }
-                });
+        textureEntry = textureRegistry.createSurfaceTexture();
+        textureView = new VLCTextureView(context);
+        textureView.setSurfaceTexture(textureEntry.surfaceTexture());
+        textureView.forceLayout();
+        textureView.setFitsSystemWindows(true);
     }
 
     // private Uri getStreamUri(String streamPath, boolean isLocal) {
@@ -143,7 +131,10 @@ final class FlutterVlcPlayer implements PlatformView {
     private void setupVlcMediaPlayer() {
 
         //
-        attachSurface();
+        mediaPlayer.getVLCVout().setWindowSize(textureView.getWidth(), textureView.getHeight());
+        mediaPlayer.getVLCVout().setVideoSurface(textureView.getSurfaceTexture());
+        textureView.setTextureEntry(textureEntry);
+        textureView.setMediaPlayer(mediaPlayer);
         mediaPlayer.setVideoTrackEnabled(true);
         //
         mediaPlayer.setEventListener(
@@ -638,31 +629,16 @@ final class FlutterVlcPlayer implements PlatformView {
         mediaPlayer.play();
     }
 
-    long textureId() {
-        return producer.id();
-    }
-
-    private void attachSurface() {
-        if (mediaPlayer == null || isDisposed) return;
-        IVLCVout vout = mediaPlayer.getVLCVout();
-        if (vout.areViewsAttached()) vout.detachViews();
-        vout.setVideoSurface(producer.getSurface(), null);
-        vout.setWindowSize(videoWidth, videoHeight);
-        // Size the texture to the video so frames aren't rescaled twice.
-        vout.attachViews(
-                (v, width, height, visibleWidth, visibleHeight, sarNum, sarDen) -> {
-                    if (width * height == 0 || (width == videoWidth && height == videoHeight)) return;
-                    videoWidth = width;
-                    videoHeight = height;
-                    producer.setSize(width, height);
-                    v.setWindowSize(width, height);
-                });
-    }
-
     @Nullable
     String getSnapshot() {
-        // Not supported on the texture path (unused by Lumina).
-        return null;
+        if (textureView == null) return null;
+
+        Bitmap bitmap = textureView.getBitmap();
+        if (bitmap == null) return null;
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream);
+        return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP);
     }
 
     Boolean startRecording(String directory) {

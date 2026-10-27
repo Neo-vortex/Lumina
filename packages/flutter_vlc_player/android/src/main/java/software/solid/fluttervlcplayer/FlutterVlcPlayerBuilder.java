@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 
 import io.flutter.plugin.common.BinaryMessenger;
-import io.flutter.plugin.common.MethodChannel;
 import io.flutter.view.TextureRegistry;
 import software.solid.fluttervlcplayer.Enums.DataSourceType;
 import software.solid.fluttervlcplayer.Enums.HwAcc;
@@ -25,26 +24,11 @@ public class FlutterVlcPlayerBuilder implements Messages.VlcPlayerApi {
 
     void startListening(BinaryMessenger messenger) {
         Messages.VlcPlayerApi.setUp(messenger, this);
-        // Lumina: the Dart side asks for the texture a player renders into.
-        new MethodChannel(messenger, "lumina/vlc_texture").setMethodCallHandler((call, result) -> {
-            if (!"textureId".equals(call.method)) {
-                result.notImplemented();
-                return;
-            }
-            Number viewId = call.arguments();
-            FlutterVlcPlayer player = viewId == null ? null : vlcPlayers.get(viewId.longValue());
-            if (player == null) {
-                result.error("player_not_found", "No player for view " + viewId, null);
-            } else {
-                result.success(player.textureId());
-            }
-        });
     }
 
     void stopListening(BinaryMessenger messenger) {
 //        disposeAllPlayers();
         Messages.VlcPlayerApi.setUp(messenger, null);
-        new MethodChannel(messenger, "lumina/vlc_texture").setMethodCallHandler(null);
     }
 
     FlutterVlcPlayer build(int viewId, Context context, BinaryMessenger binaryMessenger, TextureRegistry textureRegistry, FlutterVlcPlayerFactory.KeyForAssetFn keyForAsset, FlutterVlcPlayerFactory.KeyForAssetAndPackageName keyForAssetAndPackageName) {
