@@ -221,6 +221,9 @@ class DownloadsCubit extends Cubit<DownloadsState> {
     await _guard(() => _repo.setPaused(i.fileId, !i.isPaused));
   }
 
+  /// Starts a download TDLib stopped (e.g. out of space) again.
+  Future<void> retry(DownloadItem i) => _guard(() => _repo.setPriority(i.fileId, 16));
+
   Future<void> setAllPaused(bool paused) => _guard(() => _repo.setAllPaused(paused));
 
   Future<void> remove(DownloadItem i, {required bool deleteFile}) async {
