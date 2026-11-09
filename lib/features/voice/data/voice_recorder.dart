@@ -59,9 +59,12 @@ class VoiceRecorder extends ChangeNotifier {
     }
     final path = await _ffmpeg.tempPath('wav');
     await _recorder.start(
-      const RecordConfig(
+      RecordConfig(
         encoder: AudioEncoder.wav,
-        sampleRate: 16000,
+        // Voice messages in full band (Opus's native rate); dictation only
+        // needs Whisper's 16 kHz. 16 kHz voice messages sounded like a phone
+        // call.
+        sampleRate: forDictation ? 16000 : 48000,
         numChannels: 1,
         noiseSuppress: true,
         autoGain: true,

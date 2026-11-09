@@ -3,6 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lottie/lottie.dart';
+
+import 'lottie_frame_cache.dart';
+
 import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../storage/app_preferences.dart';
@@ -57,15 +60,19 @@ class AnimatedSticker extends StatelessWidget {
         td.StickerFormatTgs() => FileBuilder(
           file: sticker.sticker,
           builder: (context, f) => f.isDownloaded && f.local.path.isNotEmpty
-              ? Lottie.file(
-                  File(f.local.path),
-                  decoder: decodeTgs,
-                  repeat: repeat,
-                  animate: autoplay,
-                  width: size,
-                  height: size,
-                  frameBuilder: (context, child, composition) => composition == null ? fallback : child,
-                )
+              // Looping ones (custom emoji in text) from pre-drawn frames: many
+              // live Lottie players at once stuttered and flickered.
+              ? repeat && autoplay
+                    ? CachedLottie(path: f.local.path, size: size, placeholder: fallback)
+                    : Lottie.file(
+                        File(f.local.path),
+                        decoder: decodeTgs,
+                        repeat: repeat,
+                        animate: autoplay,
+                        width: size,
+                        height: size,
+                        frameBuilder: (context, child, composition) => composition == null ? fallback : child,
+                      )
               : _Download(file: f, child: fallback),
         ),
       },

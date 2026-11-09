@@ -258,7 +258,6 @@ class _PlayButton extends StatelessWidget {
           shape: BoxShape.circle,
           color: color.withValues(alpha: 0.18),
           border: Border.all(color: color.withValues(alpha: 0.8)),
-          boxShadow: playing ? glow(color, intensity: 0.5) : null,
         ),
         child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, color: color),
       ),

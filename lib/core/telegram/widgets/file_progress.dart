@@ -63,6 +63,7 @@ class TransferRing extends StatelessWidget {
     this.size = 46,
     this.idleIcon = Icons.download_rounded,
     this.onStart,
+    this.showSize = false,
   });
 
   final td.File file;
@@ -71,6 +72,10 @@ class TransferRing extends StatelessWidget {
 
   /// Called when a tap starts a download (the Downloads list records it).
   final ValueChanged<td.File>? onStart;
+
+  /// A pill beside the ring with the size: "1.2 / 4.8 MB" while it moves,
+  /// the total while idle.
+  final bool showSize;
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +89,7 @@ class TransferRing extends StatelessWidget {
         return Semantics(
           button: true,
           label: active
-              ? 'Cancel, ${((p ?? 0) * 100).round()} percent'
+              ? 'Cancel, ${p == null ? '' : '${Display.fileSize((p * f.totalSize).round())} of '}${Display.fileSize(f.totalSize)}'
               : 'Download, ${Display.fileSize(f.totalSize)}',
           excludeSemantics: true,
           child: GestureDetector(
@@ -96,30 +101,64 @@ class TransferRing extends StatelessWidget {
                 onStart?.call(f);
               }
             },
-            child: Container(
-              width: size,
-              height: size,
-              decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x99000000)),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // Unknown size: no indeterminate ring, which would redraw forever.
-                  if (active && p != null)
-                    SizedBox.square(
-                      dimension: size - 6,
-                      child: SmoothProgress(
-                        value: p,
-                        builder: (context, v) =>
-                            CircularProgressIndicator(value: v, strokeWidth: 2.6, color: GlowColors.cyan),
+            child: _withSize(
+              f,
+              p,
+              active,
+              Container(
+                width: size,
+                height: size,
+                decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x99000000)),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Unknown size: no indeterminate ring, which would redraw forever.
+                    if (active && p != null)
+                      SizedBox.square(
+                        dimension: size - 6,
+                        child: SmoothProgress(
+                          value: p,
+                          builder: (context, v) =>
+                              CircularProgressIndicator(value: v, strokeWidth: 2.6, color: GlowColors.cyan),
+                        ),
                       ),
-                    ),
-                  Icon(active ? Icons.close_rounded : idleIcon, color: Colors.white, size: size * 0.45),
-                ],
+                    Icon(active ? Icons.close_rounded : idleIcon, color: Colors.white, size: size * 0.45),
+                  ],
+                ),
               ),
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _withSize(td.File f, double? p, bool active, Widget ring) {
+    if (!showSize || f.totalSize <= 0) return ring;
+    final total = Display.fileSize(f.totalSize);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ring,
+        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(color: const Color(0x99000000), borderRadius: BorderRadius.circular(10)),
+          child: active && p != null
+              ? SmoothProgress(
+                  value: p,
+                  builder: (context, v) => Text(
+                    '${Display.fileSize((v! * f.totalSize).round())} / $total',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                )
+              : Text(total, style: const TextStyle(color: Colors.white, fontSize: 11)),
+        ),
+      ],
     );
   }
 }

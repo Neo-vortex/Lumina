@@ -1,10 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumina/app/app_chat_list_extensions.dart';
+import 'package:lumina/core/media/ffmpeg_service.dart';
 import 'package:lumina/core/storage/app_preferences.dart';
 import 'package:lumina/core/telegram/telegram_cache.dart';
 import 'package:lumina/core/theme/glow_colors.dart';
 import 'package:lumina/features/chats/domain/lens_entry.dart';
 import 'package:lumina/features/folders/data/folders_repository.dart';
+import 'package:lumina/features/stories/data/stories_repository.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
 import '../features/folders/folders_repository_test.dart' show info;
@@ -21,9 +23,12 @@ void main() {
         ),
       );
     final prefs = AppPreferences.inMemory()..folderColorsJson = '{"2": 1}';
+    final client = FakeTdClient();
     final ext = AppChatListExtensions(
-      folders: FoldersRepository(client: FakeTdClient(), cache: cache, prefs: prefs),
+      folders: FoldersRepository(client: client, cache: cache, prefs: prefs),
       cache: cache,
+      prefs: prefs,
+      stories: StoriesRepository(client: client, prefs: prefs, ffmpeg: FfmpegService()),
     );
     LensEntry folder(int i) => LensEntry(
       list: td.ChatListFolder(chatFolderId: cache.chatFolders[i].id),

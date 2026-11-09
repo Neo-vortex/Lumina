@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lumina launcher icon, foreground: a halo ring ending in a speech-bubble
+     tail, a cyan orb and an amber spark (assets/branding/icon.svg). The
+     glow is layered translucent strokes (vector drawables have no blur). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M 38.4 73.6 A 25 25 0 1 1 46.2 77.8 L 36 83 Z" android:strokeWidth="10" android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor"><gradient android:type="linear" android:startX="30" android:startY="28" android:endX="80" android:endY="82"><item android:offset="0" android:color="#1AB98CFF" /><item android:offset="0.5" android:color="#1A9A5CFF" /><item android:offset="1" android:color="#1AE052D6" /></gradient></aapt:attr>
+    </path>
+    <path android:pathData="M 38.4 73.6 A 25 25 0 1 1 46.2 77.8 L 36 83 Z" android:strokeWidth="7" android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor"><gradient android:type="linear" android:startX="30" android:startY="28" android:endX="80" android:endY="82"><item android:offset="0" android:color="#38B98CFF" /><item android:offset="0.5" android:color="#389A5CFF" /><item android:offset="1" android:color="#38E052D6" /></gradient></aapt:attr>
+    </path>
+    <path android:pathData="M 38.4 73.6 A 25 25 0 1 1 46.2 77.8 L 36 83 Z" android:strokeWidth="4.2" android:strokeLineJoin="round" android:strokeLineCap="round">
+        <aapt:attr name="android:strokeColor"><gradient android:type="linear" android:startX="30" android:startY="28" android:endX="80" android:endY="82"><item android:offset="0" android:color="#FFB98CFF" /><item android:offset="0.5" android:color="#FF9A5CFF" /><item android:offset="1" android:color="#FFE052D6" /></gradient></aapt:attr>
+    </path>
+    <!-- orb glow + orb -->
+    <path android:pathData="M54,53m-17,0a17,17 0,1 1,34 0a17,17 0,1 1,-34 0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial" android:centerX="54" android:centerY="53" android:gradientRadius="17">
+                <item android:offset="0" android:color="#8C4FE3DC" />
+                <item android:offset="1" android:color="#004FE3DC" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:pathData="M54,53m-11,0a11,11 0,1 1,22 0a11,11 0,1 1,-22 0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial" android:centerX="52.5" android:centerY="50.5" android:gradientRadius="13">
+                <item android:offset="0" android:color="#FFE9FFFD" />
+                <item android:offset="0.35" android:color="#FF4FE3DC" />
+                <item android:offset="1" android:color="#FF1C9AAE" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- spark glow + spark -->
+    <path android:pathData="M72.5,35.5m-7,0a7,7 0,1 1,14 0a7,7 0,1 1,-14 0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial" android:centerX="72.5" android:centerY="35.5" android:gradientRadius="7">
+                <item android:offset="0" android:color="#B3FFB850" />
+                <item android:offset="1" android:color="#00FFB850" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:pathData="M72.5,35.5m-3.6,0a3.6,3.6 0,1 1,7.2 0a3.6,3.6 0,1 1,-7.2 0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial" android:centerX="71.6" android:centerY="34.6" android:gradientRadius="4.7">
+                <item android:offset="0" android:color="#FFFFF1D6" />
+                <item android:offset="0.4" android:color="#FFFFB850" />
+                <item android:offset="1" android:color="#FFFF6E66" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

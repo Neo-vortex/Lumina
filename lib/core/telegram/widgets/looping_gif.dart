@@ -1,3 +1,7 @@
+import '../../widgets/chat_scrolling.dart';
+import 'progressive_image.dart';
+
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -112,21 +116,90 @@ class _PlayingState extends State<_Playing> with SingleTickerProviderStateMixin 
   // frames coming while this GIF is on screen, and only then.
   late final Ticker _frames = createTicker((_) {});
 
+  /// Started only once the reader settles here: flinging past a GIF never
+  /// opens a decoder. While the list moves it holds its frame.
+  Timer? _dwell;
+  var _begun = false;
+
   @override
   void initState() {
     super.initState();
     _pool = GifBudget._of(context);
-    final pool = _pool;
-    if (pool == null) {
-      _start();
-    } else {
-      pool.acquire(this);
+    ChatScrolling.moving.addListener(_onScroll);
+    _onScroll();
+  }
+
+  void _onScroll() {
+    _dwell?.cancel();
+    if (ChatScrolling.moving.value) {
+      if (_ready && _player != null) _applyPaused();
+      return;
     }
+    _dwell = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      if (!_begun) {
+        _begun = true;
+        final pool = _pool;
+        if (pool == null) {
+          _start();
+        } else {
+          pool.acquire(this);
+        }
+      } else if (_ready && _player != null) {
+        _applyPaused();
+      }
+    });
+  }
+
+  // Watchdog: a hardware decoder the phone refused (too many open) shows a
+  // few frames and then the position stops moving. Rebuild that player.
+  Timer? _watch;
+  Duration _lastPos = Duration.zero;
+  var _stuck = 0, _restarts = 0;
+
+  void _check() {
+    final p = _player;
+    if (p == null || !_ready || widget.paused || !mounted) return;
+    final pos = p.value.position;
+    if (pos != _lastPos) {
+      _lastPos = pos;
+      _stuck = 0;
+      return;
+    }
+    // ~2 s without progress; a few retries at most, then rest on the still.
+    if (++_stuck < 2 || _restarts >= 4) return;
+    _restarts++;
+    _stuck = 0;
+    final old = p;
+    setState(() {
+      _player = null;
+      _ready = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      old.dispose();
+      // Give the decoder back before asking for a new one.
+      Future.delayed(Duration(milliseconds: 300 * _restarts), _start);
+    });
+  }
+
+  /// Gives the decoder back (the pool rotates slots): the still shows until
+  /// this GIF's next turn.
+  void _suspend() {
+    final p = _player;
+    if (p == null || !mounted) return;
+    if (_frames.isActive) _frames.stop();
+    setState(() {
+      _player = null;
+      _ready = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => p.dispose());
   }
 
   /// A decoder slot is ours (or there is no budget): make the player.
   void _start() {
     if (!mounted || _player != null) return;
+    _watch ??= Timer.periodic(const Duration(seconds: 1), (_) => _check());
+    _lastPos = Duration.zero;
     _player = widget.player(File(widget.path));
     _frames.start();
     _c
@@ -153,7 +226,7 @@ class _PlayingState extends State<_Playing> with SingleTickerProviderStateMixin 
   }
 
   void _applyPaused() {
-    if (widget.paused) {
+    if (widget.paused || ChatScrolling.moving.value) {
       _c.pause();
       if (_frames.isActive) _frames.stop();
     } else {
@@ -164,6 +237,9 @@ class _PlayingState extends State<_Playing> with SingleTickerProviderStateMixin 
 
   @override
   void dispose() {
+    _dwell?.cancel();
+    ChatScrolling.moving.removeListener(_onScroll);
+    _watch?.cancel();
     _frames.dispose();
     _player?.dispose();
     _pool?.release(this);
@@ -175,11 +251,14 @@ class _PlayingState extends State<_Playing> with SingleTickerProviderStateMixin 
     fit: StackFit.expand,
     children: [
       widget.still,
+      // The moving picture fades in over the still, fast.
       if (_ready && _player != null)
-        FittedBox(
-          fit: BoxFit.cover,
-          clipBehavior: Clip.hardEdge,
-          child: SizedBox(width: _c.value.size.width, height: _c.value.size.height, child: VideoPlayer(_c)),
+        FadeInOnce(
+          child: FittedBox(
+            fit: BoxFit.cover,
+            clipBehavior: Clip.hardEdge,
+            child: SizedBox(width: _c.value.size.width, height: _c.value.size.height, child: VideoPlayer(_c)),
+          ),
         ),
     ],
   );
@@ -206,6 +285,12 @@ class _GifBudgetState extends State<GifBudget> {
   late final _pool = _GifPool(widget.max);
 
   @override
+  void dispose() {
+    _pool.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => _GifScope(pool: _pool, child: widget.child);
 }
 
@@ -222,8 +307,16 @@ class _GifPool {
   _GifPool(this.max);
 
   final int max;
-  final _live = <_PlayingState>{};
+
+  /// Playing, oldest first.
+  final _live = <_PlayingState>[];
   final _waiting = <_PlayingState>[];
+  Timer? _rotate;
+
+  /// Phones allow so many hardware decoders (16 here, shared with every
+  /// other video): when more GIFs are on screen than slots, they take turns
+  /// instead of the extra ones sitting still for good.
+  static const _turn = Duration(seconds: 4);
 
   void acquire(_PlayingState gif) {
     if (_live.length < max) {
@@ -231,7 +324,33 @@ class _GifPool {
       gif._start();
     } else {
       _waiting.add(gif);
+      _rotate ??= Timer.periodic(_turn, (_) => _next());
     }
+  }
+
+  void _next() {
+    _waiting.removeWhere((g) => !g.mounted);
+    if (_waiting.isEmpty || _live.isEmpty) {
+      _rotate?.cancel();
+      _rotate = null;
+      return;
+    }
+    final done = _live.removeAt(0);
+    done._suspend();
+    _waiting.add(done);
+    final next = _waiting.removeAt(0);
+    _live.add(next);
+    // After the old player's decoder is released.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 60), () {
+        if (next.mounted && _live.contains(next)) next._start();
+      });
+    });
+  }
+
+  void dispose() {
+    _rotate?.cancel();
+    _rotate = null;
   }
 
   void release(_PlayingState gif) {
@@ -243,6 +362,10 @@ class _GifPool {
       _live.add(next);
       // Not during the releasing widget's teardown.
       WidgetsBinding.instance.addPostFrameCallback((_) => next._start());
+    }
+    if (_waiting.isEmpty) {
+      _rotate?.cancel();
+      _rotate = null;
     }
   }
 }

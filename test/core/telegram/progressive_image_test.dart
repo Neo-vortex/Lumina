@@ -52,7 +52,7 @@ void main() {
       expect(sigmas[i], lessThan(sigmas[i - 1]));
     }
     expect(blurFor(1), 0);
-    expect(blurFor(0), greaterThan(4));
+    expect(blurFor(0), greaterThan(3));
   });
 
   widgetTests();

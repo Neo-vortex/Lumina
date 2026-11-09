@@ -13,6 +13,18 @@ final class BackdropGlow extends BackdropSpec {
   const BackdropGlow();
 }
 
+/// The chat list's aurora: brighter glows at the edges, drifting slowly
+/// when [drift] is set.
+final class BackdropAurora extends BackdropSpec {
+  const BackdropAurora({this.drift = true});
+  final bool drift;
+}
+
+/// Just the app background.
+final class BackdropPlain extends BackdropSpec {
+  const BackdropPlain();
+}
+
 /// A wallpaper image: a TDLib file (Telegram's gallery or a chat's
 /// background) or a local photo [path].
 final class BackdropImage extends BackdropSpec {
@@ -81,4 +93,17 @@ ChatBackdrop resolveBackdrop(td.Chat? chat, AppPreferences prefs) {
     _ => const BackdropGlow(),
   };
   return ChatBackdrop(spec, blur: prefs.backdropBlur, dim: prefs.backdropDim);
+}
+
+/// The chat list's background from Settings (the aurora out of the box).
+ChatBackdrop resolveListBackdrop(AppPreferences prefs) {
+  final spec = switch (prefs.listBackdropKind) {
+    'photo' when prefs.listBackdropPath != null => BackdropImage(path: prefs.listBackdropPath),
+    'telegram' when prefs.listBackdropFileId != null => BackdropImage(fileId: prefs.listBackdropFileId),
+    'fill' => BackdropFill([for (final c in prefs.listBackdropColors) _rgb(c)]),
+    'plain' => const BackdropPlain(),
+    _ => BackdropAurora(drift: prefs.listAuroraDrift),
+  };
+  final image = spec is BackdropImage;
+  return ChatBackdrop(spec, blur: image ? prefs.listBackdropBlur : 0, dim: image ? prefs.listBackdropDim : 0);
 }

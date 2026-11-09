@@ -9,6 +9,8 @@ import 'package:lumina_tdlib/api.dart' as td;
 import '../../../core/tdlib/td_client.dart';
 import '../../../core/telegram/file_store.dart';
 import '../../../core/telegram/widgets/file_progress.dart';
+import '../../../core/theme/glow_colors.dart';
+import '../../../core/widgets/aurora_background.dart';
 import '../../../core/widgets/glow_background.dart';
 import '../domain/chat_backdrop.dart';
 
@@ -24,6 +26,8 @@ class ChatBackdropView extends StatelessWidget {
   Widget build(BuildContext context) {
     final spec = backdrop.spec;
     if (spec is BackdropGlow) return GlowBackground(child: child);
+    if (spec is BackdropAurora) return AuroraBackground(drift: spec.drift, child: child);
+    if (spec is BackdropPlain) return ColoredBox(color: GlowColors.background, child: child);
     final media = MediaQuery.of(context);
     final width = (media.size.width * media.devicePixelRatio).round();
     Widget baked(String path) => BakedBackdropImage(path: path, blur: backdrop.blur, decodeWidth: width);
@@ -55,15 +59,40 @@ class ChatBackdropView extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        RepaintBoundary(child: ClipRect(child: layer)),
-        ColoredBox(
-          key: const ValueKey('backdrop-dim'),
-          color: Colors.black.withValues(alpha: backdrop.dim),
+        // A new background fades in over the old one.
+        RepaintBoundary(
+          child: ClipRect(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 450),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              layoutBuilder: (current, previous) =>
+                  Stack(fit: StackFit.expand, children: [...previous, ?current]),
+              child: KeyedSubtree(key: ValueKey(_identity(spec, backdrop.blur)), child: layer),
+            ),
+          ),
+        ),
+        TweenAnimationBuilder<double>(
+          tween: Tween(end: backdrop.dim),
+          duration: const Duration(milliseconds: 450),
+          builder: (context, dim, _) => ColoredBox(
+            key: const ValueKey('backdrop-dim'),
+            color: Colors.black.withValues(alpha: dim),
+          ),
         ),
         child,
       ],
     );
   }
+
+  /// What the background is, so the same one doesn't animate on every rebuild.
+  static String _identity(BackdropSpec spec, double blur) => switch (spec) {
+    BackdropFill(:final colors) => 'fill:${colors.map((c) => c.toARGB32()).join(',')}:$blur',
+    BackdropImage(:final file?) => 'file:${file.id}:$blur',
+    BackdropImage(:final fileId?) => 'id:$fileId:$blur',
+    BackdropImage(:final path?) => 'path:$path:$blur',
+    _ => 'none',
+  };
 }
 
 /// A gallery wallpaper remembered by its TDLib file id.

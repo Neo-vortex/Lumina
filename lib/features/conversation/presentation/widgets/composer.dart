@@ -7,6 +7,8 @@ import 'package:lumina_tdlib/api.dart' as td;
 import '../../../../core/telegram/display.dart';
 import '../../../../core/telegram/telegram_cache.dart';
 import '../../../../core/theme/glow_colors.dart';
+import '../../../../core/telegram/message_effects.dart';
+import '../../../../core/widgets/lumina_glass.dart';
 import '../../../../core/theme/motion.dart';
 import '../../data/messages_repository.dart';
 import 'composer_selection_menu.dart';
@@ -14,6 +16,7 @@ import 'formatting_controller.dart';
 import 'link_preview_card.dart';
 import '../../../../core/widgets/send_options_sheet.dart';
 import 'send_orb.dart';
+import 'voice_hold_orb.dart';
 
 /// Message composer: reply/edit strip, attach button, multiline field and
 /// the send orb. Voice recording and dictation are delegated through
@@ -30,6 +33,9 @@ class Composer extends StatefulWidget {
     required this.onChanged,
     this.onAttach,
     this.onVoice,
+    this.onVoiceStart,
+    this.onVoiceFinish,
+    this.voiceRecording = false,
     this.onDictate,
     this.onWritingTools,
     this.mediaPanel,
@@ -52,6 +58,13 @@ class Composer extends StatefulWidget {
   final ValueChanged<String> onChanged;
   final VoidCallback? onAttach;
   final VoidCallback? onVoice;
+
+  /// Hold-to-record voice messages (null: the mic only taps [onVoice]).
+  final VoidCallback? onVoiceStart;
+  final void Function({required bool send})? onVoiceFinish;
+
+  /// A voice message is being recorded.
+  final bool voiceRecording;
   final VoidCallback? onDictate;
 
   /// On-device writing help (rewrite, grammar, tone); shown once there's text.
@@ -120,6 +133,21 @@ class _ComposerState extends State<Composer> {
     widget.controller.addListener(_onText);
   }
 
+  // Starting a reply (swipe or menu) or an edit opens the keyboard on the
+  // message box, closing the emoji/sticker panel if it was up.
+  @override
+  void didUpdateWidget(Composer old) {
+    super.didUpdateWidget(old);
+    final replyStarted = widget.replyTo != null && widget.replyTo?.id != old.replyTo?.id;
+    final editStarted = widget.editing != null && widget.editing?.id != old.editing?.id;
+    if (replyStarted || editStarted) {
+      if (_panel) setState(() => _panel = false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focus.requestFocus();
+      });
+    }
+  }
+
   @override
   void dispose() {
     _previewTimer?.cancel();
@@ -152,9 +180,7 @@ class _ComposerState extends State<Composer> {
     _previewTimer = Timer(const Duration(milliseconds: 600), () async {
       _previewFor = link;
       final c = widget.controller;
-      final p = await load(
-        c is FormattingController ? c.formatted : td.FormattedText(text: text, entities: const []),
-      );
+      final p = await load(c is FormattingController ? c.formatted : td.FormattedText(text: text, entities: const []));
       if (!mounted || _previewFor != link) return;
       setState(() {
         _preview = p;
@@ -203,7 +229,7 @@ class _ComposerState extends State<Composer> {
   }
 
   Future<void> _sendOptions() async {
-    final options = await showSendOptionsSheet(context);
+    final options = await showSendOptionsSheet(context, effects: () => MessageEffects.available(context));
     if (options != null && mounted) await _send(options);
   }
 
@@ -229,121 +255,169 @@ class _ComposerState extends State<Composer> {
           widget.onCancelMode();
         }
       },
+      // No band: glass pills float over the chat background.
       child: Material(
-        color: GlowColors.background,
+        type: MaterialType.transparency,
         child: SafeArea(
           top: false,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              AnimatedSize(
-                duration: Motion.micro,
-                curve: Motion.enter,
-                child: contextMessage == null
-                    ? const SizedBox(width: double.infinity)
-                    : _ContextStrip(
-                        message: contextMessage,
-                        editing: widget.editing != null,
-                        quote: widget.editing == null ? widget.replyQuote : null,
-                        onCancel: widget.onCancelMode,
-                      ),
-              ),
-              AnimatedSize(
-                duration: Motion.micro,
-                curve: Motion.enter,
-                child: _preview == null || _preview!.url == _dismissedUrl || widget.recordingOverlay != null
-                    ? const SizedBox(width: double.infinity)
-                    : _PreviewStrip(
-                        preview: _preview!,
-                        large: _large ?? _preview!.showLargeMedia,
-                        above: _above,
-                        onToggleSize: _preview!.hasLargeMedia
-                            ? () => setState(() => _large = !(_large ?? _preview!.showLargeMedia))
-                            : null,
-                        onToggleAbove: () => setState(() => _above = !_above),
-                        onRemove: () => setState(() => _dismissedUrl = _preview!.url),
-                      ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+              GlassGroup(
+                shareBackdrop: true,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (widget.recordingOverlay == null && widget.onAttach != null)
-                      IconButton(
-                        tooltip: 'Attach',
-                        onPressed: widget.onAttach,
-                        icon: const Icon(Icons.add_circle_outline_rounded, color: GlowColors.cyan),
-                      ),
-                    Expanded(
-                      child:
-                          widget.recordingOverlay ??
-                          Container(
-                            constraints: const BoxConstraints(minHeight: 48),
-                            decoration: BoxDecoration(
-                              color: GlowColors.surface,
-                              borderRadius: BorderRadius.circular(24),
-                              border: Border.all(color: GlowColors.outlineStrong),
+                    AnimatedSize(
+                      duration: Motion.micro,
+                      curve: Motion.enter,
+                      child: contextMessage == null
+                          ? const SizedBox(width: double.infinity)
+                          : _ContextStrip(
+                              message: contextMessage,
+                              editing: widget.editing != null,
+                              quote: widget.editing == null ? widget.replyQuote : null,
+                              onCancel: widget.onCancelMode,
                             ),
-                            child: TextField(
-                              controller: widget.controller,
-                              focusNode: _focus,
-                              onTap: () {
-                                if (_panel) setState(() => _panel = false);
-                              },
-                              onChanged: widget.onChanged,
-                              minLines: 1,
-                              maxLines: 6,
-                              textCapitalization: TextCapitalization.sentences,
-                              keyboardType: TextInputType.multiline,
-                              contextMenuBuilder: (context, state) =>
-                                  ComposerSelectionMenu(state: state, controller: widget.controller),
-                              decoration: InputDecoration(
-                                hintText: widget.editing != null ? 'Edit message' : 'Message',
-                                hintStyle: const TextStyle(color: GlowColors.textMuted),
-                                border: InputBorder.none,
-                                prefixIcon: widget.mediaPanel == null
-                                    ? null
-                                    : IconButton(
-                                        tooltip: _panel ? 'Keyboard' : 'Emoji, stickers and GIFs',
-                                        onPressed: _togglePanel,
-                                        icon: Icon(
-                                          _panel ? Icons.keyboard_rounded : Icons.emoji_emotions_outlined,
-                                          color: GlowColors.textMuted,
-                                        ),
-                                      ),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-                                suffixIcon: hasText && widget.onWritingTools != null
-                                    ? IconButton(
-                                        tooltip: 'Writing help',
-                                        onPressed: widget.onWritingTools,
-                                        icon: const Icon(
-                                          Icons.auto_awesome_rounded,
-                                          color: GlowColors.magenta,
-                                          size: 20,
-                                        ),
-                                      )
-                                    : null,
+                    ),
+                    AnimatedSize(
+                      duration: Motion.micro,
+                      curve: Motion.enter,
+                      child: _preview == null || _preview!.url == _dismissedUrl || widget.recordingOverlay != null
+                          ? const SizedBox(width: double.infinity)
+                          : _PreviewStrip(
+                              preview: _preview!,
+                              large: _large ?? _preview!.showLargeMedia,
+                              above: _above,
+                              onToggleSize: _preview!.hasLargeMedia
+                                  ? () => setState(() => _large = !(_large ?? _preview!.showLargeMedia))
+                                  : null,
+                              onToggleAbove: () => setState(() => _above = !_above),
+                              onRemove: () => setState(() => _dismissedUrl = _preview!.url),
+                            ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (widget.recordingOverlay == null && widget.onAttach != null) ...[
+                            GlassPill(
+                              round: true,
+                              child: SizedBox.square(
+                                dimension: 48,
+                                child: IconButton(
+                                  tooltip: 'Attach',
+                                  onPressed: widget.onAttach,
+                                  icon: const Icon(Icons.add_rounded, color: GlowColors.text),
+                                ),
                               ),
                             ),
+                            const SizedBox(width: 8),
+                          ],
+                          Expanded(
+                            child:
+                                widget.recordingOverlay ??
+                                // Glass at rest; typing only firms up a quiet violet edge.
+                                GlassPill(
+                                  child: ListenableBuilder(
+                                    listenable: _focus,
+                                    builder: (context, child) => AnimatedContainer(
+                                      duration: const Duration(milliseconds: 160),
+                                      curve: Curves.easeOut,
+                                      constraints: const BoxConstraints(minHeight: 48),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(24),
+                                        border: Border.all(
+                                          color: _focus.hasFocus
+                                              ? GlowColors.violet.withValues(alpha: 0.38)
+                                              : Colors.transparent,
+                                        ),
+                                      ),
+                                      child: child,
+                                    ),
+                                    child: TextField(
+                                      controller: widget.controller,
+                                      focusNode: _focus,
+                                      onTap: () {
+                                        if (_panel) setState(() => _panel = false);
+                                      },
+                                      onChanged: widget.onChanged,
+                                      minLines: 1,
+                                      maxLines: 6,
+                                      textCapitalization: TextCapitalization.sentences,
+                                      keyboardType: TextInputType.multiline,
+                                      contextMenuBuilder: (context, state) =>
+                                          ComposerSelectionMenu(state: state, controller: widget.controller),
+                                      decoration: InputDecoration(
+                                        hintText: widget.editing != null ? 'Edit message' : 'Message',
+                                        hintStyle: const TextStyle(color: GlowColors.textMuted),
+                                        border: InputBorder.none,
+                                        prefixIcon: widget.mediaPanel == null
+                                            ? null
+                                            : IconButton(
+                                                tooltip: _panel ? 'Keyboard' : 'Emoji, stickers and GIFs',
+                                                onPressed: _togglePanel,
+                                                icon: Icon(
+                                                  _panel ? Icons.keyboard_rounded : Icons.emoji_emotions_outlined,
+                                                  color: GlowColors.textMuted,
+                                                ),
+                                              ),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+                                        suffixIcon: !hasText && widget.onDictate != null && widget.onVoiceStart != null
+                                            ? IconButton(
+                                                tooltip: 'Dictate (speech to text)',
+                                                onPressed: widget.onDictate,
+                                                icon: const Icon(
+                                                  Icons.keyboard_voice_outlined,
+                                                  color: GlowColors.textMuted,
+                                                  size: 22,
+                                                ),
+                                              )
+                                            : hasText && widget.onWritingTools != null
+                                            ? IconButton(
+                                                tooltip: 'Writing help',
+                                                onPressed: widget.onWritingTools,
+                                                icon: const Icon(
+                                                  Icons.auto_awesome_rounded,
+                                                  color: GlowColors.magenta,
+                                                  size: 20,
+                                                ),
+                                              )
+                                            : null,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                           ),
-                    ),
-                    const SizedBox(width: 8),
-                    SendOrb(
-                      mode: mode,
-                      charge: hasText ? (text.length / _fullCharge).clamp(0.08, 1.0) : 0,
-                      // A mode forced by an extension (recording) routes taps to it.
-                      onTap: widget.orbMode != null
-                          ? (widget.onVoice ?? () {})
-                          : switch (mode) {
-                              OrbMode.send => _send,
-                              OrbMode.mic => widget.onVoice ?? () {},
-                              OrbMode.stop => widget.onVoice ?? () {},
-                              OrbMode.busy => () {},
-                            },
-                      onLongPress: hasText && widget.editing == null
-                          ? _sendOptions
-                          : (!hasText ? widget.onDictate : null),
+                          const SizedBox(width: 8),
+                          if (widget.onVoiceStart != null &&
+                              widget.onVoiceFinish != null &&
+                              (widget.voiceRecording || (!hasText && widget.editing == null && widget.orbMode == null)))
+                            VoiceHoldOrb(
+                              recording: widget.voiceRecording,
+                              onStart: widget.onVoiceStart!,
+                              onFinish: widget.onVoiceFinish!,
+                            )
+                          else
+                            SendOrb(
+                              mode: mode,
+                              charge: hasText ? (text.length / _fullCharge).clamp(0.08, 1.0) : 0,
+                              // A mode forced by an extension (recording) routes taps to it.
+                              onTap: widget.orbMode != null
+                                  ? (widget.onVoice ?? () {})
+                                  : switch (mode) {
+                                      OrbMode.send => _send,
+                                      OrbMode.mic => widget.onVoice ?? () {},
+                                      OrbMode.stop => widget.onVoice ?? () {},
+                                      OrbMode.busy => () {},
+                                    },
+                              onLongPress: hasText && widget.editing == null
+                                  ? _sendOptions
+                                  : (!hasText ? widget.onDictate : null),
+                            ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -400,11 +474,7 @@ class _PreviewStrip extends StatelessWidget {
           onPressed: onToggleAbove,
           icon: Icon(above ? Icons.vertical_align_bottom_rounded : Icons.vertical_align_top_rounded),
         ),
-        IconButton(
-          tooltip: 'Send without preview',
-          onPressed: onRemove,
-          icon: const Icon(Icons.close_rounded),
-        ),
+        IconButton(tooltip: 'Send without preview', onPressed: onRemove, icon: const Icon(Icons.close_rounded)),
       ],
     ),
   );
@@ -421,48 +491,73 @@ class _ContextStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cache = context.read<TelegramCache>();
-    final accent = editing ? GlowColors.amber : GlowColors.cyan;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 4, 0),
-      child: Row(
-        children: [
-          Icon(
-            editing
-                ? Icons.edit_rounded
-                : quote != null
-                ? Icons.format_quote_rounded
-                : Icons.reply_rounded,
-            color: accent,
-            size: 20,
-          ),
-          const SizedBox(width: 10),
-          Container(width: 2, height: 32, color: accent),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  editing
-                      ? 'Editing'
-                      : '${quote != null ? 'Quote' : 'Reply to'} ${message.isOutgoing ? 'yourself' : Display.senderName(cache, message.senderId)}',
-                  style: TextStyle(color: accent, fontSize: 12, fontWeight: FontWeight.w600),
+    // Reply: violet; editing: amber. A calm glass card: the accent is only
+    // the thin bar and the label, no fill or glow.
+    final accent = editing ? GlowColors.amber : GlowColors.violet;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+      child: GlassPill(
+        radius: 18,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+          child: Row(
+            children: [
+              Container(
+                width: 3,
+                height: 34,
+                decoration: BoxDecoration(color: accent, borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(width: 10),
+              Icon(
+                editing
+                    ? Icons.edit_rounded
+                    : quote != null
+                    ? Icons.format_quote_rounded
+                    : Icons.reply_rounded,
+                color: accent,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      editing
+                          ? 'Editing'
+                          : '${quote != null ? 'Quote' : 'Reply to'} ${message.isOutgoing ? 'yourself' : Display.senderName(cache, message.senderId)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Color.lerp(accent, Colors.white, 0.25),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      quote != null ? '“${quote!.text.text}”' : Display.preview(cache, message),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13, color: GlowColors.text),
+                    ),
+                  ],
                 ),
-                Text(
-                  quote != null ? '“${quote!.text.text}”' : Display.preview(cache, message),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13, color: GlowColors.textMuted),
+              ),
+              IconButton(
+                tooltip: editing ? 'Cancel editing' : 'Cancel reply',
+                onPressed: onCancel,
+                visualDensity: VisualDensity.compact,
+                icon: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: GlowColors.text.withValues(alpha: 0.08)),
+                  child: const Icon(Icons.close_rounded, size: 16, color: GlowColors.textMuted),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          IconButton(
-            tooltip: editing ? 'Cancel editing' : 'Cancel reply',
-            onPressed: onCancel,
-            icon: const Icon(Icons.close_rounded, color: GlowColors.textMuted),
-          ),
-        ],
+        ),
       ),
     );
   }

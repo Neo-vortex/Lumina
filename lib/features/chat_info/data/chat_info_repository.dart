@@ -230,4 +230,10 @@ class ChatInfoRepository {
 
   Future<td.Chat> privateChat(int userId) =>
       _client.invoke<td.Chat>(td.CreatePrivateChat(userId: userId, force: false));
+
+  /// Saved Messages: the private chat with yourself.
+  Future<td.Chat> savedMessages() async {
+    final me = await _client.invoke<td.User>(const td.GetMe());
+    return privateChat(me.id);
+  }
 }

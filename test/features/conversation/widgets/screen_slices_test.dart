@@ -52,6 +52,9 @@ void main() {
       ),
     );
     await tester.pump();
+    // Let the screen settle (the list is revealed a frame after it lands, the
+    // composer's height is measured): those rebuild it once, by design.
+    await tester.pump(const Duration(seconds: 1));
 
     final header = tester.widget(find.byType(ConversationHeader));
     final composer = tester.widget(find.byType(Composer));
@@ -62,6 +65,9 @@ void main() {
     expect(find.text('hi'), findsNWidgets(3));
     expect(identical(tester.widget(find.byType(ConversationHeader)), header), isTrue);
     expect(identical(tester.widget(find.byType(Composer)), composer), isTrue);
+    // The new message is reported read (debounced) now that it's on screen.
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(client.sent.whereType<td.ViewMessages>().any((v) => v.messageIds.contains(3)), isTrue);
 
     await tester.pumpWidget(const SizedBox());
   });

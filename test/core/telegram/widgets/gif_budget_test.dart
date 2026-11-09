@@ -47,10 +47,12 @@ void main() {
       ),
     );
     await tester.pumpWidget(grid([1, 2, 3]));
-    await tester.pump();
+    // GIFs start once the list has rested on them (350 ms).
+    await tester.pump(const Duration(milliseconds: 400));
     expect(players, ['/gif1.mp4', '/gif2.mp4'], reason: 'the third waits on its still');
 
     await tester.pumpWidget(grid([2, 3]));
+    await tester.pump();
     await tester.pump();
     expect(players, ['/gif1.mp4', '/gif2.mp4', '/gif3.mp4'], reason: 'a freed slot goes to the waiting GIF');
   });

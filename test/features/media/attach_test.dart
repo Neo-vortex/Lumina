@@ -6,7 +6,7 @@ import 'package:lumina/features/media/presentation/widgets/poll_composer.dart';
 void main() {
   group('attach hub tile order', () {
     test('a fresh install keeps the declared order', () {
-      expect(attachTileOrder(const {}), ['file', 'location', 'contact', 'poll', 'music', 'roundVideo']);
+      expect(attachTileOrder(const {}), ['file', 'location', 'contact', 'poll', 'music', 'roundVideo', 'dice']);
     });
 
     test('most used first, ties keep the declared order', () {
@@ -17,6 +17,7 @@ void main() {
         'file',
         'location',
         'roundVideo',
+        'dice',
       ]);
     });
 
@@ -27,7 +28,7 @@ void main() {
         allowVideoNote: false,
         allowContact: false,
       );
-      expect(order, ['file', 'location', 'music']);
+      expect(order, ['file', 'location', 'music', 'dice']);
     });
   });
 

@@ -29,8 +29,12 @@ class ConversationExtensions {
 
   void openChatInfo(BuildContext context, td.Chat chat) {}
 
-  /// Extra header buttons (calls).
+  /// Header buttons that stay visible (the voice call); keep it to one so the
+  /// title and last seen have room.
   List<Widget> headerActions(BuildContext context, td.Chat chat) => const [];
+
+  /// Entries for the header's ⋮ menu (video call, background…).
+  List<HeaderMenuEntry> headerMenu(BuildContext context, td.Chat chat) => const [];
 
   /// Shown in place of the message list while the chat has no messages
   /// (a bot's welcome card); null shows the plain empty list.
@@ -39,6 +43,16 @@ class ConversationExtensions {
   void onAttach(BuildContext context, td.Chat chat) {}
 
   void onVoice(BuildContext context, td.Chat chat, TextEditingController text) {}
+
+  /// Hold-to-record: starts a voice message for [chat].
+  void onVoiceStart(BuildContext context, td.Chat chat) {}
+
+  /// Ends the voice message started with [onVoiceStart]: sends it, or
+  /// throws it away (slid to cancel).
+  void onVoiceFinish(BuildContext context, td.Chat chat, {required bool send}) {}
+
+  /// A voice message (not dictation) is being recorded for [chat].
+  bool voiceRecording(BuildContext context, td.Chat chat) => false;
 
   void onDictate(BuildContext context, td.Chat chat, TextEditingController text) {}
 
@@ -73,4 +87,12 @@ class _NeverChanges implements Listenable {
 
   @override
   void removeListener(VoidCallback listener) {}
+}
+
+/// One entry of the chat header's ⋮ menu.
+class HeaderMenuEntry {
+  const HeaderMenuEntry(this.icon, this.label, this.onSelected);
+  final IconData icon;
+  final String label;
+  final VoidCallback onSelected;
 }

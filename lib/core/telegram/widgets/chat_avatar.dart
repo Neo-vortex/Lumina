@@ -63,28 +63,57 @@ class ChatAvatar extends StatelessWidget {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(colors: [accent, accent.withValues(alpha: 0.55)]),
-                boxShadow: glowIntensity > 0 ? glow(accent, intensity: glowIntensity) : null,
+            // The accent glow as a radial gradient behind the circle (a
+            // blurred shadow per avatar cost a blur pass every scroll frame).
+            if (glowIntensity > 0)
+              Positioned.fill(
+                left: -size * 0.22,
+                top: -size * 0.22,
+                right: -size * 0.22,
+                bottom: -size * 0.22,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          accent.withValues(alpha: 0.30 + 0.25 * glowIntensity),
+                          accent.withValues(alpha: 0),
+                        ],
+                        stops: const [0.55, 1],
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              child: ClipOval(
-                child: photo != null
-                    ? TdFileImage(
-                        file: photo.small,
-                        placeholderBytes: Display.minithumbnail(photo.minithumbnail),
-                      )
-                    : Center(
-                        child: Text(
-                          Display.initials(title),
-                          style: TextStyle(
-                            color: GlowColors.onAccent,
-                            fontWeight: FontWeight.w700,
-                            fontSize: size * 0.36,
+            // Fills the square: a loose Stack child takes the photo's own
+            // aspect ratio, which drew non-square photos as ovals.
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(colors: [accent, accent.withValues(alpha: 0.55)]),
+                ),
+                child: ClipOval(
+                  child: photo != null
+                      ? SizedBox.expand(
+                          child: TdFileImage(
+                            file: photo.small,
+                            fit: BoxFit.cover,
+                            placeholderBytes: Display.minithumbnail(photo.minithumbnail),
+                          ),
+                        )
+                      : Center(
+                          child: Text(
+                            Display.initials(title),
+                            style: TextStyle(
+                              color: GlowColors.onAccent,
+                              fontWeight: FontWeight.w700,
+                              fontSize: size * 0.36,
+                            ),
                           ),
                         ),
-                      ),
+                ),
               ),
             ),
             if (online)
@@ -98,7 +127,6 @@ class ChatAvatar extends StatelessWidget {
                     shape: BoxShape.circle,
                     color: GlowColors.cyan,
                     border: Border.all(color: GlowColors.background, width: 2),
-                    boxShadow: glow(GlowColors.cyan, intensity: 0.6),
                   ),
                 ),
               ),

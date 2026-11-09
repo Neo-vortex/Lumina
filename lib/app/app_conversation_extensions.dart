@@ -10,9 +10,8 @@ import '../core/storage/app_preferences.dart';
 import '../core/telegram/display.dart';
 import '../core/telegram/telegram_cache.dart';
 import '../core/theme/glow_colors.dart';
-import '../features/profile/presentation/user_profile_screen.dart';
-import '../features/folders/presentation/screens/folder_qr_screen.dart';
-import '../features/calls/bloc/call_cubit.dart';
+import 'app_profiles.dart';
+import '../core/build/build_flavor.dart';
 import '../features/assistant/data/action_extractor.dart';
 import '../features/backgrounds/domain/chat_backdrop.dart';
 import '../features/backgrounds/presentation/background_picker_screen.dart';
@@ -37,7 +36,6 @@ import '../features/conversation/presentation/widgets/send_orb.dart';
 import '../features/media/presentation/widgets/attach_sheet.dart';
 import '../features/transcription/data/transcription_center.dart';
 import '../features/transcription/data/whisper_service.dart';
-import '../features/bots/presentation/bot_profile_section.dart';
 import '../features/bots/presentation/bot_welcome_card.dart';
 import '../features/transcription/presentation/widgets/dictation_bar.dart';
 import '../features/transcription/presentation/widgets/transcript_view.dart';
@@ -84,47 +82,36 @@ class AppConversationExtensions extends ConversationExtensions {
       Navigator.of(context).push(ChatInfoScreen.route(chat.id, openChat: flows.openChat));
       return;
     }
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => UserProfileScreen(
-          userId: userId,
-          // The chat is right behind the profile.
-          onMessage: (_) => Navigator.of(context).maybePop(),
-          botSection: (context, user, full) => BotProfileSection(info: full.botInfo!),
-          onCall: (id, {required video}) async {
-            final messenger = ScaffoldMessenger.of(context);
-            final error = await context.read<CallCubit>().startCall(id, video: video);
-            if (error != null) messenger.showSnackBar(SnackBar(content: Text(error)));
-          },
-          onOpenChat: (id) => flows.openChat(context, id),
-          onShowQr: (url, title) =>
-              Navigator.of(context)
-                  .push(FolderQrScreen.route(url: url, title: title, color: GlowColors.violet)),
-        ),
-      ),
-    );
+    Navigator.of(context).push(userProfileRoute(context, userId, flows, chatBehind: true));
   }
 
   @override
   List<Widget> headerActions(BuildContext context, td.Chat chat) => [
-    ..._callActions(context, chat),
-    IconButton(
-      tooltip: 'Chat background',
-      icon: const Icon(Icons.wallpaper_rounded),
-      onPressed: () => Navigator.of(context).push(BackgroundPickerScreen.route(chat: chat)),
+    if (_callee(context, chat) case final id?) CallButtons(userId: id, video: false),
+  ];
+
+  @override
+  List<HeaderMenuEntry> headerMenu(BuildContext context, td.Chat chat) => [
+    if (_callee(context, chat) case final id?)
+      HeaderMenuEntry(Icons.videocam_rounded, 'Video call', () => CallButtons.call(context, id, video: true)),
+    HeaderMenuEntry(
+      Icons.wallpaper_rounded,
+      'Chat background',
+      () => Navigator.of(context).push(BackgroundPickerScreen.route(chat: chat)),
     ),
   ];
 
-  List<Widget> _callActions(BuildContext context, td.Chat chat) {
+  /// The person a private chat can call, if any (not bots, not yourself).
+  int? _callee(BuildContext context, td.Chat chat) {
     final type = chat.type;
-    if (type is! td.ChatTypePrivate) return const [];
+    if (type is! td.ChatTypePrivate) return null;
     final me = switch (context.read<AuthBloc>().state.step) {
       AuthReady(:final me, :final capabilities) when !capabilities.isBot => me,
       _ => null,
     };
     final user = context.read<TelegramCache>().users[type.userId];
-    if (me == null || user == null || user.type is! td.UserTypeRegular || user.id == me.id) return const [];
-    return [CallButtons(userId: user.id)];
+    if (me == null || user == null || user.type is! td.UserTypeRegular || user.id == me.id) return null;
+    return user.id;
   }
 
   /// Dictation progress (Whisper running on the recorded speech).
@@ -137,7 +124,7 @@ class AppConversationExtensions extends ConversationExtensions {
 
   @override
   List<ExtraMenuEntry> menuEntries(td.Message message) => [
-    if (messageText(message) != null)
+    if (kOnDeviceLlm && messageText(message) != null)
       const ExtraMenuEntry(
         MessageAction.aiAction,
         Icons.auto_awesome_rounded,
@@ -147,7 +134,7 @@ class AppConversationExtensions extends ConversationExtensions {
 
   @override
   Future<void> onMenuAction(BuildContext context, MessageAction action, td.Message message) async {
-    if (action != MessageAction.aiAction) return;
+    if (!kOnDeviceLlm || action != MessageAction.aiAction) return;
     final text = messageText(message)?.text;
     if (text == null) return;
     final cache = context.read<TelegramCache>();
@@ -196,29 +183,31 @@ class AppConversationExtensions extends ConversationExtensions {
 
   @override
   Future<String?>? aiReaction(BuildContext context, td.Message message) {
-    if (!prefs.aiReactionSuggestion) return null;
+    if (!kOnDeviceLlm || !prefs.aiReactionSuggestion) return null;
     final text = messageText(message)?.text.trim() ?? '';
     if (text.isEmpty) return null;
     return context.read<ActionExtractor>().suggestReaction(text);
   }
 
   @override
-  VoidCallback? writingTools(BuildContext context, TextEditingController text) => () async {
-    final extractor = context.read<ActionExtractor>();
-    final draft = text.text.trim();
-    if (draft.isEmpty) return;
-    final result = await showWritingTools(
-      context,
-      text: draft,
-      write: (t, tool, onStage) => extractor.write(t, tool, onStage: onStage),
-    );
-    if (result != null) {
-      text.value = TextEditingValue(
-        text: result,
-        selection: TextSelection.collapsed(offset: result.length),
-      );
-    }
-  };
+  VoidCallback? writingTools(BuildContext context, TextEditingController text) => !kOnDeviceLlm
+      ? null
+      : () async {
+          final extractor = context.read<ActionExtractor>();
+          final draft = text.text.trim();
+          if (draft.isEmpty) return;
+          final result = await showWritingTools(
+            context,
+            text: draft,
+            write: (t, tool, onStage) => extractor.write(t, tool, onStage: onStage),
+          );
+          if (result != null) {
+            text.value = TextEditingValue(
+              text: result,
+              selection: TextSelection.collapsed(offset: result.length),
+            );
+          }
+        };
 
   @override
   void onDictate(BuildContext context, td.Chat chat, TextEditingController text) =>
@@ -305,6 +294,33 @@ class AppConversationExtensions extends ConversationExtensions {
     } else {
       _voice(context, chat);
     }
+  }
+
+  @override
+  bool voiceRecording(BuildContext context, td.Chat chat) =>
+      recorder.isActiveFor(chat.id) && !recorder.dictation && recorder.phase == RecorderPhase.recording;
+
+  @override
+  void onVoiceStart(BuildContext context, td.Chat chat) {
+    if (recorder.phase != RecorderPhase.idle) return;
+    _voice(context, chat);
+  }
+
+  @override
+  void onVoiceFinish(BuildContext context, td.Chat chat, {required bool send}) =>
+      _finishVoice(context, chat, send: send);
+
+  Future<void> _finishVoice(BuildContext context, td.Chat chat, {required bool send}) async {
+    if (!recorder.isActiveFor(chat.id) || recorder.dictation) return;
+    final cubit = context.read<ConversationCubit>();
+    if (!send) {
+      await recorder.cancel();
+      cubit.chatAction(const td.ChatActionCancel());
+      return;
+    }
+    // Stop, then the review step sends it straight away.
+    if (recorder.phase == RecorderPhase.recording && context.mounted) await _voice(context, chat);
+    if (recorder.phase == RecorderPhase.review && context.mounted) await _voice(context, chat);
   }
 
   Future<void> _voice(BuildContext context, td.Chat chat) async {

@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+
 import 'dart:typed_data';
 
 import 'package:whisper_edge/whisper_edge.dart';
@@ -67,15 +70,19 @@ class WhisperService {
     void Function(double)? onProgress,
   ) async {
     _idle?.cancel();
+    debugPrint('DIAG whisper: start $audioPath');
     final wav = audioPath.toLowerCase().endsWith('.wav') ? audioPath : await _ffmpeg.toWhisperWav(audioPath);
     if (wav == null) {
       throw const TranscriptionFailure('This audio format could not be converted for transcription.');
     }
     try {
-      final transcriber = _transcriber ??= await WhisperTranscriber.load(
-        await _models.ensure(BundledModel.whisperBase),
-      );
+      debugPrint('DIAG whisper: wav ok, ensuring model');
+      final modelPath = await _models.ensure(BundledModel.whisperBase);
+      debugPrint('DIAG whisper: model at $modelPath, loading');
+      final transcriber = _transcriber ??= await WhisperTranscriber.load(modelPath);
+      debugPrint('DIAG whisper: loaded, reading pcm');
       final pcm = await _readPcm(wav);
+      debugPrint('DIAG whisper: pcm ${pcm.length} samples, transcribing');
       final duration = Duration(milliseconds: pcm.length * 1000 ~/ sampleRate);
       final parts = <String>[];
       String? detected;

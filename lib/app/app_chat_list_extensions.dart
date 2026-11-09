@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
+import '../core/storage/app_preferences.dart';
 import '../core/telegram/telegram_cache.dart';
 import '../core/theme/glow_colors.dart';
 import '../core/widgets/glow_sheet.dart';
+import '../features/backgrounds/domain/chat_backdrop.dart';
+import '../features/backgrounds/presentation/chat_backdrop_view.dart';
 import '../features/chats/domain/lens_entry.dart';
 import '../features/chats/presentation/widgets/chat_list_extensions.dart';
 import '../features/folders/data/folders_repository.dart';
@@ -15,17 +18,37 @@ import '../features/folders/presentation/widgets/folder_share_sheet.dart';
 import '../features/folders/presentation/widgets/join_folder_sheet.dart';
 import '../features/proxy/presentation/screens/proxy_screen.dart';
 import '../features/proxy/presentation/widgets/proxy_button.dart';
+import '../features/stories/data/stories_repository.dart';
+import 'app_story_wiring.dart' show StoryStrip;
 
 import '../features/downloads/presentation/downloads_ring.dart';
 import '../features/downloads/presentation/downloads_screen.dart';
 import 'feature_wiring.dart' show openDownloadMessage;
 
-/// Folders and the proxy button, plugged into the chat list.
+/// Folders, the proxy button, the background and the story strip, plugged
+/// into the chat list.
 class AppChatListExtensions extends ChatListExtensions {
-  AppChatListExtensions({required this.folders, required this.cache});
+  AppChatListExtensions({
+    required this.folders,
+    required this.cache,
+    required this.prefs,
+    required this.stories,
+  });
 
   final FoldersRepository folders;
   final TelegramCache cache;
+  final AppPreferences prefs;
+  final StoriesRepository stories;
+
+  @override
+  Widget background(BuildContext context, Widget child) => ListenableBuilder(
+    listenable: prefs.changes,
+    builder: (context, child) => ChatBackdropView(backdrop: resolveListBackdrop(prefs), child: child!),
+    child: child,
+  );
+
+  @override
+  Widget? belowHeader(BuildContext context) => StoryStrip(stories: stories, prefs: prefs);
 
   @override
   List<Widget> headerActions(BuildContext context) => [

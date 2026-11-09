@@ -39,7 +39,12 @@ class VideoPlayerView extends StatefulWidget {
     this.onControlsVisibilityChanged,
     this.fileId,
     this.seek,
+    this.onEnded,
   });
+
+  /// Played to the end (not looping): it is back at the start, paused, with
+  /// a replay button in the middle; the host shows its caption again.
+  final VoidCallback? onEnded;
 
   final String source;
   final bool isLocalFile;
@@ -167,6 +172,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   var _configured = false;
   var _landscape = false;
 
+  /// Finished and rewound; waiting for the replay button.
+  var _ended = false;
+
   void _toggleFullscreen() {
     _landscape = !_landscape;
     SystemChrome.setPreferredOrientations(
@@ -193,6 +201,14 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
     }
     if (v.isInitialized) {
       widget.onProgress?.call(v.position, v.duration, v.isEnded);
+    }
+    if (v.isInitialized && v.isEnded && !widget.loop && !_ended) {
+      // VLC can't seek from "ended"; stopping rewinds it to the start.
+      _ended = true;
+      _hideTimer?.cancel();
+      _vlc.stop().ignore();
+      _setControlsVisible(false);
+      widget.onEnded?.call();
     }
     if (mounted) setState(() {});
   }
@@ -251,6 +267,12 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
 
   final _playToggle = PlayToggle();
 
+  void _replay() {
+    setState(() => _ended = false);
+    _vlc.play();
+    _scheduleHide();
+  }
+
   void _togglePlay() {
     final v = _vlc.value;
     switch (_playToggle.tap(
@@ -267,6 +289,8 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
         // VLC can't resume from "ended"; stopping rewinds it.
         _vlc.stop().then((_) => _vlc.play()).ignore();
     }
+    // From the dock after the end: the switch above already starts it.
+    _ended = false;
     setState(() {});
     _setControlsVisible(true);
     _scheduleHide();
@@ -327,92 +351,125 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
-        return Semantics(
-          label: 'Video player. Double tap sides to skip 10 seconds',
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  _setControlsVisible(!_controlsVisible);
-                  if (_controlsVisible) _scheduleHide();
-                },
-                onDoubleTapDown: (d) =>
-                    _seekBy(Duration(seconds: d.localPosition.dx < size.width / 2 ? -10 : 10)),
-                onDoubleTap: () {},
-                onScaleStart: widget.showControls ? _onScaleStart : null,
-                onScaleUpdate: widget.showControls ? (d) => _onScaleUpdate(d, size) : null,
-                onScaleEnd: widget.showControls ? _onScaleEnd : null,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Center(
-                      child: Transform.scale(
-                        scale: _scale,
-                        child: VlcPlayer(
-                          controller: _vlc,
-                          aspectRatio: ratio,
-                          placeholder: const Center(
-                            child: CircularProgressIndicator(color: GlowColors.violet),
+        // Also shown outside the viewer (fullscreen route): the dock's
+        // Slider and buttons need a Material ancestor wherever it lands.
+        return Material(
+          type: MaterialType.transparency,
+          child: Semantics(
+            label: 'Video player. Double tap sides to skip 10 seconds',
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    _setControlsVisible(!_controlsVisible);
+                    if (_controlsVisible) _scheduleHide();
+                  },
+                  onDoubleTapDown: (d) =>
+                      _seekBy(Duration(seconds: d.localPosition.dx < size.width / 2 ? -10 : 10)),
+                  onDoubleTap: () {},
+                  onScaleStart: widget.showControls ? _onScaleStart : null,
+                  onScaleUpdate: widget.showControls ? (d) => _onScaleUpdate(d, size) : null,
+                  onScaleEnd: widget.showControls ? _onScaleEnd : null,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Center(
+                        child: Transform.scale(
+                          scale: _scale,
+                          child: VlcPlayer(
+                            controller: _vlc,
+                            aspectRatio: ratio,
+                            placeholder: const Center(
+                              child: CircularProgressIndicator(color: GlowColors.violet),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    if (v.isBuffering) Center(child: _BufferingIndicator(percent: v.bufferPercent)),
-                    if (_drag == _Drag.scrub)
-                      Center(child: _Bubble('${_fmt(_scrubTarget)} / ${_fmt(v.duration)}')),
-                    if (_toast != null) Align(alignment: const Alignment(0, -0.6), child: _Bubble(_toast!)),
-                  ],
-                ),
-              ),
-              // Outside the detector: its double tap would hold every
-              // dock tap for the double-tap timeout.
-              if (widget.showControls)
-                AnimatedOpacity(
-                  opacity: _controlsVisible ? 1 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  child: IgnorePointer(
-                    ignoring: !_controlsVisible,
-                    child: VideoDock(
-                      position: v.position,
-                      duration: v.duration,
-                      playing: _playToggle.shown(playing: v.isPlaying),
-                      speed: v.playbackSpeed,
-                      muted: _volume == 0,
-                      buffered: _download == null || v.duration == Duration.zero
-                          ? null
-                          : v.duration *
-                                _download!.bufferedAhead(
-                                  v.position.inMilliseconds / v.duration.inMilliseconds,
-                                ),
-                      downloaded: _download == null || _download!.complete ? null : _download!.downloaded,
-                      onPlayPause: () {
-                        _togglePlay();
-                        _scheduleHide();
-                      },
-                      onSeek: (d) {
-                        _vlc.seekTo(d);
-                        _scheduleHide();
-                      },
-                      onSeekBy: (d) {
-                        _seekBy(d);
-                        _scheduleHide();
-                      },
-                      onSpeed: (s) {
-                        _vlc.setPlaybackSpeed(s);
-                        _scheduleHide();
-                      },
-                      onMute: () {
-                        setState(() => _volume = _volume == 0 ? 100 : 0);
-                        _vlc.setVolume(_volume);
-                        _scheduleHide();
-                      },
-                      onFullscreen: _toggleFullscreen,
-                    ),
+                      if (v.isBuffering) Center(child: _BufferingIndicator(percent: v.bufferPercent)),
+                      if (_drag == _Drag.scrub)
+                        Center(child: _Bubble('${_fmt(_scrubTarget)} / ${_fmt(v.duration)}')),
+                      if (_toast != null) Align(alignment: const Alignment(0, -0.6), child: _Bubble(_toast!)),
+                    ],
                   ),
                 ),
-            ],
+                // Played to the end: back at the start, waiting for a replay.
+                if (_ended && widget.showControls)
+                  Center(
+                    child: Semantics(
+                      button: true,
+                      label: 'Play again',
+                      excludeSemantics: true,
+                      child: GestureDetector(
+                        onTap: _replay,
+                        child: Container(
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.black.withValues(alpha: 0.55),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.7), width: 1.5),
+                          ),
+                          child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 44),
+                        ),
+                      ),
+                    ),
+                  ),
+                // Outside the detector: its double tap would hold every
+                // dock tap for the double-tap timeout.
+                if (widget.showControls)
+                  AnimatedOpacity(
+                    opacity: _controlsVisible ? 1 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: IgnorePointer(
+                      ignoring: !_controlsVisible,
+                      // The dock's shade fills the screen and takes every tap: a
+                      // tap off the bar hides the controls (and the viewer
+                      // brings the caption back). The bar's buttons still win.
+                      child: GestureDetector(
+                        onTap: () => _setControlsVisible(false),
+                        child: VideoDock(
+                          position: v.position,
+                          duration: v.duration,
+                          playing: _playToggle.shown(playing: v.isPlaying),
+                          speed: v.playbackSpeed,
+                          muted: _volume == 0,
+                          buffered: _download == null || v.duration == Duration.zero
+                              ? null
+                              : v.duration *
+                                    _download!.bufferedAhead(
+                                      v.position.inMilliseconds / v.duration.inMilliseconds,
+                                    ),
+                          downloaded: _download == null || _download!.complete ? null : _download!.downloaded,
+                          onPlayPause: () {
+                            _togglePlay();
+                            _scheduleHide();
+                          },
+                          onSeek: (d) {
+                            _vlc.seekTo(d);
+                            _scheduleHide();
+                          },
+                          onSeekBy: (d) {
+                            _seekBy(d);
+                            _scheduleHide();
+                          },
+                          onSpeed: (s) {
+                            _vlc.setPlaybackSpeed(s);
+                            _scheduleHide();
+                          },
+                          onMute: () {
+                            setState(() => _volume = _volume == 0 ? 100 : 0);
+                            _vlc.setVolume(_volume);
+                            _scheduleHide();
+                          },
+                          onFullscreen: _toggleFullscreen,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         );
       },

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Files handed to other apps from the media viewer's Share: copied into
+     cache/share first, so nothing else of Lumina's is ever exposed. -->
+<paths>
+    <cache-path name="share" path="share/" />
+</paths>

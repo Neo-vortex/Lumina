@@ -23,6 +23,11 @@ if [[ ! -d "$work/td/.git" ]]; then
 fi
 git -C "$work/td" fetch -q --depth 1 origin "$commit"
 git -C "$work/td" checkout -q --force FETCH_HEAD
+# Lumina's patches (custom-server support: LUMINA_SERVER / LUMINA_SERVER_RSA).
+for patch in "$root"/tool/tdlib-patches/*.patch; do
+  [[ -e "$patch" ]] || continue
+  git -C "$work/td" apply "$patch"
+done
 
 cd "$work/td/example/android"
 # 16 KB LOAD alignment (NDK r28 defaults to it; this keeps it explicit).

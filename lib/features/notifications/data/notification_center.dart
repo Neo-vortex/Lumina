@@ -75,6 +75,7 @@ class NotificationCenter with WidgetsBindingObserver {
     required this._sink,
     this._openChat,
     this._openLink,
+    this._openShare,
     this._foreground,
   }) {
     _subs = [_client.updates.listen(_onUpdate), _sink.actions.listen(_onAction, onError: (_) {})];
@@ -89,6 +90,10 @@ class NotificationCenter with WidgetsBindingObserver {
   final NotificationSink _sink;
   final void Function(int chatId)? _openChat;
   final void Function(String url)? _openLink;
+
+  /// Something shared to Lumina from another app: its text and the local
+  /// copies of its files (path, name, MIME type).
+  final void Function(String text, List<({String path, String name, String mime})> files)? _openShare;
   final bool Function()? _foreground;
   late final List<StreamSubscription<Object?>> _subs;
   var _resumed = false;
@@ -165,6 +170,15 @@ class NotificationCenter with WidgetsBindingObserver {
   }
 
   Future<void> _onAction(Map<Object?, Object?> a) async {
+    if (a['type'] == 'share') {
+      final files = [
+        for (final f in (a['files'] as List?) ?? const [])
+          if (f case {'path': final String path, 'name': final String name, 'mime': final String mime})
+            (path: path, name: name, mime: mime),
+      ];
+      _openShare?.call(a['text'] as String? ?? '', files);
+      return;
+    }
     if (a['type'] == 'link') {
       final url = a['url'] as String?;
       if (url != null) _openLink?.call(url);

@@ -18,7 +18,13 @@ class AuthRepository {
     required this._secureStore,
     required this._paths,
     required this._settings,
+    this.onSignedOut,
   });
+
+  /// After a sign-out or exit wiped this account: the app forgets it and
+  /// moves to another account (or a fresh one). True when it took over
+  /// starting the next client.
+  final Future<bool> Function()? onSignedOut;
 
   final TdClient _client;
   final SecureStore _secureStore;
@@ -36,7 +42,7 @@ class AuthRepository {
   }
 
   Future<void> sendTdlibParameters() async {
-    final key = await _secureStore.databaseEncryptionKey();
+    final key = await _secureStore.databaseEncryptionKey(scope: _paths.serverId);
     await _client.invoke<td.Ok>(
       td.SetTdlibParameters(
         useTestDc: _settings.useTestDc,
@@ -103,7 +109,7 @@ class AuthRepository {
   /// Deletes the database, files and encryption key. Only after `Closed`.
   Future<void> wipeLocalData() async {
     await _paths.wipe();
-    await _secureStore.discardDatabaseEncryptionKey();
+    await _secureStore.discardDatabaseEncryptionKey(scope: _paths.serverId);
   }
 
   /// TDLib cannot reuse a closed client; the new one restarts the flow at

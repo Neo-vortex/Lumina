@@ -20,11 +20,20 @@ class ProfilePhotoViewer extends StatefulWidget {
   /// Saves a downloaded file to the gallery (tests swap it).
   final Future<bool> Function(String path)? save;
 
+  /// The header photo flies into place (a Hero on the photo's id) while the
+  /// black fades in; closing flies it back.
   static Route<void> route(List<td.ChatPhoto> photos, int initial) => PageRouteBuilder<void>(
     opaque: false,
+    transitionDuration: const Duration(milliseconds: 380),
+    reverseTransitionDuration: const Duration(milliseconds: 300),
     pageBuilder: (_, _, _) => ProfilePhotoViewer(photos: photos, initial: initial),
-    transitionsBuilder: (_, animation, _, child) => FadeTransition(opacity: animation, child: child),
+    transitionsBuilder: (_, animation, _, child) => FadeTransition(
+      opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+      child: child,
+    ),
   );
+
+  static String heroTag(td.ChatPhoto p) => 'profile-photo-${p.id}';
 
   @override
   State<ProfilePhotoViewer> createState() => _ProfilePhotoViewerState();
@@ -91,12 +100,15 @@ class _ProfilePhotoViewerState extends State<ProfilePhotoViewer> {
                   aspectRatio: 1,
                   child: p.sizes.isEmpty
                       ? const SizedBox.shrink()
-                      : TdFileImage(
-                          file: p.sizes.last.photo,
-                          fit: BoxFit.contain,
-                          fullResolution: true,
-                          placeholderBytes: Display.minithumbnail(p.minithumbnail),
-                          semanticLabel: 'Profile photo ${i + 1}',
+                      : Hero(
+                          tag: ProfilePhotoViewer.heroTag(p),
+                          child: TdFileImage(
+                            file: p.sizes.last.photo,
+                            fit: BoxFit.contain,
+                            fullResolution: true,
+                            placeholderBytes: Display.minithumbnail(p.minithumbnail),
+                            semanticLabel: 'Profile photo ${i + 1}',
+                          ),
                         ),
                 ),
               ),

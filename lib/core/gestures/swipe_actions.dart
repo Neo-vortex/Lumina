@@ -4,5 +4,8 @@ enum SwipeSide { left, right }
 /// What a swipe on a message does (Settings → Chats → Swipe gestures).
 enum MessageSwipe { reply, react, delete, none }
 
+/// What double-tapping a message does (Settings → Chats → Gestures).
+enum MessageDoubleTap { react, reply, forward, copy, select, pin, none }
+
 /// What a swipe on a chat-list row does.
 enum ChatSwipe { archive, pin, mute, read, delete, none }

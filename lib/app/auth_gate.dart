@@ -46,7 +46,9 @@ class AuthGate extends StatelessWidget {
       // Reduced motion: plain cross-fade, no scale (UX-10).
       transitionBuilder: (child, animation) => FadeTransition(
         opacity: animation,
-        child: ambient ? ScaleTransition(scale: Tween(begin: 0.98, end: 1.0).animate(animation), child: child) : child,
+        child: ambient
+            ? ScaleTransition(scale: Tween(begin: 0.98, end: 1.0).animate(animation), child: child)
+            : child,
       ),
       child: KeyedSubtree(key: ValueKey(step.runtimeType), child: screen),
     );

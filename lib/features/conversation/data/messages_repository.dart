@@ -231,6 +231,12 @@ class MessagesRepository {
     ),
   );
 
+  /// Sends failed messages again; TDLib gives them new ids (the old ones are
+  /// replaced through updateMessageSendSucceeded/Failed).
+  Future<void> resend(int chatId, List<int> messageIds) => _client.invoke<td.Messages>(
+    td.ResendMessages(chatId: chatId, messageIds: messageIds, paidMessageStarCount: 0),
+  );
+
   Future<void> pin(int chatId, int messageId, {bool notify = false, bool onlyForSelf = false}) =>
       _client.invoke<td.Ok>(
         td.PinChatMessage(
@@ -382,6 +388,43 @@ class MessagesRepository {
       if (!list.any((x) => (x as td.ReactionTypeEmoji).emoji == emoji)) list.add(r);
       return list;
     });
+  }
+
+  /// The chat's reactions as TDLib groups them for a picker (emoji only,
+  /// none needing Premium): your recent ones and the popular ones.
+  Future<({List<String> recent, List<String> popular})> reactionSections(int chatId, int messageId) async {
+    final result = await _client.invoke<td.AvailableReactions>(
+      td.GetMessageAvailableReactions(chatId: chatId, messageId: messageId, rowSize: 8),
+    );
+    List<String> emoji(List<td.AvailableReaction> list) => [
+      for (final r in list)
+        if (r.type case td.ReactionTypeEmoji(:final emoji) when !r.needsPremium) emoji,
+    ];
+    return (
+      recent: emoji(result.recentReactions),
+      popular: emoji([...result.topReactions, ...result.popularReactions]),
+    );
+  }
+
+  /// Telegram's emoji categories (Love, Approval, Laughter…), each with the
+  /// emoji it holds; categories made of Premium emoji only are left out.
+  Future<List<({String name, List<String> emojis})>> emojiCategories() async {
+    final result = await _client.invoke<td.EmojiCategories>(
+      const td.GetEmojiCategories(type: td.EmojiCategoryTypeDefault()),
+    );
+    return [
+      for (final c in result.categories)
+        if (c.source case td.EmojiCategorySourceSearch(:final emojis) when emojis.isNotEmpty)
+          (name: c.name, emojis: emojis),
+    ];
+  }
+
+  /// Emoji whose keywords match [text] (in English and the device language).
+  Future<List<String>> searchEmojis(String text, List<String> languages) async {
+    final result = await _client.invoke<td.EmojiKeywords>(
+      td.SearchEmojis(text: text, inputLanguageCodes: languages),
+    );
+    return [for (final k in result.emojiKeywords) k.emoji];
   }
 
   Future<void> react(int chatId, int messageId, td.ReactionType reaction, {required bool add}) => add

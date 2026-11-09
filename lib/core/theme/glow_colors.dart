@@ -29,6 +29,10 @@ abstract final class GlowColors {
   static const cyan = Color(0xFF4FE3DC);
   static const teal = Color(0xFF1C9AAE);
 
+  /// Read receipts: an ocean blue bright enough to read on the violet
+  /// outgoing bubble and on the dark timeline.
+  static const ocean = Color(0xFF4CC3FF);
+
   // Warm accents (status, warnings, destructive actions).
   static const amber = Color(0xFFE8B778);
   static const coral = Color(0xFFE08A80);
@@ -37,6 +41,10 @@ abstract final class GlowColors {
   static const outgoingTop = Color(0xFF5B3FD0);
   static const outgoingBottom = Color(0xFF3A2E8F);
   static const onOutgoing = Colors.white;
+
+  /// Incoming bubbles: an opaque lift off the background (1.2 : 1 against it,
+  /// edged with 7 % white), text 12.9 : 1 on it.
+  static const bubbleIn = Color(0xFF1F232B);
 
   // Active / selection: violet -> magenta. Bright variants for glow only.
   static const violet = Color(0xFF9A5CFF);

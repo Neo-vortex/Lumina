@@ -14,6 +14,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
 import androidx.core.app.RemoteInput
 import dev.lumina.lumina.MainActivity
+import dev.lumina.lumina.R
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
@@ -116,7 +117,7 @@ class MessageNotifications(private val context: Context, messenger: BinaryMessen
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val notification = NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(android.R.drawable.stat_notify_chat)
+            .setSmallIcon(R.drawable.ic_stat_lumina)
             .setStyle(style)
             .setContentIntent(open)
             .setAutoCancel(true)
@@ -207,6 +208,13 @@ class MessageNotifications(private val context: Context, messenger: BinaryMessen
         /** A tg:// or t.me link opened from another app. */
         fun openLink(url: String) {
             val event = mapOf("type" to "link", "url" to url)
+            val target = instance
+            if (target != null) target.deliver(event) else synchronized(pending) { pending += event }
+        }
+
+        /** Something shared to Lumina from another app (MainActivity copied the files). */
+        fun openShare(text: String, files: List<Map<String, String>>) {
+            val event = mapOf("type" to "share", "text" to text, "files" to files)
             val target = instance
             if (target != null) target.deliver(event) else synchronized(pending) { pending += event }
         }

@@ -515,19 +515,25 @@ class _Action extends StatelessWidget {
     child: InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
+      // Grows for a longer label ("Permissions", translations, large
+      // text) instead of breaking it; past that the label scales down.
       child: Container(
-        width: 78,
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        constraints: const BoxConstraints(minWidth: 78, maxWidth: 112),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
         decoration: BoxDecoration(
           color: GlowColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: GlowColors.outline),
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, color: GlowColors.cyan),
             const SizedBox(height: 4),
-            Text(label, style: const TextStyle(fontSize: 12)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(label, style: const TextStyle(fontSize: 12), maxLines: 1, softWrap: false),
+            ),
           ],
         ),
       ),

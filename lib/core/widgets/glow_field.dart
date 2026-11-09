@@ -24,6 +24,7 @@ class GlowField extends StatefulWidget {
     this.textAlign = TextAlign.start,
     this.letterSpacing,
     this.focusNode,
+    this.prefix,
   });
 
   final TextEditingController controller;
@@ -41,6 +42,9 @@ class GlowField extends StatefulWidget {
   final TextAlign textAlign;
   final double? letterSpacing;
   final FocusNode? focusNode;
+
+  /// Inside the box, before the text (e.g. a country picker).
+  final Widget? prefix;
 
   @override
   State<GlowField> createState() => _GlowFieldState();
@@ -106,7 +110,9 @@ class _GlowFieldState extends State<GlowField> {
               hintText: widget.hint,
               hintStyle: const TextStyle(color: GlowColors.textMuted),
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+              contentPadding: EdgeInsets.fromLTRB(widget.prefix == null ? 18 : 4, 16, 18, 16),
+              prefixIcon: widget.prefix,
+              prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
             ),
           ),
         ),

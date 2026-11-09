@@ -59,9 +59,13 @@ void main() {
       ),
     );
     await tester.pump();
+    // The list takes touches once it is revealed (a frame after it lands).
+    await tester.pump(const Duration(seconds: 1));
 
     await tester.tap(find.text('hi').first);
     await tester.pump();
+    // A tap waits out the double-tap window, then the menu animates in.
+    await tester.pump(const Duration(seconds: 1));
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('Reply'), findsOneWidget);
     await tester.tapAt(const Offset(10, 10));

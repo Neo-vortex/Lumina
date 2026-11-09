@@ -57,6 +57,12 @@ class ChatListExtensions {
   /// Shown before the search button.
   List<Widget> headerActions(BuildContext context) => const [];
 
+  /// Drawn behind the whole chat list (the aurora or a wallpaper).
+  Widget background(BuildContext context, Widget child) => child;
+
+  /// A strip under the title (people's stories); null shows nothing.
+  Widget? belowHeader(BuildContext context) => null;
+
   /// Tapping the connection status (connection and proxy settings).
   void openConnectionSettings(BuildContext context) {}
 

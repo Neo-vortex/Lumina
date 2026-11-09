@@ -1,0 +1,4 @@
+send.wav — "sound_out.wav" from Telegram for Android
+(https://github.com/DrKLO/Telegram, TMessagesProj/src/main/res/raw/sound_out.wav),
+licensed under the GNU General Public License v2 (the same source the calls
+engine comes from; full text in assets/licenses/calls_engine.txt).

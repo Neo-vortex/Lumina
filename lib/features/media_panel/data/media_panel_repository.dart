@@ -21,6 +21,15 @@ class MediaPanelRepository {
   Future<List<td.Sticker>> recentStickers() async =>
       (await _client.invoke<td.Stickers>(const td.GetRecentStickers(isAttached: false))).stickers;
 
+  /// Emoji whose keywords match [query] (Telegram's keyword lists: English
+  /// plus the device language), best matches first, no repeats.
+  Future<List<String>> searchEmoji(String query, {List<String> languages = const ['en']}) async {
+    final r = await _client.invoke<td.EmojiKeywords>(
+      td.SearchEmojis(text: query, inputLanguageCodes: languages),
+    );
+    return {for (final k in r.emojiKeywords) k.emoji}.toList();
+  }
+
   Future<List<td.Animation>> savedGifs() async =>
       (await _client.invoke<td.Animations>(const td.GetSavedAnimations())).animations;
 

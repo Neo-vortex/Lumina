@@ -65,12 +65,16 @@ void main() {
       // Right after the next arrival, bubble 3 is fully shown, not replaying.
       client.emitUpdate(td.UpdateNewMessage(message: fakeMessage(4, date: 1761390240)));
       await tester.pump();
+      // The list takes the new row in on the next frame.
+      await tester.pump();
       expect(find.byType(MessageBubble), findsNWidgets(4));
       final fades = tester.widgetList<FadeTransition>(
         find.descendant(of: find.byKey(const ValueKey(3)), matching: find.byType(FadeTransition)),
       );
       expect(fades.where((f) => f.opacity.value < 1), isEmpty);
 
+      // Let the read report for the new message (debounced) go out first.
+      await tester.pump(const Duration(milliseconds: 500));
       await tester.pumpWidget(const SizedBox());
     },
   );

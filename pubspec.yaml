@@ -43,6 +43,7 @@ dependencies:
   url_launcher: ^6.3.3
   shared_preferences: ^2.5.6
   flutter_vlc_player: ^7.4.4
+  liquid_glass_renderer: any
   ffmpeg_kit_flutter_new_full: ^2.5.7
   image_picker: ^1.2.4
   file_picker: ^13.2.0
@@ -58,12 +59,34 @@ dependencies:
   flutter_zxing: ^3.1.0
   lottie: ^3.6.1
   video_player: ^2.14.1
+  # Custom server: key fingerprints (SHA-1, as MTProto) and setenv via FFI.
+  crypto: ^3.0.6
+  # Session backups: AES-256-GCM, key from the backup passphrase (PBKDF2).
+  cryptography: ^2.7.0
+  ffi: ^2.1.2
 
 # flutter_vlc_player 7.4.4's Android side was regenerated with Pigeon 25
 # but no matching Dart side was published (2.0.5 and the retracted 3.0.0
 # use the old channel names), so every player call failed. Vendored copy
 # with lib/src/messages/messages.dart regenerated from 7.4.4's pigeons/.
 dependency_overrides:
+  # Liquid glass (refraction and lighting) for floating pills, vendored with
+  # its small dependency tree from the pub.flutter-io.cn mirror (pub.dev is
+  # unreachable from here). All MIT. 1.0.0-dev.2 renders through Flutter GPU
+  # (Impeller only; enabled in AndroidManifest) with a fake-glass fallback; its
+  # Dart range was relaxed to admit Dart 3.14.
+  liquid_glass_renderer:
+    path: packages/liquid_glass_renderer
+  flutter_gpu_shaders:
+    path: packages/flutter_gpu_shaders
+  data_assets:
+    path: packages/data_assets
+  motor:
+    path: packages/motor
+  flutter_shaders:
+    path: packages/flutter_shaders
+  equatable:
+    path: packages/equatable
   flutter_vlc_player_platform_interface:
     path: packages/flutter_vlc_player_platform_interface
   # Vendored too: its Android side drew through a TextureView inside a
@@ -94,9 +117,15 @@ flutter:
   assets:
     # Git LFS. Whisper base (speech-to-text) and SmolLM2-360M-Instruct (AI actions).
     - assets/models/ggml-base-q5_1.bin
-    - assets/models/SmolLM2-360M-Instruct-Q4_0.gguf
+    # Only in the `full` flavor; `--flavor lite` ships without the LLM.
+    - path: assets/models/SmolLM2-360M-Instruct-Q4_0.gguf
+      flavors:
+        - full
     # Third-party notices for the calls engine (tool/fetch_calls_engine.sh).
     - assets/licenses/calls_engine.txt
+    # The send sound: Telegram for Android's sound_out.wav (GPL v2, see
+    # assets/sounds/CREDITS.txt).
+    - assets/sounds/send.wav
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -3,7 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../core/storage/app_preferences.dart';
+import '../../../../core/telegram/telegram_cache.dart';
 import '../../../../core/theme/glow_colors.dart';
+import '../../../../core/widgets/chat_scrolling.dart';
 import '../../../../core/widgets/luminous_refresh.dart';
 import '../../bloc/chat_list_cubit.dart';
 import '../../data/chats_repository.dart';
@@ -42,6 +44,30 @@ class _ChatListPageState extends State<ChatListPage> with AutomaticKeepAliveClie
 
   @override
   bool get wantKeepAlive => true;
+
+  /// The last row built per chat, with what it showed. Handing Flutter the
+  /// same widget again skips that row entirely, so a list update rebuilds
+  /// only the rows that changed instead of every visible one.
+  final _rows = <int, (Object, Widget)>{};
+
+  /// Everything a row reads: the chat (a new object on every change), its
+  /// peer (presence), who is typing there, and where it sits.
+  Object _signature(BuildContext context, td.Chat chat, int i, int count) {
+    final cache = context.read<TelegramCache>();
+    final typing = cache.actionsIn(chat.id);
+    return (
+      _Same(chat),
+      _Same(cache.peerUser(chat)),
+      typing.isEmpty ? '' : typing.map((a) => '${a.sender}${a.action.runtimeType}').join(),
+      i == 0,
+      i == count - 1,
+      widget.tint,
+      widget.isBot,
+      // Folder tags, and "13:58" turning into "Yesterday".
+      _Same(cache.chatFolders),
+      DateTime.now().day,
+    );
+  }
 
   @override
   void dispose() {
@@ -101,14 +127,21 @@ class _ChatListPageState extends State<ChatListPage> with AutomaticKeepAliveClie
             child: NotificationListener<ScrollNotification>(
               onNotification: (n) {
                 if (n.metrics.extentAfter < 600) _cubit.loadMore();
+                // Row pulses (and other ambient motion) hold while it moves.
+                if (n is ScrollStartNotification && n.depth == 0) ChatScrolling.set(true);
+                if (n is ScrollEndNotification && n.depth == 0) ChatScrolling.set(false);
                 return false;
               },
               child: ListView.builder(
                 padding: const EdgeInsets.only(bottom: 120),
+                // Rows are a fixed 72 dp: no child layout to place them.
+                itemExtent: TimelineChatRow.height,
                 itemCount: state.chats.length,
                 itemBuilder: (context, i) {
                   final chat = state.chats[i];
-                  return SwipeableChatRow(
+                  final sig = _signature(context, chat, i, state.chats.length);
+                  if (_rows[chat.id] case (final old, final row) when old == sig) return row;
+                  final row = SwipeableChatRow(
                     key: ValueKey(chat.id),
                     chat: chat,
                     list: widget.entry.list,
@@ -119,9 +152,16 @@ class _ChatListPageState extends State<ChatListPage> with AutomaticKeepAliveClie
                       showPresence: !widget.isBot,
                       tint: widget.tint,
                       onTap: () => widget.onOpen(chat),
-                      onLongPress: () => showChatActions(context, chat, list: widget.entry.list),
+                      onLongPress: () => showChatActions(
+                        context,
+                        chat,
+                        list: widget.entry.list,
+                        onOpen: () => widget.onOpen(chat),
+                      ),
                     ),
                   );
+                  _rows[chat.id] = (sig, row);
+                  return row;
                 },
               ),
             ),
@@ -130,4 +170,17 @@ class _ChatListPageState extends State<ChatListPage> with AutomaticKeepAliveClie
       ),
     );
   }
+}
+
+/// Compares by identity (TDLib objects are replaced, never mutated).
+class _Same {
+  const _Same(this.value);
+
+  final Object? value;
+
+  @override
+  bool operator ==(Object other) => other is _Same && identical(other.value, value);
+
+  @override
+  int get hashCode => identityHashCode(value);
 }

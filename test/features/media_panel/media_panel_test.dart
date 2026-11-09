@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumina/core/storage/app_preferences.dart';
 import 'package:lumina/core/telegram/file_store.dart';
-import 'package:lumina/core/telegram/widgets/looping_gif.dart';
+import 'package:lumina/core/telegram/widgets/gif_preview.dart';
 import 'package:lumina/features/media_panel/data/media_panel_repository.dart';
 import 'package:lumina/features/media_panel/presentation/media_panel.dart';
 import 'package:lumina_tdlib/api.dart' as td;
@@ -123,7 +123,7 @@ void main() {
     await tester.tap(find.text('GIFs'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    bool paused() => tester.widget<LoopingGif>(find.byType(LoopingGif).first).paused;
+    bool paused() => tester.widget<GifPreview>(find.byType(GifPreview).first).paused;
     expect(paused(), isFalse);
     final grid = tester.element(find.byType(GridView));
     ScrollStartNotification(

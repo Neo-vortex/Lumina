@@ -1,0 +1,102 @@
+diff --git a/td/telegram/ConfigManager.cpp b/td/telegram/ConfigManager.cpp
+index 6e61f91..f776acc 100644
+--- a/td/telegram/ConfigManager.cpp
++++ b/td/telegram/ConfigManager.cpp
+@@ -6,6 +6,8 @@
+ //
+ #include "td/telegram/ConfigManager.h"
+ 
++#include <cstdlib>
++
+ #include "td/telegram/AccountManager.h"
+ #include "td/telegram/AgeVerificationParameters.h"
+ #include "td/telegram/AuthManager.h"
+@@ -712,6 +714,11 @@ class ConfigRecoverer final : public Actor {
+     if (close_flag_) {
+       return;
+     }
++    // Lumina: no Telegram DNS/Firebase config recovery for a custom server;
++    // it would point the client back at Telegram's DCs.
++    if (std::getenv("LUMINA_SERVER") != nullptr) {
++      return;
++    }
+     if (Session::is_high_loaded()) {
+       VLOG(config_recoverer) << "Skip config recoverer under high load";
+       set_timeout_in(Random::fast(200, 300));
+diff --git a/td/telegram/net/ConnectionCreator.cpp b/td/telegram/net/ConnectionCreator.cpp
+index d81900c..1e6476f 100644
+--- a/td/telegram/net/ConnectionCreator.cpp
++++ b/td/telegram/net/ConnectionCreator.cpp
+@@ -6,6 +6,8 @@
+ //
+ #include "td/telegram/net/ConnectionCreator.h"
+ 
++#include <cstdlib>
++
+ #include "td/telegram/ConfigManager.h"
+ #include "td/telegram/Global.h"
+ #include "td/telegram/logevent/LogEvent.h"
+@@ -1276,6 +1278,28 @@ DcOptions ConnectionCreator::get_default_dc_options(bool is_test) {
+     }
+   };
+   vector<int> ports = {443, 80, 5222};
++#if !TD_EMSCRIPTEN
++  // Lumina: a self-hosted, Telegram-compatible server ("host:port") serves
++  // every DC; it hands out its own dc_options through help.getConfig.
++  if (const char *custom = std::getenv("LUMINA_SERVER")) {
++    Slice server(custom);
++    auto colon = server.rfind(':');
++    if (!server.empty() && colon != static_cast<size_t>(-1)) {
++      auto host = server.substr(0, colon).str();
++      if (host.size() > 2 && host[0] == '[' && host.back() == ']') {
++        host = host.substr(1, host.size() - 2);
++      }
++      auto port = to_integer<int>(server.substr(colon + 1));
++      for (int32 dc_id = 1; dc_id <= 5; dc_id++) {
++        IPAddress ip_address;
++        if (ip_address.init_host_port(host, port).is_ok()) {
++          res.dc_options.emplace_back(DcId::internal(dc_id), ip_address);
++        }
++      }
++      return res;
++    }
++  }
++#endif
+ #if TD_EMSCRIPTEN
+   if (is_test) {
+     add_ip_ports(1, {"pluto.web.telegram.org/apiws_test"}, {443}, HostType::Url);
+diff --git a/td/telegram/net/PublicRsaKeySharedMain.cpp b/td/telegram/net/PublicRsaKeySharedMain.cpp
+index abdbff5..a83b55e 100644
+--- a/td/telegram/net/PublicRsaKeySharedMain.cpp
++++ b/td/telegram/net/PublicRsaKeySharedMain.cpp
+@@ -9,6 +9,8 @@
+ #include "td/utils/Slice.h"
+ #include "td/utils/SliceBuilder.h"
+ 
++#include <cstdlib>
++
+ namespace td {
+ 
+ std::shared_ptr<PublicRsaKeySharedMain> PublicRsaKeySharedMain::create(bool is_test) {
+@@ -18,6 +20,21 @@ std::shared_ptr<PublicRsaKeySharedMain> PublicRsaKeySharedMain::create(bool is_t
+     keys.push_back(RsaKey{std::move(rsa), fingerprint});
+   };
+ 
++  // Lumina: a self-hosted server's own RSA public key (PEM), the only one
++  // trusted while LUMINA_SERVER is set.
++  // Lumina: a self-hosted server's own RSA public key (PEM), the only one
++  // trusted while LUMINA_SERVER_RSA is set. Not cached for the process: the
++  // app can switch servers by closing its client and creating a new one.
++  if (const char *pem = std::getenv("LUMINA_SERVER_RSA")) {
++    vector<RsaKey> keys;
++    auto r_rsa = mtproto::RSA::from_pem_public_key(CSlice(pem));
++    if (r_rsa.is_ok()) {
++      auto rsa = r_rsa.move_as_ok();
++      auto fingerprint = rsa.get_fingerprint();
++      keys.push_back(RsaKey{std::move(rsa), fingerprint});
++    }
++    return std::make_shared<PublicRsaKeySharedMain>(std::move(keys));
++  }
+   if (is_test) {
+     static auto test_public_rsa_key = [&] {
+       vector<RsaKey> keys;

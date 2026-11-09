@@ -58,9 +58,19 @@ class ChatListCubit extends Cubit<ChatListState> {
     await loadMore();
   }
 
+  /// Chats in this list, and the users whose status their rows show.
+  var _ids = <int>{};
+  var _peers = <int>{};
+
   void _onCacheEvent(CacheEvent event) {
+    // Only what this list shows: a busy channel elsewhere, or someone's
+    // "last seen" who isn't a row here, no longer rebuilds it (each rebuild
+    // re-sorts every chat and rebuilt every visible row mid-scroll).
     final relevant = switch (event) {
-      ChatChanged() || TypingChanged() || UserChanged() || SecretChatChanged() => true,
+      ChatChanged(:final chatId, :final orderChanged) => orderChanged || _ids.contains(chatId),
+      TypingChanged(:final chatId) => _ids.contains(chatId),
+      UserChanged(:final userId) => _peers.contains(userId),
+      SecretChatChanged() => true,
       _ => false,
     };
     if (!relevant) return;
@@ -80,6 +90,11 @@ class ChatListCubit extends Cubit<ChatListState> {
           if (!cache.isProxySponsored(c)) c,
       ];
     }
+    _ids = {for (final c in chats) c.id};
+    _peers = {
+      for (final c in chats)
+        if (cache.peerUser(c) case final u?) u.id,
+    };
     emit(state.copyWith(chats: chats, revision: state.revision + 1));
   }
 

@@ -33,6 +33,9 @@ void main() {
     await settle(tester);
     expect(prefs.messageSwipe(SwipeSide.right), MessageSwipe.delete);
 
+    // The chat-list section sits below the message one.
+    await tester.ensureVisible(find.byKey(const ValueKey('chat-left')));
+    await settle(tester);
     await tester.tap(find.byKey(const ValueKey('chat-left')));
     await settle(tester);
     await tester.tap(find.text('Mute / unmute').last);

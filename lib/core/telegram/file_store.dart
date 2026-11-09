@@ -79,8 +79,17 @@ class FileStore {
     return file;
   }
 
-  Future<void> cancel(int fileId) =>
-      _client.invoke<td.Ok>(td.CancelDownloadFile(fileId: fileId, onlyIfPending: false));
+  /// Stops a download. A file the ring added to TDLib's download list
+  /// (AddFileToDownloads) is restarted by TDLib's download manager after a
+  /// plain cancel, so it leaves that list too (the downloaded part stays).
+  Future<void> cancel(int fileId) async {
+    await _client.invoke<td.Ok>(td.CancelDownloadFile(fileId: fileId, onlyIfPending: false));
+    try {
+      await _client.invoke<td.Ok>(td.RemoveFileFromDownloads(fileId: fileId, deleteFromCache: false));
+    } catch (_) {
+      // Not in the download list: nothing more to stop.
+    }
+  }
 
   void clear() => _files.clear();
 

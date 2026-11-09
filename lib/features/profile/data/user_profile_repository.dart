@@ -102,4 +102,45 @@ class UserProfileRepository {
       );
 
   Future<void> deleteContact(int userId) => _client.invoke<td.Ok>(td.RemoveContacts(userIds: [userId]));
+
+  // ---- your own account ----------------------------------------------------
+
+  /// Uploads [path] as the new main profile photo.
+  Future<void> setProfilePhoto(String path) => _client.invoke<td.Ok>(
+    td.SetProfilePhoto(
+      photo: td.InputChatPhotoStatic(photo: td.InputFileLocal(path: path)),
+      isPublic: false,
+    ),
+  );
+
+  /// Makes one of your earlier photos the main one again.
+  Future<void> setMainPhoto(int photoId) => _client.invoke<td.Ok>(
+    td.SetProfilePhoto(photo: td.InputChatPhotoPrevious(chatPhotoId: photoId), isPublic: false),
+  );
+
+  Future<void> deleteProfilePhoto(int photoId) =>
+      _client.invoke<td.Ok>(td.DeleteProfilePhoto(profilePhotoId: photoId));
+
+  Future<void> setName(String firstName, String lastName) =>
+      _client.invoke<td.Ok>(td.SetName(firstName: firstName, lastName: lastName));
+
+  Future<void> setBio(String bio) => _client.invoke<td.Ok>(td.SetBio(bio: bio));
+
+  /// Sets your public username; empty removes it.
+  Future<void> setUsername(String username) => _client.invoke<td.Ok>(td.SetUsername(username: username));
+
+  /// Whether [username] could be yours; null when it can, otherwise why not.
+  Future<String?> checkUsername(int myUserId, String username) async {
+    final r = await _client.invoke<td.CheckChatUsernameResult>(
+      td.CheckChatUsername(chatId: myUserId, username: username),
+    );
+    return switch (r) {
+      td.CheckChatUsernameResultOk() => null,
+      td.CheckChatUsernameResultUsernameInvalid() => 'Invalid username',
+      td.CheckChatUsernameResultUsernameOccupied() => 'This username is taken',
+      td.CheckChatUsernameResultUsernamePurchasable() => 'This username is for sale on Fragment',
+      td.CheckChatUsernameResultPublicChatsTooMany() => 'Too many public usernames',
+      _ => 'Not available',
+    };
+  }
 }

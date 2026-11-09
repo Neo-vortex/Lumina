@@ -144,16 +144,29 @@ class _PostStoryScreenState extends State<PostStoryScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     setState(() => _progress = 0);
+    final ffmpeg = context.read<FfmpegService>();
     String? overlay;
-    final png = await renderOverlay(_decorations, _isVideo ? const Size(720, 1280) : const Size(1080, 1920));
-    if (png != null && mounted) {
-      overlay = await context.read<FfmpegService>().tempPath('png');
-      await File(overlay).writeAsBytes(png);
+    String? composed;
+    // Photos: render the final 9:16 frame here, as the preview shows it.
+    // ffmpeg then only re-encodes it to JPEG.
+    final frame = await (_isVideo ? null : composeStoryPhoto(path, _decorations, const Size(1080, 1920)));
+    if (frame != null) {
+      composed = await ffmpeg.tempPath('png');
+      await File(composed).writeAsBytes(frame);
+    } else {
+      final png = await renderOverlay(
+        _decorations,
+        _isVideo ? const Size(720, 1280) : const Size(1080, 1920),
+      );
+      if (png != null) {
+        overlay = await ffmpeg.tempPath('png');
+        await File(overlay).writeAsBytes(png);
+      }
     }
     if (!mounted) return;
     final error = await _repo.post(
       chatId: _poster,
-      path: path,
+      path: composed ?? path,
       isVideo: _isVideo,
       caption: _caption.text.trim(),
       // Channel stories are always public.
@@ -166,6 +179,7 @@ class _PostStoryScreenState extends State<PostStoryScreen> {
         if (mounted) setState(() => _progress = p);
       },
     );
+    // [composed] stays: TDLib may still be uploading it if ffmpeg failed.
     if (overlay != null) File(overlay).delete().ignore();
     if (!mounted) return;
     if (error != null) {

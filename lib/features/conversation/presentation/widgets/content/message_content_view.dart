@@ -1,3 +1,5 @@
+import 'dice_content.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
@@ -5,6 +7,7 @@ import 'package:lumina_tdlib/api.dart' as td;
 import '../../../../../core/telegram/display.dart';
 import '../../../../../core/telegram/telegram_cache.dart';
 import 'audio_content.dart';
+import 'call_content.dart';
 import 'auto_fetch.dart';
 import 'document_content.dart';
 import 'generic_content.dart';
@@ -17,7 +20,11 @@ import 'text_content.dart';
 
 /// Content types rendered edge-to-edge (no text padding around them).
 bool isMediaContent(td.MessageContent c) => switch (c) {
-  td.MessagePhoto() || td.MessageVideo() || td.MessageAnimation() || td.MessageSticker() => true,
+  td.MessagePhoto() ||
+  td.MessageVideo() ||
+  td.MessageAnimation() ||
+  td.MessageSticker() ||
+  td.MessageDice() => true,
   td.MessageVideoNote() => true,
   _ => false,
 };
@@ -122,6 +129,12 @@ class MessageContentView extends StatelessWidget {
         message: m,
         footer: overlayFooter,
       ),
+      td.MessageDice() => DiceContent(
+        dice: m.content as td.MessageDice,
+        footer: overlayFooter,
+        // Roll for fresh throws; history shows the result.
+        animate: DateTime.now().millisecondsSinceEpoch ~/ 1000 - m.date < 20,
+      ),
       td.MessageExpiredPhoto() ||
       td.MessageExpiredVideo() ||
       td.MessageExpiredVoiceNote() ||
@@ -129,6 +142,12 @@ class MessageContentView extends StatelessWidget {
         content: m.content,
         outgoing: outgoing,
         color: textColor,
+        footer: footer,
+      ),
+      td.MessageCall() => CallContent(
+        message: m,
+        color: textColor,
+        mutedColor: mutedColor,
         footer: footer,
       ),
       _ => GenericContent(

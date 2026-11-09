@@ -1,12 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../core/config/app_config.dart';
 import '../core/media/tdlib_stream_server.dart';
+import '../core/accounts/account_store.dart';
+import 'app_root.dart';
 import '../core/storage/app_preferences.dart';
 import '../core/storage/secure_store.dart';
 import '../core/tdlib/td_client.dart';
 import '../core/tdlib/td_paths.dart';
+import '../core/tdlib/unsupported_api.dart';
 import '../core/telegram/custom_emoji_store.dart';
 import '../core/telegram/file_store.dart';
 import '../core/telegram/display.dart';
@@ -29,6 +34,9 @@ import 'lifecycle_watcher.dart';
 
 /// Composition root: wires repositories, caches and blocs, then the UI.
 /// Everything is provided above [MaterialApp] so pushed routes see it.
+/// App-wide toasts that don't belong to one screen (UnsupportedApiToasts).
+final appMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
 class LuminaApp extends StatelessWidget {
   const LuminaApp({
     super.key,
@@ -59,8 +67,20 @@ class LuminaApp extends StatelessWidget {
         RepositoryProvider(create: (_) => CustomEmojiStore(client)),
         RepositoryProvider(create: (c) => TdStreamServer(c.read<FileStore>()), dispose: (s) => s.stop()),
         RepositoryProvider(
-          create: (_) =>
-              AuthRepository(client: client, secureStore: secure, paths: paths, settings: settings),
+          create: (_) => AuthRepository(
+            client: client,
+            secureStore: secure,
+            paths: paths,
+            settings: settings,
+            onSignedOut: () async {
+              final accounts = AccountStore.current;
+              if (accounts == null) return false;
+              await accounts.removeActive();
+              // Rebuilds on the next account (or a fresh sign-in).
+              unawaited(AppRoot.reload());
+              return true;
+            },
+          ),
         ),
         RepositoryProvider(
           create: (c) => ChatsRepository(client: client, cache: c.read<TelegramCache>()),
@@ -101,11 +121,47 @@ class LuminaApp extends StatelessWidget {
           theme: buildGlowTheme(),
           themeMode: ThemeMode.dark,
           navigatorKey: appNavigatorKey,
-          builder: (context, child) =>
-              CallHost(navigatorKey: appNavigatorKey, child: child ?? const SizedBox.shrink()),
+          scaffoldMessengerKey: appMessengerKey,
+          // Settings → Appearance → Text size scales the system size.
+          builder: (context, child) => ListenableBuilder(
+            listenable: preferences.changes,
+            builder: (context, _) {
+              final scale = preferences.textScale;
+              final media = MediaQuery.of(context);
+              return MediaQuery(
+                data: media.copyWith(
+                  textScaler: scale == 1.0 ? media.textScaler : _Scaled(media.textScaler, scale),
+                ),
+                child: UnsupportedApiToasts(
+                  messengerKey: appMessengerKey,
+                  child: CallHost(navigatorKey: appNavigatorKey, child: child ?? const SizedBox.shrink()),
+                ),
+              );
+            },
+          ),
           home: const LifecycleWatcher(child: AuthGate()),
         ),
       ),
     );
   }
+}
+
+/// The system text scaler times Lumina's own text size setting.
+class _Scaled extends TextScaler {
+  const _Scaled(this.base, this.factor);
+
+  final TextScaler base;
+  final double factor;
+
+  @override
+  double scale(double fontSize) => base.scale(fontSize) * factor;
+
+  @override
+  double get textScaleFactor => base.scale(14) / 14 * factor;
+
+  @override
+  bool operator ==(Object other) => other is _Scaled && other.base == base && other.factor == factor;
+
+  @override
+  int get hashCode => Object.hash(base, factor);
 }

@@ -23,6 +23,9 @@ class ComposeFlows {
     await _create(context, (r) => r.privateChat(ids.first));
   }
 
+  /// Opens Saved Messages (your chat with yourself).
+  Future<void> savedMessages(BuildContext context) => _create(context, (r) => r.savedMessages());
+
   Future<void> newSecretChat(BuildContext context) async {
     final ids = await ContactPickerScreen.pick(context, title: 'New secret chat');
     if (ids == null || ids.isEmpty || !context.mounted) return;

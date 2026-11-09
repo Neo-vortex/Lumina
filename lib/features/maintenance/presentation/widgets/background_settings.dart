@@ -106,3 +106,34 @@ Future<void> maybeShowBatteryPrompt(
   );
   if (allow == true) await system.openBatterySettings();
 }
+
+/// Asks once per app start, when Android 14+ took away the full-screen
+/// permission: without it incoming calls on a locked phone never show the
+/// call screen (Samsung and Play-less installs often start without it).
+Future<void> maybeShowCallScreenPrompt(BuildContext context) async {
+  const system = SystemChannel();
+  bool allowed;
+  try {
+    allowed = await system.canUseFullScreenIntent();
+  } catch (_) {
+    return;
+  }
+  if (allowed || !context.mounted) return;
+  final open = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: GlowColors.surfaceHigh,
+      icon: const Icon(Icons.phone_in_talk_rounded, color: GlowColors.cyan),
+      title: const Text('Calls on the lock screen'),
+      content: const Text(
+        'Android is blocking Lumina from showing incoming calls while your phone is locked. '
+        'Allow "full screen notifications" so calls ring like a normal phone call.',
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Not now')),
+        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Allow')),
+      ],
+    ),
+  );
+  if (open == true) await system.openFullScreenIntentSettings();
+}

@@ -19,7 +19,7 @@ class SwipeSettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final prefs = context.read<AppPreferences>();
     return Scaffold(
-      appBar: AppBar(title: const Text('Swipe gestures')),
+      appBar: AppBar(title: const Text('Gestures')),
       body: ListenableBuilder(
         listenable: prefs.changes,
         builder: (context, _) {
@@ -54,6 +54,61 @@ class SwipeSettingsScreen extends StatelessWidget {
                     title: const Text('Reaction for "React"'),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => _pickEmoji(context, prefs),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              _Card(
+                title: 'Double tap a message',
+                preview: const SizedBox.shrink(),
+                children: [
+                  ListTile(
+                    key: const ValueKey('double-tap'),
+                    leading: _doubleTapLook(prefs.doubleTap, prefs.doubleTapEmoji).leading,
+                    title: const Text('Action'),
+                    subtitle: Text(_doubleTapLook(prefs.doubleTap, prefs.doubleTapEmoji).label),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () async {
+                      final v = await showGlowSheet<MessageDoubleTap>(
+                        context,
+                        title: 'Double tap a message',
+                        builder: (context) => Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (final a in MessageDoubleTap.values)
+                              ListTile(
+                                leading: _doubleTapLook(a, prefs.doubleTapEmoji).leading,
+                                title: Text(_doubleTapLook(a, prefs.doubleTapEmoji).label),
+                                trailing: a == prefs.doubleTap
+                                    ? const Icon(Icons.check_rounded, color: GlowColors.violet)
+                                    : null,
+                                onTap: () => Navigator.pop(context, a),
+                              ),
+                            const SizedBox(height: 8),
+                          ],
+                        ),
+                      );
+                      if (v != null) prefs.doubleTap = v;
+                    },
+                  ),
+                  if (prefs.doubleTap == MessageDoubleTap.react)
+                    ListTile(
+                      key: const ValueKey('double-tap-emoji'),
+                      leading: Text(prefs.doubleTapEmoji, style: const TextStyle(fontSize: 24)),
+                      title: const Text('Reaction'),
+                      subtitle: const Text('Any emoji the chat allows'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () async {
+                        final e = await _chooseEmoji(context, prefs.doubleTapEmoji, allowCustom: true);
+                        if (e != null) prefs.doubleTapEmoji = e;
+                      },
+                    ),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Text(
+                      'With an action set, a single tap waits a moment to tell taps apart. "Nothing" keeps it instant.',
+                      style: TextStyle(color: GlowColors.textMuted, fontSize: 12),
+                    ),
                   ),
                 ],
               ),
@@ -124,35 +179,63 @@ class SwipeSettingsScreen extends StatelessWidget {
       );
 
   Future<void> _pickEmoji(BuildContext context, AppPreferences prefs) async {
-    final e = await showGlowSheet<String>(
+    final e = await _chooseEmoji(context, prefs.swipeEmoji);
+    if (e != null) prefs.swipeEmoji = e;
+  }
+
+  /// The common reactions, plus (with [allowCustom]) a field for any emoji.
+  static Future<String?> _chooseEmoji(BuildContext context, String current, {bool allowCustom = false}) {
+    final custom = TextEditingController();
+    return showGlowSheet<String>(
       context,
       title: 'Reaction',
       builder: (context) => Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 8,
-          runSpacing: 8,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            for (final e in emojis)
-              InkResponse(
-                onTap: () => Navigator.pop(context, e),
-                radius: 30,
-                child: Container(
-                  width: 56,
-                  height: 56,
-                  alignment: Alignment.center,
-                  decoration: e == prefs.swipeEmoji
-                      ? BoxDecoration(shape: BoxShape.circle, color: GlowColors.violet.withValues(alpha: 0.2))
-                      : null,
-                  child: Text(e, style: const TextStyle(fontSize: 30)),
-                ),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final e in emojis)
+                  InkResponse(
+                    onTap: () => Navigator.pop(context, e),
+                    radius: 30,
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      alignment: Alignment.center,
+                      decoration: e == current
+                          ? BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: GlowColors.violet.withValues(alpha: 0.2),
+                            )
+                          : null,
+                      child: Text(e, style: const TextStyle(fontSize: 30)),
+                    ),
+                  ),
+              ],
+            ),
+            if (allowCustom) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: custom,
+                maxLength: 16,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 26),
+                decoration: const InputDecoration(hintText: 'Or type any emoji', counterText: ''),
+                onSubmitted: (v) {
+                  final e = v.characters.firstOrNull;
+                  if (e != null) Navigator.pop(context, e);
+                },
               ),
+            ],
           ],
         ),
       ),
     );
-    if (e != null) prefs.swipeEmoji = e;
   }
 }
 
@@ -180,6 +263,44 @@ _Look _messageLook(MessageSwipe a, String emoji) => switch (a) {
     GlowColors.coral,
   ),
   MessageSwipe.none => const _Look(
+    'Nothing',
+    Icon(Icons.block_rounded, color: GlowColors.textMuted),
+    Colors.transparent,
+  ),
+};
+
+_Look _doubleTapLook(MessageDoubleTap a, String emoji) => switch (a) {
+  MessageDoubleTap.react => _Look(
+    'React with $emoji',
+    Text(emoji, style: const TextStyle(fontSize: 22)),
+    GlowColors.magenta,
+  ),
+  MessageDoubleTap.reply => const _Look(
+    'Reply',
+    Icon(Icons.reply_rounded, color: GlowColors.cyan),
+    GlowColors.cyan,
+  ),
+  MessageDoubleTap.forward => const _Look(
+    'Forward',
+    Icon(Icons.shortcut_rounded, color: GlowColors.violet),
+    GlowColors.violet,
+  ),
+  MessageDoubleTap.copy => const _Look(
+    'Copy text',
+    Icon(Icons.copy_rounded, color: GlowColors.teal),
+    GlowColors.teal,
+  ),
+  MessageDoubleTap.select => const _Look(
+    'Select',
+    Icon(Icons.check_circle_outline_rounded, color: GlowColors.cyan),
+    GlowColors.cyan,
+  ),
+  MessageDoubleTap.pin => const _Look(
+    'Pin / unpin',
+    Icon(Icons.push_pin_rounded, color: GlowColors.amber),
+    GlowColors.amber,
+  ),
+  MessageDoubleTap.none => const _Look(
     'Nothing',
     Icon(Icons.block_rounded, color: GlowColors.textMuted),
     Colors.transparent,

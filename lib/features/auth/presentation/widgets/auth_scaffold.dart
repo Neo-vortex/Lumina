@@ -19,10 +19,20 @@ class AuthExtras {
 /// Shared frame for every auth screen: drifting backdrop, sigil, title,
 /// subtitle, the pending notice (if any) and the screen's form.
 class AuthScaffold extends StatelessWidget {
-  const AuthScaffold({super.key, required this.title, required this.children, this.subtitle});
+  const AuthScaffold({
+    super.key,
+    required this.title,
+    required this.children,
+    this.subtitle,
+    this.subtitleMinLines = 1,
+  });
 
   final String title;
   final String? subtitle;
+
+  /// Room kept for the subtitle, so swapping a longer and a shorter one
+  /// (phone / bot token) doesn't shift the form below.
+  final int subtitleMinLines;
   final List<Widget> children;
 
   @override
@@ -67,10 +77,24 @@ class AuthScaffold extends StatelessWidget {
                     ),
                     if (subtitle != null) ...[
                       const SizedBox(height: 10),
-                      Text(
-                        subtitle!,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: GlowColors.textMuted, fontSize: 15, height: 1.4),
+                      Stack(
+                        alignment: Alignment.topCenter,
+                        children: [
+                          // Invisible: reserves [subtitleMinLines] lines.
+                          Text(
+                            '\n' * (subtitleMinLines - 1),
+                            style: const TextStyle(fontSize: 15, height: 1.4, color: Color(0x00000000)),
+                          ),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 180),
+                            child: Text(
+                              subtitle!,
+                              key: ValueKey(subtitle),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: GlowColors.textMuted, fontSize: 15, height: 1.4),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                     if (notice != null) ...[

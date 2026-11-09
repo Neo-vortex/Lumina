@@ -71,7 +71,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       case td.AuthorizationStateWaitPassword(:final passwordHint, :final hasRecoveryEmailAddress):
         emit(_enter(AuthWaitPassword(hint: passwordHint, hasRecoveryEmail: hasRecoveryEmailAddress)));
       case td.AuthorizationStateWaitRegistration(:final termsOfService):
-        emit(_enter(AuthWaitRegistration(termsOfService.text.text)));
+        emit(_enter(AuthWaitRegistration(termsOfService?.text.text ?? '')));
       case td.AuthorizationStateWaitOtherDeviceConfirmation(:final link):
         emit(_enter(AuthWaitOtherDevice(link)));
       case td.AuthorizationStateWaitPremiumPurchase():
@@ -113,11 +113,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         notice: intent == _CloseIntent.none ? 'Your session ended. Sign in again.' : null,
       ),
     );
+    // Signed out on purpose: with several accounts the app switches to the
+    // next one (it restarts the client itself).
+    if (intent != _CloseIntent.none && await (_repository.onSignedOut?.call() ?? Future.value(false))) return;
     await _repository.recreateClient();
   }
 
   Future<void> _onSubmitted(AuthSubmitted event, Emitter<AuthState> emit) async {
     if (state.busy || state.isFloodBlocked(_now())) return;
+    // A late second submit of the code (auto-submit, then the button) after
+    // TDLib moved on, e.g. to registration: TDLib would reject it as
+    // "unexpected".
+    if (event is AuthCodeSubmitted && state.step is! AuthWaitCode) return;
 
     // TDLib accepts bot tokens only in WaitPhoneNumber; while a code is
     // pending we are only *showing* phone entry.

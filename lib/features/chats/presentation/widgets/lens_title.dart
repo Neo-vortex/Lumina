@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/telegram/widgets/connection_status.dart';
+import '../../../../core/theme/glow_colors.dart';
 import '../../domain/lens_entry.dart';
 import 'chat_list_extensions.dart';
 
@@ -37,6 +38,11 @@ class LensTitle extends StatelessWidget {
           child: ConnectionAwareTitle(
             title: entry.title,
             glow: onTap == null ? null : color,
+            // The lens colour into cyan (into violet when the lens is cyan-ish).
+            gradient: [
+              Color.lerp(color, Colors.white, 0.15)!,
+              (color.b > 0.7 && color.r < 0.4) ? GlowColors.violet : GlowColors.cyan,
+            ],
             onStatusTap: () => ChatListExtensions.of(context).openConnectionSettings(context),
           ),
         ),

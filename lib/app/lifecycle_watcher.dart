@@ -1,16 +1,24 @@
+import '../core/accounts/account_store.dart';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
+import '../core/platform/system_channel.dart';
 import '../core/storage/app_preferences.dart';
 import '../core/tdlib/td_client.dart';
 import '../features/auth/bloc/auth_bloc.dart';
 import '../features/auth/domain/auth_step.dart';
+import '../core/build/build_flavor.dart';
 import '../features/assistant/data/action_extractor.dart';
 import '../features/maintenance/data/storage_repository.dart';
 import '../features/transcription/data/whisper_service.dart';
 import '../features/maintenance/presentation/widgets/background_settings.dart';
 import '../features/search/data/message_indexer.dart';
+import '../features/session_backup/data/session_backup.dart';
+import '../features/session_backup/presentation/backup_on_login.dart';
+import '../core/storage/secure_store.dart';
+import '../core/telegram/display.dart';
 
 /// App lifecycle duties (spec §10.2):
 /// * re-checks the TDLib receive loop on resume (the process may have been
@@ -52,7 +60,7 @@ class _LifecycleWatcherState extends State<LifecycleWatcher> with WidgetsBinding
   /// Low-RAM devices (4 GB): give back the on-device models' memory first.
   @override
   void didHaveMemoryPressure() {
-    context.read<ActionExtractor>().releaseMemory().ignore();
+    if (kOnDeviceLlm) context.read<ActionExtractor>().releaseMemory().ignore();
     context.read<WhisperService>().releaseMemory();
   }
 
@@ -88,12 +96,50 @@ class _LifecycleWatcherState extends State<LifecycleWatcher> with WidgetsBinding
         final step = state.step;
         if (step is AuthReady) {
           context.read<MessageIndexer>().activate(isBot: step.capabilities.isBot).ignore();
+          // The account switcher shows who each account is.
+          AccountStore.current
+              ?.updateActive(
+                userId: step.me.id,
+                name: Display.userName(step.me),
+                phone: step.me.phoneNumber,
+                username: step.me.usernames?.activeUsernames.firstOrNull,
+              )
+              .ignore();
           context.read<StorageRepository>().autoClean().catchError((_) {}).ignore();
-          maybeShowBatteryPrompt(
-            context,
-            alreadyShown: _prefs.batteryPromptShown,
-            markShown: () => _prefs.batteryPromptShown = true,
-          ).ignore();
+          // Session backup: on a custom server, offer it once; then back up
+          // now (if set up, also from the login screen) and about daily.
+          final backup = context.read<SessionBackupService>();
+          final me = step.me;
+          final label = '${Display.userName(me)}${me.phoneNumber.isEmpty ? '' : ' (+${me.phoneNumber})'}';
+          (step.capabilities.isBot
+                  ? Future<void>.value()
+                  : offerCustomServerBackup(context, backup, context.read<SecureStore>()))
+              .catchError((_) {})
+              .then((_) => backup.onSignedIn(me.id, label: label))
+              .catchError((_) {})
+              .ignore();
+          // Without POST_NOTIFICATIONS (Android 13+) every message
+          // notification is dropped silently; ask first, then the battery
+          // prompt.
+          final battery = context;
+          (step.capabilities.isBot ? Future.value(true) : const SystemChannel().requestNotifications())
+              .catchError((_) => false)
+              .then((_) {
+                if (!battery.mounted) return;
+                maybeShowBatteryPrompt(
+                      battery,
+                      alreadyShown: _prefs.batteryPromptShown,
+                      markShown: () => _prefs.batteryPromptShown = true,
+                    )
+                    .then((_) {
+                      if (battery.mounted && !step.capabilities.isBot) {
+                        return maybeShowCallScreenPrompt(battery);
+                      }
+                    })
+                    .catchError((_) {})
+                    .ignore();
+              })
+              .ignore();
         }
       },
       child: widget.child,

@@ -13,10 +13,13 @@ import '../telegram_cache.dart';
 /// slow proxy doesn't keep the screen drawing. Tapping the capsule runs
 /// [onStatusTap] (connection and proxy settings). Announced to TalkBack.
 class ConnectionAwareTitle extends StatefulWidget {
-  const ConnectionAwareTitle({super.key, required this.title, this.glow, this.onStatusTap});
+  const ConnectionAwareTitle({super.key, required this.title, this.glow, this.gradient, this.onStatusTap});
 
   final String title;
   final Color? glow;
+
+  /// Paints the title in this gradient (left to right).
+  final List<Color>? gradient;
   final VoidCallback? onStatusTap;
 
   @override
@@ -57,6 +60,40 @@ class _ConnectionAwareTitleState extends State<ConnectionAwareTitle> with Single
     super.dispose();
   }
 
+  Widget _title() {
+    const base = TextStyle(fontSize: 22, fontWeight: FontWeight.w600);
+    final glow = widget.glow;
+    final gradient = widget.gradient;
+    final shadows = glow == null ? null : [Shadow(color: glow.withValues(alpha: 0.7), blurRadius: 14)];
+    if (gradient == null || gradient.length < 2) {
+      return Text(
+        widget.title,
+        overflow: TextOverflow.ellipsis,
+        style: base.copyWith(shadows: shadows),
+      );
+    }
+    // The glow under, the gradient-filled letters over it.
+    return Stack(
+      children: [
+        if (shadows != null)
+          Text(
+            widget.title,
+            overflow: TextOverflow.ellipsis,
+            style: base.copyWith(color: Colors.transparent, shadows: shadows),
+          ),
+        ShaderMask(
+          blendMode: BlendMode.srcIn,
+          shaderCallback: (bounds) => LinearGradient(colors: gradient).createShader(bounds),
+          child: Text(
+            widget.title,
+            overflow: TextOverflow.ellipsis,
+            style: base.copyWith(color: Colors.white),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.read<TelegramCache>().connectionState;
@@ -70,19 +107,7 @@ class _ConnectionAwareTitleState extends State<ConnectionAwareTitle> with Single
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Flexible(
-          child: Text(
-            widget.title,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w600,
-              shadows: widget.glow == null
-                  ? null
-                  : [Shadow(color: widget.glow!.withValues(alpha: 0.7), blurRadius: 14)],
-            ),
-          ),
-        ),
+        Flexible(child: _title()),
         AnimatedSize(
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOutCubic,

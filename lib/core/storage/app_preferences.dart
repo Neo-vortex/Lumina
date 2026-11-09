@@ -1,3 +1,5 @@
+import '../widgets/lumina_glass.dart' show GlassMode;
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -5,6 +7,12 @@ import '../gestures/swipe_actions.dart';
 
 /// How the chat-list title switches folders.
 enum FolderPickerStyle { gesture, classic }
+
+/// Which encoding of a Telegram video to fetch and play. Telegram keeps
+/// lower-resolution copies beside the upload (a 35 MB clip may have a 6 MB
+/// 480p one): [low] takes the smallest, [auto] the best up to 720p, and
+/// [original] the upload itself.
+enum VideoQuality { auto, original, low }
 
 /// Non-secret user preferences, persisted with shared_preferences. Listen to
 /// [changes] to react immediately.
@@ -21,10 +29,14 @@ class AppPreferences {
   /// Fires after any preference changes.
   Listenable get changes => _changes;
 
+  /// The app's instance once loaded, for code without a BuildContext (e.g.
+  /// which video file a message stands for).
+  static AppPreferences? current;
+
   static Future<AppPreferences> load() async {
     final prefs = AppPreferences(SharedPreferencesAsync());
     await prefs._loadAll();
-    return prefs;
+    return current = prefs;
   }
 
   Future<void> _loadAll() async {
@@ -110,6 +122,15 @@ class AppPreferences {
   void setChatSwipe(SwipeSide side, ChatSwipe v) => _set('swipe.chat.${side.name}', v.name);
 
   /// The reaction a "React" message swipe sends.
+  /// Double-tapping a message: react with [doubleTapEmoji] by default.
+  MessageDoubleTap get doubleTap =>
+      _enum(MessageDoubleTap.values, 'doubleTap.message') ?? MessageDoubleTap.react;
+  set doubleTap(MessageDoubleTap v) => _set('doubleTap.message', v.name);
+
+  /// Any emoji (the chat must allow it as a reaction).
+  String get doubleTapEmoji => _string('doubleTap.emoji') ?? '❤️';
+  set doubleTapEmoji(String v) => _set('doubleTap.emoji', v);
+
   String get swipeEmoji => _string('swipe.emoji') ?? '❤️';
   set swipeEmoji(String v) => _set('swipe.emoji', v);
 
@@ -159,6 +180,42 @@ class AppPreferences {
 
   double get backdropDim => _double('backdrop.dim', 0.35);
   set backdropDim(double v) => _set('backdrop.dim', v.clamp(0.0, 0.9));
+
+  /// Chat list background: 'aurora' (drifting glow), 'plain', 'photo',
+  /// 'telegram' (a gallery wallpaper) or 'fill'.
+  String get listBackdropKind => _string('listBackdrop.kind') ?? 'aurora';
+  set listBackdropKind(String v) => _set('listBackdrop.kind', v);
+
+  String? get listBackdropPath => _string('listBackdrop.path');
+  set listBackdropPath(String? v) => v == null ? _remove('listBackdrop.path') : _set('listBackdrop.path', v);
+
+  int? get listBackdropFileId => (_values['listBackdrop.fileId'] as num?)?.toInt();
+  set listBackdropFileId(int? v) =>
+      v == null ? _remove('listBackdrop.fileId') : _set('listBackdrop.fileId', v);
+
+  List<int> get listBackdropColors =>
+      _string('listBackdrop.colors')?.split(',').map(int.parse).toList() ?? const [0x1B1F3B, 0x0E1220];
+  set listBackdropColors(List<int> v) => _set('listBackdrop.colors', v.join(','));
+
+  double get listBackdropBlur => _double('listBackdrop.blur', 8);
+  set listBackdropBlur(double v) => _set('listBackdrop.blur', v.clamp(0.0, 30.0));
+
+  /// Photos sit under chat rows, so they start well dimmed.
+  double get listBackdropDim => _double('listBackdrop.dim', 0.55);
+  set listBackdropDim(double v) => _set('listBackdrop.dim', v.clamp(0.0, 0.9));
+
+  /// Let the aurora drift (a slow, low-frame-rate loop).
+  bool get listAuroraDrift => _bool('listBackdrop.drift', true);
+  set listAuroraDrift(bool v) => _set('listBackdrop.drift', v);
+
+  /// Glass in the chat header and composer: full (liquid glass), light (a
+  /// plain blur) or off (solid, the smoothest scrolling).
+  GlassMode get glassMode => _enum(GlassMode.values, 'ui.glass') ?? GlassMode.light;
+  set glassMode(GlassMode v) => _set('ui.glass', v.name);
+
+  /// Text size across the app: 0.85 … 1.4 times the system size.
+  double get textScale => _double('ui.textScale', 1.0);
+  set textScale(double v) => _set('ui.textScale', v.clamp(0.85, 1.4));
 
   /// Play animated emoji, reactions and custom emoji; off shows them static.
   bool get animatedEmoji => _bool('emoji.animated', true);
@@ -219,8 +276,18 @@ class AppPreferences {
   double get playbackSpeed => _double('media.playbackSpeed', 1.0);
   set playbackSpeed(double v) => _set('media.playbackSpeed', v.clamp(0.5, 4.0));
 
-  bool get autoplayVideos => _bool('media.autoplayVideos', true);
-  set autoplayVideos(bool v) => _set('media.autoplayVideos', v);
+  /// Downloaded videos start playing (muted) in the chat once scrolling
+  /// settles on them. Off by default: they wait for their play button.
+  bool get autoplayVideos => _bool('media.autoplayInline', false);
+  set autoplayVideos(bool v) => _set('media.autoplayInline', v);
+
+  /// A soft sound when a message goes out (not on silent or vibrate).
+  bool get sendSound => _bool('media.sendSound', true);
+  set sendSound(bool v) => _set('media.sendSound', v);
+
+  /// The quality videos download and play in by default.
+  VideoQuality get videoQuality => _enum(VideoQuality.values, 'media.videoQuality') ?? VideoQuality.low;
+  set videoQuality(VideoQuality v) => _set('media.videoQuality', v.name);
 
   // ---- Dictation (Whisper) ---------------------------------------------------
 

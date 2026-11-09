@@ -26,7 +26,16 @@ class StickerContent extends StatelessWidget {
                 ? Center(child: Text(sticker.emoji, style: const TextStyle(fontSize: 64)))
                 : TdFileImage(file: file, fit: BoxFit.contain, semanticLabel: '${sticker.emoji} sticker'),
           ),
-          footer,
+          // No bubble behind a sticker: the time sits on a small dark pill
+          // so it reads over any wallpaper.
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: footer,
+          ),
         ],
       ),
     );

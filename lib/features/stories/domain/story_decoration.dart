@@ -251,3 +251,55 @@ Future<Uint8List?> renderOverlay(List<StoryDecoration> decorations, Size frame) 
   image.dispose();
   return data?.buffer.asUint8List();
 }
+
+/// The finished story photo as a PNG of [frame] size: [path] letterboxed on
+/// black (exactly as the editor previews it) with the burned-in decorations.
+///
+/// Decoded by the same platform codec the editor preview uses, so camera
+/// HEIC/HEIF photos (tiled; ffmpeg may only see one tile) and EXIF-rotated
+/// JPEGs come out as the user saw them. Null when the photo can't be decoded.
+Future<Uint8List?> composeStoryPhoto(String path, List<StoryDecoration> decorations, Size frame) async {
+  final ImmutableBuffer buffer;
+  try {
+    buffer = await ImmutableBuffer.fromFilePath(path);
+  } catch (_) {
+    return null;
+  }
+  // Decode near the output size: a 200 MP original must not land in memory.
+  final limit = math.max(frame.width, frame.height) * 1.5;
+  Image? photo;
+  try {
+    final codec = await instantiateImageCodecWithSize(
+      buffer,
+      getTargetSize: (w, h) {
+        final s = math.min(1.0, limit / math.max(w, h));
+        return TargetImageSize(width: (w * s).round(), height: (h * s).round());
+      },
+    );
+    photo = (await codec.getNextFrame()).image;
+    codec.dispose();
+  } catch (_) {
+    return null;
+  } finally {
+    buffer.dispose();
+  }
+  final recorder = PictureRecorder();
+  final canvas = Canvas(recorder, Offset.zero & frame);
+  canvas.drawRect(Offset.zero & frame, Paint()..color = const Color(0xFF000000));
+  final src = Size(photo.width.toDouble(), photo.height.toDouble());
+  final fitted = applyBoxFit(BoxFit.contain, src, frame);
+  canvas.drawImageRect(
+    photo,
+    Offset.zero & src,
+    Alignment.center.inscribe(fitted.destination, Offset.zero & frame),
+    Paint()..filterQuality = FilterQuality.high,
+  );
+  for (final d in decorations.where((d) => d.burned)) {
+    DecorationPainter.paint(canvas, frame, d);
+  }
+  final image = await recorder.endRecording().toImage(frame.width.round(), frame.height.round());
+  photo.dispose();
+  final data = await image.toByteData(format: ImageByteFormat.png);
+  image.dispose();
+  return data?.buffer.asUint8List();
+}

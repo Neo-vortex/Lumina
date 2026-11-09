@@ -192,6 +192,32 @@ class FfmpegService {
     return ok ? out : null;
   }
 
+  /// A sharp still for previewing [video] before sending: the frame at
+  /// [at] (or the first one for very short clips), up to [maxSide] px,
+  /// rotation applied.
+  Future<String?> previewFrame(
+    String video, {
+    Duration at = const Duration(seconds: 1),
+    int maxSide = 1080,
+  }) async {
+    final out = await tempPath('jpg');
+    List<String> args(Duration t) => [
+      '-ss',
+      (t.inMilliseconds / 1000).toStringAsFixed(2),
+      '-i',
+      video,
+      '-frames:v',
+      '1',
+      '-vf',
+      "scale='if(gt(iw,ih),min($maxSide,iw),-2)':'if(gt(iw,ih),-2,min($maxSide,ih))'",
+      '-q:v',
+      '3',
+      out,
+    ];
+    if (await run(args(at)) && File(out).existsSync() && File(out).lengthSync() > 0) return out;
+    return await run(args(Duration.zero)) ? out : null;
+  }
+
   /// A music file's embedded cover art as a ≤ 320 px JPEG (what TDLib
   /// accepts as a thumbnail), or null when it has none.
   Future<String?> coverArt(String audio) async {
@@ -219,7 +245,9 @@ class FfmpegService {
     return ok ? out : null;
   }
 
-  /// WAV/any → OGG/Opus voice note, the format Telegram clients expect.
+  /// WAV/any → OGG/Opus voice note, the format Telegram clients expect: Opus in Ogg, mono, 48 kHz, at
+  /// 64 kbit/s VBR tuned for fidelity ("audio"), not the 32 kbit/s "voip"
+  /// setting that made voices sound thin.
   Future<String?> toVoiceNote(String input) async {
     final out = await tempPath('ogg');
     final ok = await run([
@@ -233,9 +261,13 @@ class FfmpegService {
       '-c:a',
       'libopus',
       '-b:a',
-      '32k',
+      '64k',
+      '-vbr',
+      'on',
+      '-compression_level',
+      '10',
       '-application',
-      'voip',
+      'audio',
       out,
     ]);
     return ok ? out : null;

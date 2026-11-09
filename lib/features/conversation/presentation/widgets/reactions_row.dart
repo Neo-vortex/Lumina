@@ -18,9 +18,13 @@ class ReactionsRow extends StatelessWidget {
     required this.onTap,
     this.pending = const {},
     this.burst,
+    this.showCount = true,
   });
 
   final List<td.MessageReaction> reactions;
+
+  /// Off in private chats: there are only two of you, so a number adds nothing.
+  final bool showCount;
   final void Function(String emoji) onTap;
 
   /// Emoji (no variation selector) waiting for TDLib's answer.
@@ -43,6 +47,7 @@ class ReactionsRow extends StatelessWidget {
               key: ValueKey(_plain(emoji)),
               emoji: emoji,
               count: r.totalCount,
+              showCount: showCount,
               chosen: r.isChosen,
               pending: pending.contains(_plain(emoji)),
               burst: burst != null && _plain(burst!.emoji) == _plain(emoji) ? burst!.serial : null,
@@ -58,6 +63,7 @@ class ReactionChip extends StatefulWidget {
     super.key,
     required this.emoji,
     required this.count,
+    this.showCount = true,
     required this.chosen,
     required this.pending,
     required this.burst,
@@ -66,6 +72,7 @@ class ReactionChip extends StatefulWidget {
 
   final String emoji;
   final int count;
+  final bool showCount;
   final bool chosen;
   final bool pending;
 
@@ -83,6 +90,15 @@ class _ReactionChipState extends State<ReactionChip> with SingleTickerProviderSt
   final _link = LayerLink();
   final _portal = OverlayPortalController();
   int? _played;
+
+  /// The effect is playing over the chip: its emoji waits until it ends, so
+  /// the static icon doesn't sit under the animation (as in Telegram).
+  var _veiled = false;
+
+  void _burstDone() {
+    _portal.hide();
+    if (mounted && _veiled) setState(() => _veiled = false);
+  }
 
   @override
   void initState() {
@@ -106,12 +122,14 @@ class _ReactionChipState extends State<ReactionChip> with SingleTickerProviderSt
     if (burst != null && burst != _played) {
       _played = burst;
       if (Motion.ambientEnabled(context)) {
+        _veiled = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _portal.show();
         });
       }
     } else if (burst == null && _portal.isShowing) {
       _portal.hide();
+      _veiled = false;
     }
   }
 
@@ -132,22 +150,22 @@ class _ReactionChipState extends State<ReactionChip> with SingleTickerProviderSt
         link: _link,
         child: OverlayPortal(
           controller: _portal,
-          overlayChildBuilder: (context) => _Burst(link: _link, emoji: widget.emoji, onDone: _portal.hide),
+          overlayChildBuilder: (context) => _Burst(link: _link, emoji: widget.emoji, onDone: _burstDone),
           child: InkWell(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(19),
             onTap: widget.onTap,
             child: AnimatedBuilder(
               animation: _pulse,
               builder: (context, child) {
                 final t = Curves.easeInOut.transform(_pulse.value);
                 return Container(
-                  constraints: const BoxConstraints(minHeight: 32, minWidth: 48),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  constraints: const BoxConstraints(minHeight: 38, minWidth: 54),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                   decoration: BoxDecoration(
                     color: widget.chosen
                         ? GlowColors.violetDeep.withValues(alpha: 0.55)
                         : GlowColors.surfaceHigh,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(19),
                     border: Border.all(
                       color: Color.lerp(
                         widget.chosen ? GlowColors.violet : GlowColors.outline,
@@ -156,10 +174,7 @@ class _ReactionChipState extends State<ReactionChip> with SingleTickerProviderSt
                       )!,
                       width: 1 + 0.6 * t,
                     ),
-                    boxShadow: [
-                      if (widget.chosen) ...glow(GlowColors.violet, intensity: 0.3),
-                      if (t > 0) ...glow(GlowColors.cyan, intensity: 0.4 + 0.6 * t),
-                    ],
+                    boxShadow: [if (t > 0) ...glow(GlowColors.cyan, intensity: 0.4 + 0.6 * t)],
                   ),
                   child: child,
                 );
@@ -167,23 +182,29 @@ class _ReactionChipState extends State<ReactionChip> with SingleTickerProviderSt
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(widget.emoji, style: const TextStyle(fontSize: 15)),
-                  const SizedBox(width: 4),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    transitionBuilder: (child, animation) => FadeTransition(
-                      opacity: animation,
-                      child: SlideTransition(
-                        position: Tween(begin: const Offset(0, 0.4), end: Offset.zero).animate(animation),
-                        child: child,
+                  AnimatedOpacity(
+                    opacity: _veiled ? 0 : 1,
+                    duration: const Duration(milliseconds: 180),
+                    child: Text(widget.emoji, style: const TextStyle(fontSize: 22, height: 1.1)),
+                  ),
+                  if (widget.showCount) ...[
+                    const SizedBox(width: 5),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween(begin: const Offset(0, 0.4), end: Offset.zero).animate(animation),
+                          child: child,
+                        ),
+                      ),
+                      child: Text(
+                        '${widget.count}',
+                        key: ValueKey(widget.count),
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                       ),
                     ),
-                    child: Text(
-                      '${widget.count}',
-                      key: ValueKey(widget.count),
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -230,6 +251,9 @@ class _BurstState extends State<_Burst> {
       top: 0,
       child: CompositedTransformFollower(
         link: widget.link,
+        // Leaving the chat mid-effect unlinks the chip; without this the rest
+        // of the effect played at the overlay's corner.
+        showWhenUnlinked: false,
         // Centred on the chip's emoji (its left part).
         targetAnchor: const Alignment(-0.45, 0),
         followerAnchor: Alignment.center,

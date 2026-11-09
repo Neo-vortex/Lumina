@@ -11,10 +11,18 @@ import '../../helpers/fakes.dart';
 import 'downloads_cubit_test.dart' show counts, dl;
 
 void main() {
-  Future<DownloadsCubit> pump(WidgetTester tester, List<td.FileDownload> active, {void Function()? onOpen}) async {
+  Future<DownloadsCubit> pump(
+    WidgetTester tester,
+    List<td.FileDownload> active, {
+    void Function()? onOpen,
+  }) async {
     final client = FakeTdClient()
       ..respond = (f) => f is td.SearchFileDownloads
-          ? td.FoundFileDownloads(totalCounts: counts, files: f.onlyActive ? active : const [], nextOffset: '')
+          ? td.FoundFileDownloads(
+              totalCounts: counts,
+              files: f.onlyActive ? active : const [],
+              nextOffset: '',
+            )
           : const td.Ok();
     final cubit = DownloadsCubit(repository: DownloadsRepository(client), files: FileStore(client));
     await cubit.start();
@@ -22,7 +30,9 @@ void main() {
     await tester.pumpWidget(
       BlocProvider.value(
         value: cubit,
-        child: MaterialApp(home: Scaffold(body: DownloadsRing(onOpen: onOpen ?? () {}))),
+        child: MaterialApp(
+          home: Scaffold(body: DownloadsRing(onOpen: onOpen ?? () {})),
+        ),
       ),
     );
     await tester.pump();

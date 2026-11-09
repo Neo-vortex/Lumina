@@ -20,6 +20,7 @@ import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import io.flutter.plugin.common.BinaryMessenger
@@ -49,6 +50,9 @@ class CallChannel(
     private var previousMode = AudioManager.MODE_NORMAL
     private var ringtone: Ringtone? = null
     private var vibrating = false
+
+    /** Lights a dark (locked) screen while it rings. */
+    private var screenWake: PowerManager.WakeLock? = null
 
     /** A notification action that arrived before Dart listened. */
     private var pendingAction: String? = null
@@ -454,6 +458,16 @@ class CallChannel(
         stopRinging()
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(CallService.INCOMING_ID, CallService.incoming(context, title, video))
+        try {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            if (!pm.isInteractive) {
+                screenWake = pm.newWakeLock(
+                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                    "lumina:incoming-call",
+                ).apply { acquire(60_000) }
+            }
+        } catch (_: Exception) {
+        }
         if (audio.ringerMode == AudioManager.RINGER_MODE_NORMAL) {
             ringtone = RingtoneManager.getRingtone(context, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE))?.apply {
                 audioAttributes = AudioAttributes.Builder()
@@ -477,6 +491,8 @@ class CallChannel(
     }
 
     private fun stopRinging() {
+        screenWake?.let { if (it.isHeld) it.release() }
+        screenWake = null
         ringtone?.stop()
         ringtone = null
         if (vibrating) {

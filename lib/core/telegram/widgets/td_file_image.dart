@@ -110,7 +110,19 @@ class _TdFileImageState extends State<TdFileImage> {
           cacheWidth: cacheWidth,
           gaplessPlayback: true,
           semanticLabel: widget.semanticLabel,
-          frameBuilder: (context, child, frame, sync) => sync || frame != null ? child : placeholder,
+          // Ready at once (already decoded, e.g. scrolling back): no fade.
+          // Arriving later: a short cross-fade over the placeholder, not a pop.
+          frameBuilder: (context, child, frame, sync) {
+            if (sync) return child;
+            if (frame == null) return placeholder;
+            return Stack(
+              fit: StackFit.passthrough,
+              children: [
+                placeholder,
+                FadeInOnce(child: child),
+              ],
+            );
+          },
           errorBuilder: (_, _, _) => placeholder,
         );
         if (widget.fullResolution) return image(null);

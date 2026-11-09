@@ -7,8 +7,11 @@ import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../core/telegram/widgets/formatted_text_view.dart';
 import '../../../../core/theme/glow_colors.dart';
+import 'reaction_panel.dart';
 
 enum MessageAction {
+  retry,
+  retryAll,
   reply,
   copy,
   selectText,
@@ -51,13 +54,20 @@ Future<({MessageAction? action, String? reaction})?> showMessageMenu(
   Widget Function(String emoji, double size)? reactionIcon,
   Future<String?>? aiSuggestion,
   List<ExtraMenuEntry> extras = const [],
+  ReactionCatalog? reactionCatalog,
+  int failedInChat = 0,
 }) {
   HapticFeedback.selectionClick();
   final p = properties;
   final hasText = _plainText(message) != null;
   final canSave = !protectedContent && (p?.canBeSaved ?? true);
+  final failed = message.sendingState is td.MessageSendingStateFailed;
+  final canRetry = failed;
   final items = <(MessageAction, IconData, String, Color?)>[
-    if (p?.canBeReplied ?? true) (MessageAction.reply, Icons.reply_rounded, 'Reply', null),
+    if (canRetry) (MessageAction.retry, Icons.refresh_rounded, 'Retry', GlowColors.cyan),
+    if (canRetry && failedInChat > 1)
+      (MessageAction.retryAll, Icons.restart_alt_rounded, 'Retry all ($failedInChat)', GlowColors.cyan),
+    if (!failed && (p?.canBeReplied ?? true)) (MessageAction.reply, Icons.reply_rounded, 'Reply', null),
     if (hasText && canSave) (MessageAction.copy, Icons.copy_rounded, 'Copy', null),
     if (hasText && canSave) (MessageAction.selectText, Icons.text_fields_rounded, 'Select text', null),
     if (p?.canBeEdited ?? false) (MessageAction.edit, Icons.edit_rounded, 'Edit', null),
@@ -96,6 +106,7 @@ Future<({MessageAction? action, String? reaction})?> showMessageMenu(
         reactionIcon: reactionIcon,
         aiSuggestion: aiSuggestion,
         items: items,
+        catalog: reactionCatalog,
       ),
     ),
   );
@@ -112,7 +123,11 @@ class _FocusMenu extends StatefulWidget {
     required this.reactionIcon,
     required this.items,
     this.aiSuggestion,
+    this.catalog,
   });
+
+  /// Sections, categories and search for the full reaction panel.
+  final ReactionCatalog? catalog;
 
   final Animation<double> animation;
   final Rect? anchor;
@@ -132,7 +147,11 @@ class _FocusMenu extends StatefulWidget {
 
 class _FocusMenuState extends State<_FocusMenu> {
   var _allReactions = false;
+  var _panelH = 360.0;
   String? _ai;
+
+  /// The quick row as first shown with the chat's reactions.
+  List<String>? _frozen;
 
   @override
   void initState() {
@@ -154,7 +173,10 @@ class _FocusMenuState extends State<_FocusMenu> {
     final media = MediaQuery.of(context);
     final screen = media.size;
     final anchor = widget.anchor ?? Rect.fromLTWH(16, screen.height * 0.35, screen.width - 32, 48);
-    const pillH = 60.0;
+    // The full panel takes the pill's place, so it gets the pill's room.
+    final panelH = math.min(380.0, (screen.height - media.viewInsets.bottom) * 0.5);
+    _panelH = panelH;
+    final pillH = _allReactions ? panelH : 60.0;
     final rows = (widget.items.length / 2).ceil();
     final listH = rows * 48.0 + 52;
     // Lay out in the space above the keyboard (or the system bar).
@@ -252,10 +274,19 @@ class _FocusMenuState extends State<_FocusMenu> {
       final ai = _ai == null || available.isEmpty
           ? _ai
           : available.where((a) => plain(a) == plain(_ai!)).firstOrNull;
-      final quick = [
+      var quick = [
         ?ai,
         ...[...picks, ...available.where((a) => !picks.contains(a))].where((e) => e != ai),
       ].take(5).toList();
+      // Once the chat's reactions are in, the row stays put: a late AI pick
+      // only marks its emoji (or takes the last slot) instead of shifting
+      // every button under a finger that is already on its way.
+      if (_frozen case final frozen?) {
+        if (ai != null && !frozen.contains(ai)) frozen[frozen.length - 1] = ai;
+        quick = frozen;
+      } else if (snap.hasData) {
+        _frozen = quick;
+      }
       return Material(
         color: GlowColors.surfaceHigh,
         shape: RoundedRectangleBorder(
@@ -266,16 +297,12 @@ class _FocusMenuState extends State<_FocusMenu> {
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
           child: _allReactions
-              ? Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: [
-                      for (final e in available)
-                        _ReactionButton(emoji: e, icon: _emoji(e, 34), onTap: _react),
-                    ],
-                  ),
+              ? ReactionPanel(
+                  available: available,
+                  onPick: _react,
+                  icon: _emoji,
+                  catalog: widget.catalog,
+                  height: _panelH,
                 )
               : SizedBox(
                   height: 60,
@@ -285,16 +312,17 @@ class _FocusMenuState extends State<_FocusMenu> {
                       const SizedBox(width: 6),
                       for (final e in quick)
                         Expanded(
+                          key: ValueKey('quick-$e'),
                           child: e == ai
                               ? _AiReaction(
                                   child: _ReactionButton(
                                     emoji: e,
-                                    icon: _emoji(e, 38),
+                                    icon: _emoji(e, 42),
                                     onTap: _react,
                                     ai: true,
                                   ),
                                 )
-                              : _ReactionButton(emoji: e, icon: _emoji(e, 38), onTap: _react),
+                              : _ReactionButton(emoji: e, icon: _emoji(e, 42), onTap: _react),
                         ),
                       IconButton(
                         tooltip: 'More reactions',
@@ -424,7 +452,7 @@ class _ReactionButton extends StatelessWidget {
     child: InkResponse(
       radius: 26,
       onTap: () => onTap(emoji),
-      child: SizedBox(height: 48, width: 48, child: Center(child: icon)),
+      child: SizedBox(height: 52, width: 52, child: Center(child: icon)),
     ),
   );
 }

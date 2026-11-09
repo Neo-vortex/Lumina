@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
+import '../../../../core/accounts/account_store.dart';
+import '../../../../core/accounts/account_switcher.dart';
 import '../../../../core/config/native_licenses.dart';
 import '../../../../core/storage/app_preferences.dart';
 import '../../../../core/telegram/display.dart';
@@ -12,6 +14,7 @@ import '../../../auth/bloc/auth_bloc.dart';
 import '../../../auth/domain/account_capabilities.dart';
 import '../../../auth/domain/auth_step.dart';
 import '../../../home/presentation/widgets/bot_limitations_card.dart';
+import '../../../profile/presentation/my_account_screen.dart';
 import '../settings_category.dart';
 import '../widgets/general_settings.dart';
 import '../widgets/settings_section.dart';
@@ -104,31 +107,39 @@ class SettingsHub extends StatelessWidget {
       builder: (context, _) => ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
         children: [
-          Row(
-            children: [
-              ChatAvatar.user(me, size: 64),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      Display.userName(me),
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
-                    ),
-                    Text(
-                      [
-                        if (caps.isBot) 'Bot account',
-                        if (me.usernames?.activeUsernames.firstOrNull case final u?) '@$u',
-                        if (me.phoneNumber.isNotEmpty) '+${me.phoneNumber}',
-                      ].join(' · '),
-                      style: const TextStyle(color: GlowColors.textMuted),
-                    ),
-                  ],
+          InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: caps.isBot ? null : () => Navigator.of(context).push(MyAccountScreen.route(me.id)),
+            child: Row(
+              children: [
+                ChatAvatar.user(me, size: 64),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        Display.userName(me),
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        [
+                          if (caps.isBot) 'Bot account',
+                          if (me.usernames?.activeUsernames.firstOrNull case final u?) '@$u',
+                          if (me.phoneNumber.isNotEmpty) '+${me.phoneNumber}',
+                        ].join(' · '),
+                        style: const TextStyle(color: GlowColors.textMuted),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                if (!caps.isBot) const Icon(Icons.chevron_right_rounded, color: GlowColors.textMuted),
+              ],
+            ),
           ),
+          const SizedBox(height: 12),
+          // Other accounts (Telegram or custom servers) and adding one.
+          _AccountsRow(),
           if (caps.isBot) ...[const SizedBox(height: 20), BotLimitationsCard(caps.limitations)],
           SettingsSection(
             title: 'Settings',
@@ -164,6 +175,29 @@ class SettingsHub extends StatelessWidget {
           ),
           const SizedBox(height: 28),
           GlowButton.warm(label: 'Log out', onPressed: () => _confirmLogout(context)),
+          const SizedBox(height: 10),
+          // Leaves the session alive on Telegram's side, so a cloud backup of
+          // it can still be restored (here or on another phone).
+          OutlinedButton.icon(
+            onPressed: () => _confirmExit(context),
+            icon: const Icon(Icons.exit_to_app_rounded),
+            label: const Text('Exit account'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: GlowColors.text,
+              side: const BorderSide(color: GlowColors.outlineStrong),
+              minimumSize: const Size.fromHeight(48),
+              shape: const StadiumBorder(),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 6, 16, 0),
+            child: Text(
+              'Removes the account from this phone only. The session stays active on Telegram, '
+              'so a cloud backup of it can still be restored.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: GlowColors.textMuted, fontSize: 12),
+            ),
+          ),
         ],
       ),
     );
@@ -175,7 +209,11 @@ class SettingsHub extends StatelessWidget {
       builder: (context) => AlertDialog(
         backgroundColor: GlowColors.surfaceHigh,
         title: const Text('Log out?'),
-        content: const Text('This ends the session and deletes all Telegram data stored on this device.'),
+        content: const Text(
+          'This ends the session on Telegram and deletes all Telegram data stored on this device. '
+          'A cloud backup of this session will stop working.\n\n'
+          'To keep the backup restorable, use "Exit account" instead.',
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           TextButton(
@@ -186,6 +224,28 @@ class SettingsHub extends StatelessWidget {
       ),
     );
     if ((confirmed ?? false) && context.mounted) context.read<AuthBloc>().add(const AuthLogOutRequested());
+  }
+
+  Future<void> _confirmExit(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: GlowColors.surfaceHigh,
+        title: const Text('Exit account?'),
+        content: const Text(
+          'Lumina deletes this account\'s data from this phone, but the session stays signed in on Telegram. '
+          'You can restore it later from a cloud backup.\n\n'
+          'The session still shows under Active sessions on your other devices; end it there when you no longer need it.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Exit account')),
+        ],
+      ),
+    );
+    if ((confirmed ?? false) && context.mounted) {
+      context.read<AuthBloc>().add(const AuthLocalDataResetRequested());
+    }
   }
 }
 
@@ -204,4 +264,49 @@ class _CategoryRow extends StatelessWidget {
     trailing: const Icon(Icons.chevron_right_rounded, color: GlowColors.textMuted),
     onTap: onTap,
   );
+}
+
+class _AccountsRow extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final store = AccountStore.current;
+    final others = store?.others.where((a) => a.signedIn).toList() ?? const [];
+    return Material(
+      color: GlowColors.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => showAccountSwitcher(context),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              const Icon(Icons.switch_account_rounded, color: GlowColors.cyan),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      others.isEmpty ? 'Add account' : 'Switch account',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      others.isEmpty
+                          ? 'Another Telegram account or a custom server'
+                          : others.map((a) => a.name ?? a.serverLabel).join(', '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: GlowColors.textMuted, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: GlowColors.textMuted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

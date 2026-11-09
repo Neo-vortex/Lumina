@@ -57,6 +57,8 @@ void main() {
         ),
       ),
     );
+    // It starts once the list has rested on it (350 ms).
+    await tester.pump(const Duration(milliseconds: 400));
     expect(h.played, ['/gif.mp4']);
   });
 }

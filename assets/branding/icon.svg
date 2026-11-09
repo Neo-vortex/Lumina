@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="1024" height="1024">
+  <!-- Lumina launcher icon: a halo ring that ends in a speech-bubble tail,
+       a glowing cyan orb, and an amber spark on the ring (GlowColors).
+       108×108 = Android adaptive icon canvas; keep the art inside the
+       central 66×66 safe zone. -->
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#1C2027"/>
+      <stop offset="0.55" stop-color="#0D0F12"/>
+      <stop offset="1" stop-color="#07090B"/>
+    </radialGradient>
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#9A5CFF" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#9A5CFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="30" y1="28" x2="80" y2="82" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#B98CFF"/>
+      <stop offset="0.5" stop-color="#9A5CFF"/>
+      <stop offset="1" stop-color="#E052D6"/>
+    </linearGradient>
+    <radialGradient id="orb" cx="46%" cy="42%" r="60%">
+      <stop offset="0" stop-color="#E9FFFD"/>
+      <stop offset="0.35" stop-color="#4FE3DC"/>
+      <stop offset="1" stop-color="#1C9AAE"/>
+    </radialGradient>
+    <radialGradient id="orbGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#4FE3DC" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#4FE3DC" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="spark" cx="40%" cy="38%" r="65%">
+      <stop offset="0" stop-color="#FFF1D6"/>
+      <stop offset="0.4" stop-color="#FFB850"/>
+      <stop offset="1" stop-color="#FF6E66"/>
+    </radialGradient>
+    <radialGradient id="sparkGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#FFB850" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#FFB850" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.2"/>
+    </filter>
+  </defs>
+
+  <!-- background layer -->
+  <rect width="108" height="108" fill="url(#bg)"/>
+  <circle cx="54" cy="54" r="38" fill="url(#bgGlow)"/>
+
+  <!-- foreground layer -->
+  <g id="foreground">
+    <!-- ring glow -->
+    <path d="M 38.4 73.6 A 25 25 0 1 1 46.2 77.8 L 36 83 Z" fill="none" stroke="url(#ring)"
+          stroke-width="7" stroke-linejoin="round" opacity="0.45" filter="url(#soft)"/>
+    <!-- halo ring with a bubble tail at the lower left -->
+    <path d="M 38.4 73.6 A 25 25 0 1 1 46.2 77.8 L 36 83 Z" fill="none" stroke="url(#ring)"
+          stroke-width="4.2" stroke-linejoin="round" stroke-linecap="round"/>
+    <!-- orb -->
+    <circle cx="54" cy="53" r="17" fill="url(#orbGlow)"/>
+    <circle cx="54" cy="53" r="11" fill="url(#orb)"/>
+    <!-- spark orbiting on the ring -->
+    <circle cx="72.5" cy="35.5" r="7" fill="url(#sparkGlow)"/>
+    <circle cx="72.5" cy="35.5" r="3.6" fill="url(#spark)"/>
+  </g>
+</svg>

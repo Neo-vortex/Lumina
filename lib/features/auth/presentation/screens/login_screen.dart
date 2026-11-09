@@ -2,12 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/accounts/account_store.dart';
+import '../../../../core/accounts/account_switcher.dart';
 import '../../../../core/theme/motion.dart';
 import '../../../../core/widgets/glow_field.dart';
 import '../../bloc/auth_bloc.dart';
 import '../../domain/auth_step.dart';
 import '../widgets/auth_scaffold.dart';
 import '../widgets/auth_submit_button.dart';
+import '../widgets/country_phone_field.dart';
+import '../widgets/custom_server_sheet.dart';
+import '../../../session_backup/data/session_backup.dart';
+import '../../../session_backup/presentation/backup_on_login.dart';
+import '../../../session_backup/presentation/restore_sheet.dart';
 import '../widgets/login_mode_toggle.dart';
 import '../widgets/start_over_button.dart';
 
@@ -23,12 +30,14 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _phone = TextEditingController();
   final _token = TextEditingController();
+  final _backupTo = TextEditingController();
   var _mode = LoginMode.phone;
 
   @override
   void dispose() {
     _phone.dispose();
     _token.dispose();
+    _backupTo.dispose();
     super.dispose();
   }
 
@@ -36,7 +45,12 @@ class _LoginScreenState extends State<LoginScreen> {
     final bloc = context.read<AuthBloc>();
     switch (_mode) {
       case LoginMode.phone:
-        if (_phone.text.trim().isNotEmpty) bloc.add(AuthPhoneNumberSubmitted(_phone.text));
+        if (_phone.text.trim().isEmpty) return;
+        // Backed up as soon as this login succeeds (LifecycleWatcher).
+        if (_backupTo.text.trim().isNotEmpty) {
+          rememberBackupTarget(context.read<SessionBackupService>(), _backupTo.text).ignore();
+        }
+        bloc.add(AuthPhoneNumberSubmitted(_phone.text));
       case LoginMode.bot:
         if (_token.text.trim().isNotEmpty) bloc.add(AuthBotTokenSubmitted(_token.text));
     }
@@ -51,6 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return AuthScaffold(
       title: 'Welcome to Lumina',
+      subtitleMinLines: 2,
       subtitle: _mode == LoginMode.phone
           ? 'Sign in with your phone number. We will send you a code.'
           : 'Paste the token @BotFather gave your bot.',
@@ -62,14 +77,9 @@ class _LoginScreenState extends State<LoginScreen> {
           switchInCurve: Motion.enter,
           switchOutCurve: Motion.exit,
           child: _mode == LoginMode.phone
-              ? GlowField(
+              ? CountryPhoneField(
                   key: const ValueKey(LoginMode.phone),
                   controller: _phone,
-                  label: 'Phone number',
-                  hint: '+1 555 010 0000',
-                  keyboardType: TextInputType.phone,
-                  autofillHints: const [AutofillHints.telephoneNumber],
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+\s()-]'))],
                   errorText: error,
                   enabled: !busy,
                   onSubmitted: (_) => _submit(),
@@ -86,9 +96,23 @@ class _LoginScreenState extends State<LoginScreen> {
                   onSubmitted: (_) => _submit(),
                 ),
         ),
+        if (_mode == LoginMode.phone) BackupTargetField(controller: _backupTo),
         const SizedBox(height: 28),
         AuthSubmitButton(label: 'Continue', onPressed: _submit),
         if (loginPending) ...[const SizedBox(height: 12), const StartOverButton()],
+        const SizedBox(height: 8),
+        const Center(child: ServerButton()),
+        const Center(child: RestoreButton()),
+        // Adding an account: a way back to the ones already signed in.
+        if (AccountStore.current case final store?
+            when !store.active.signedIn && store.others.any((a) => a.signedIn))
+          Center(
+            child: TextButton.icon(
+              onPressed: () => abandonNewAccount(store.others.firstWhere((a) => a.signedIn)),
+              icon: const Icon(Icons.arrow_back_rounded, size: 18),
+              label: Text('Back to ${store.others.firstWhere((a) => a.signedIn).name ?? 'your account'}'),
+            ),
+          ),
       ],
     );
   }

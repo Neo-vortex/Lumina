@@ -7,12 +7,16 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../../core/media/tdlib_stream_server.dart';
+import '../../../../core/platform/system_channel.dart';
 import '../../../../core/storage/app_preferences.dart';
 import '../../../../core/telegram/display.dart';
 import '../../../../core/telegram/file_store.dart';
 import '../../../../core/telegram/telegram_cache.dart';
+import '../../../../core/telegram/video_files.dart';
 import '../../../../core/telegram/widgets/formatted_text_view.dart';
+import '../../../../core/telegram/widgets/inline_video.dart';
 import '../../../../core/telegram/widgets/td_file_image.dart';
+import '../../../../core/theme/glow_colors.dart';
 import '../widgets/media_flight.dart';
 import '../widgets/media_geometry.dart';
 import '../widgets/video_player_view.dart';
@@ -31,10 +35,20 @@ td.PhotoSize? largestSize(td.Photo photo) => photo.sizes.isEmpty
 /// and paging springs with the flick. Every animation can be grabbed
 /// mid-way and continues from where it is.
 class MediaViewerScreen extends StatefulWidget {
-  const MediaViewerScreen({super.key, required this.messages, required this.initialIndex, this.onOpened});
+  const MediaViewerScreen({
+    super.key,
+    required this.messages,
+    required this.initialIndex,
+    this.onOpened,
+    this.onForward,
+  });
 
   final List<td.Message> messages;
   final int initialIndex;
+
+  /// Opens the forward picker for a message; true once it was forwarded.
+  /// Null hides Forward.
+  final Future<bool> Function(BuildContext context, td.Message message)? onForward;
 
   /// View-once / self-destructing content must be marked opened.
   final void Function(td.Message message)? onOpened;
@@ -44,6 +58,7 @@ class MediaViewerScreen extends StatefulWidget {
     List<td.Message> messages, {
     int index = 0,
     void Function(td.Message)? onOpened,
+    Future<bool> Function(BuildContext context, td.Message message)? onForward,
   }) async {
     final navigator = Navigator.of(context);
     // Decode the picture the flight starts with before the first frame, so
@@ -56,7 +71,7 @@ class MediaViewerScreen extends StatefulWidget {
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
         pageBuilder: (_, _, _) =>
-            MediaViewerScreen(messages: messages, initialIndex: index, onOpened: onOpened),
+            MediaViewerScreen(messages: messages, initialIndex: index, onOpened: onOpened, onForward: onForward),
       ),
     );
   }
@@ -93,6 +108,16 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> with TickerProvid
   late double _pos = widget.initialIndex.toDouble();
   late int _index = widget.initialIndex;
   var _chrome = true;
+
+  /// The caption was tapped away (until the page changes or a video ends).
+  var _captionHidden = false;
+
+  /// Quality picked with the gear for this viewing; null follows Settings.
+  VideoQuality? _quality;
+
+  /// A short status line ("Saved to gallery"); the viewer has no Scaffold.
+  String? _notice;
+  var _noticeSerial = 0;
   var _zoom = Zoom.identity;
   var _drag = Offset.zero;
   var _size = Size.zero;
@@ -131,6 +156,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> with TickerProvid
   @override
   void initState() {
     super.initState();
+    InlineVideo.hold.value++;
     _markOpened(_message);
     _openFrom = MediaFlight.rectOf(_message.id);
     MediaFlight.hidden.value = _message.id;
@@ -146,6 +172,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> with TickerProvid
 
   @override
   void dispose() {
+    InlineVideo.hold.value--;
     if (MediaFlight.hidden.value != null && widget.messages.any((m) => m.id == MediaFlight.hidden.value)) {
       MediaFlight.hidden.value = null;
     }
@@ -153,6 +180,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> with TickerProvid
     _dragCtl.dispose();
     _zoomCtl.dispose();
     _flightCtl.dispose();
+    _captionScroll.dispose();
     super.dispose();
   }
 
@@ -174,6 +202,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> with TickerProvid
     if (i == _index) return;
     _index = i;
     _zoom = Zoom.identity;
+    _captionHidden = false;
     _markOpened(_message);
   }
 
@@ -471,6 +500,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> with TickerProvid
     final pictures = _Pictures.of(m);
     final picture = pictures == null ? const SizedBox.shrink() : _Picture(pictures: pictures);
 
+    final isVideo = m.content is! td.MessagePhoto;
     Widget body;
     if (flight != null) {
       body = Opacity(
@@ -478,12 +508,21 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> with TickerProvid
         child: ClipRRect(
           clipper: _RRectClipper(flight.clip, flight.radius),
           child: Stack(
-            children: [Positioned.fromRect(rect: flight.image, child: picture)],
+            children: [
+              Positioned.fromRect(rect: flight.image, child: picture),
+              // Closing a video flies the playing frame itself (same player,
+              // via its GlobalKey) back into the bubble instead of cutting
+              // to the thumbnail.
+              if (isVideo && _closing)
+                Positioned.fromRect(
+                  rect: flight.image,
+                  child: IgnorePointer(child: _videoFor(m, active: current)),
+                ),
+            ],
           ),
         ),
       );
     } else {
-      final isVideo = m.content is! td.MessagePhoto;
       body = Stack(
         children: [
           Positioned.fromRect(rect: rest, child: picture),
@@ -509,16 +548,29 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> with TickerProvid
     );
   }
 
+  final _videoKeys = <int, GlobalKey>{};
+  final _captionScroll = ScrollController();
+
   Widget _videoFor(td.Message m, {required bool active}) => switch (m.content) {
     td.MessageVideo(:final video) => _VideoPage(
-      file: video.video,
+      // A new player per quality (the gear swaps the file).
+      key: _videoKeys.putIfAbsent(Object.hash(m.id, _quality), GlobalKey.new),
+      controls: !_closing,
+      file: VideoFiles.pick(m.content as td.MessageVideo, _quality),
       mime: video.mimeType,
       width: video.width,
       height: video.height,
       active: active,
       onChrome: (visible) => setState(() => _chrome = visible),
+      // Back at the start: the caption (and the bar with it) returns.
+      onEnded: () => setState(() {
+        _captionHidden = false;
+        _chrome = false;
+      }),
     ),
     td.MessageAnimation(:final animation) => _VideoPage(
+      key: _videoKeys.putIfAbsent(m.id, GlobalKey.new),
+      controls: !_closing,
       file: animation.animation,
       mime: animation.mimeType,
       width: animation.width,
@@ -530,12 +582,284 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> with TickerProvid
     _ => const SizedBox.shrink(),
   };
 
+  // ---- Caption ---------------------------------------------------------------
+
+  Widget _captionLayer(td.FormattedText caption, bool shown) {
+    void hide() => setState(() {
+      if (_message.content is td.MessageVideo) {
+        _captionHidden = true;
+      } else {
+        // Photos: the caption goes with the bar, as a tap elsewhere does.
+        _chrome = false;
+      }
+    });
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      // Hidden, it must not take touches: it lies over the video dock.
+      child: IgnorePointer(
+        ignoring: !shown,
+        child: AnimatedOpacity(
+          opacity: shown ? 1 : 0,
+          duration: const Duration(milliseconds: 200),
+          child: RawGestureDetector(
+            behavior: HitTestBehavior.opaque,
+            gestures: {
+              // A tap anywhere on it puts it away (links inside still win).
+              TapGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
+                TapGestureRecognizer.new,
+                (r) => r.onTap = hide,
+              ),
+              // Sideways: page like anywhere else.
+              HorizontalDragGestureRecognizer:
+                  GestureRecognizerFactoryWithHandlers<HorizontalDragGestureRecognizer>(
+                    HorizontalDragGestureRecognizer.new,
+                    (r) => r
+                      ..onStart = ((d) => _onStart(d.globalPosition))
+                      ..onUpdate = ((d) => _onUpdate(d.globalPosition, 1, 1))
+                      ..onEnd = ((d) => _onEnd(d.velocity, 0)),
+                  ),
+              // Up/down only reaches here when the caption is too short to
+              // scroll (a scrolling caption's own drag wins): dismiss then.
+              VerticalDragGestureRecognizer: GestureRecognizerFactoryWithHandlers<VerticalDragGestureRecognizer>(
+                VerticalDragGestureRecognizer.new,
+                (r) => r
+                  ..onStart = ((d) => _onStart(d.globalPosition))
+                  ..onUpdate = ((d) => _onUpdate(d.globalPosition, 1, 1))
+                  ..onEnd = ((d) => _onEnd(d.velocity, 0)),
+              ),
+            },
+            child: Container(
+              key: const ValueKey('caption'),
+              width: double.infinity,
+              constraints: BoxConstraints(maxHeight: _size.height * 0.35),
+              padding: const EdgeInsets.fromLTRB(16, 32, 16, 28),
+              decoration: const BoxDecoration(
+                // Deep enough that white text reads over any frame.
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [Color(0xF2000000), Color(0xB3000000), Color(0x00000000)],
+                  stops: [0, 0.65, 1],
+                ),
+              ),
+              child: SafeArea(
+                top: false,
+                child: SingleChildScrollView(
+                  controller: _captionScroll,
+                  child: Semantics(
+                    label: 'Caption',
+                    child: FormattedTextView(
+                      caption,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        height: 1.35,
+                        shadows: [Shadow(color: Colors.black, blurRadius: 6)],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---- Top bar and its actions ---------------------------------------------
+
+  Widget _topBar(TelegramCache cache, td.Message m) {
+    final video = m.content is td.MessageVideo ? m.content as td.MessageVideo : null;
+    final hasQualities = video != null && video.alternativeVideos.isNotEmpty;
+    // Protected chats: no forwarding, saving or sharing (as in Telegram).
+    final protected = cache.chats[m.chatId]?.hasProtectedContent ?? false;
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0x99000000), Color(0x00000000)],
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Row(
+          children: [
+            IconButton(
+              tooltip: 'Close',
+              icon: const Icon(Icons.close_rounded, color: Colors.white),
+              onPressed: _close,
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    m.isOutgoing ? 'You' : Display.senderName(cache, m.senderId),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                  Text(
+                    [
+                      Display.listTime(Display.messageDate(m), DateTime.now()),
+                      if (widget.messages.length > 1) '${_index + 1} of ${widget.messages.length}',
+                    ].join(' · '),
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            if (widget.onForward != null && !protected && m.selfDestructType == null)
+              _BarButton(
+                icon: Icons.reply_rounded,
+                mirrored: true,
+                label: 'Forward (hold to stay here)',
+                onTap: () => _forward(m, stay: false),
+                onLongPress: () => _forward(m, stay: true),
+              ),
+            if (hasQualities)
+              _BarButton(icon: Icons.settings_rounded, label: 'Quality', onTap: () => _pickQuality(video)),
+            if (_fileOf(m) != null && !protected && m.selfDestructType == null) ...[
+              _BarButton(icon: Icons.download_rounded, label: 'Save to gallery', onTap: () => _save(m)),
+              _BarButton(icon: Icons.share_rounded, label: 'Share', onTap: () => _share(m)),
+            ],
+            const SizedBox(width: 4),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showNotice(String text) {
+    final serial = ++_noticeSerial;
+    setState(() => _notice = text);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted && serial == _noticeSerial) setState(() => _notice = null);
+    });
+  }
+
+  /// Tap: pick chats, forward, and back to the chat. Hold: forward and keep
+  /// looking.
+  Future<void> _forward(td.Message m, {required bool stay}) async {
+    final sent = await widget.onForward!(context, m);
+    if (!mounted || !sent) return;
+    if (stay) {
+      _showNotice('Forwarded');
+    } else {
+      _close();
+    }
+  }
+
+  /// The file Save and Share hand out: the largest photo, or the video in
+  /// the quality being watched.
+  td.File? _fileOf(td.Message m) => switch (m.content) {
+    td.MessagePhoto(:final photo) => largestSize(photo)?.photo,
+    td.MessageVideo() => VideoFiles.pick(m.content as td.MessageVideo, _quality),
+    td.MessageAnimation(:final animation) => animation.animation,
+    _ => null,
+  };
+
+  ({String mime, String name}) _typeOf(td.Message m) => switch (m.content) {
+    td.MessageVideo(:final video) => (
+      mime: video.mimeType.isEmpty ? 'video/mp4' : video.mimeType,
+      name: video.fileName.isEmpty ? 'Lumina_${m.id}.mp4' : video.fileName,
+    ),
+    td.MessageAnimation() => (mime: 'video/mp4', name: 'Lumina_${m.id}.mp4'),
+    _ => (mime: 'image/jpeg', name: 'Lumina_${m.id}.jpg'),
+  };
+
+  /// The file on disk, downloading it first when needed.
+  Future<String?> _local(td.Message m) async {
+    final f = _fileOf(m);
+    if (f == null) return null;
+    final files = context.read<FileStore>();
+    final known = files[f.id] ?? f;
+    if (known.local.isDownloadingCompleted && known.local.path.isNotEmpty) return known.local.path;
+    _showNotice('Downloading…');
+    try {
+      return await files.downloadAndWait(f.id, priority: 32);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _save(td.Message m) async {
+    final path = await _local(m);
+    if (!mounted) return;
+    if (path == null) return _showNotice("Couldn't download it");
+    final type = _typeOf(m);
+    final ok = await const SystemChannel().saveToGallery(path, mime: type.mime, name: type.name);
+    if (mounted) _showNotice(ok ? 'Saved to gallery' : "Couldn't save it");
+  }
+
+  Future<void> _share(td.Message m) async {
+    final path = await _local(m);
+    if (!mounted) return;
+    if (path == null) return _showNotice("Couldn't download it");
+    final type = _typeOf(m);
+    final ok = await const SystemChannel().shareFile(path, mime: type.mime, name: type.name);
+    if (!ok && mounted) _showNotice('No app to share with');
+  }
+
+  Future<void> _pickQuality(td.MessageVideo video) async {
+    final current = _quality ?? VideoFiles.preferred;
+    String size(int bytes) => bytes > 0 ? ' · ${Display.fileSize(bytes)}' : '';
+    final picked = await showModalBottomSheet<VideoQuality>(
+      context: context,
+      backgroundColor: GlowColors.surfaceHigh,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Play in', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              ),
+            ),
+            for (final o in VideoFiles.options(video))
+              ListTile(
+                leading: Icon(
+                  o.quality == current ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                  color: o.quality == current ? GlowColors.cyan : GlowColors.textMuted,
+                ),
+                title: Text(switch (o.quality) {
+                  VideoQuality.auto => 'Auto',
+                  VideoQuality.original => 'Original',
+                  VideoQuality.low => 'Low',
+                }),
+                subtitle: Text('${o.height > 0 ? '${o.height}p' : ''}${size(o.size)}'),
+                onTap: () => Navigator.pop(context, o.quality),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || !mounted || picked == current) return;
+    setState(() {
+      _quality = picked;
+      _captionHidden = true;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final cache = context.read<TelegramCache>();
     final m = _message;
     final caption = _captionOf(m);
     final chrome = _chrome && !_closing && _flightCtl.isCompleted;
+    final isVideo = m.content is td.MessageVideo;
+    final captionShown =
+        caption != null && (isVideo ? !chrome : chrome) && !_closing && !_captionHidden && _mode != _Mode.dismiss;
+    // Videos keep the bar while their caption shows, not only with the dock.
+    final topBar = !_closing && _flightCtl.isCompleted && (chrome || (isVideo && captionShown));
     return PopScope(
       canPop: _closed,
       onPopInvokedWithResult: (didPop, _) {
@@ -546,116 +870,106 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> with TickerProvid
           _size = constraints.biggest;
           final first = _pos.floor().clamp(0, widget.messages.length - 1);
           final pages = {first, (first + 1).clamp(0, widget.messages.length - 1), _index};
-          return Stack(
-            children: [
-              Positioned.fill(
-                child: ColoredBox(color: Colors.black.withValues(alpha: _backdropOpacity)),
-              ),
-              Positioned.fill(
-                child: RawGestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  gestures: _gestures,
-                  child: Stack(
-                    children: [
-                      for (final i in pages) _pageAt(i),
-                      // Videos: the caption shows while the controls are
-                      // hidden and gives way to them on a tap. Photos: it
-                      // follows the top bar. It sits under the gesture
-                      // detector, so swipes over it still page and dismiss.
-                      if (caption != null)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: AnimatedOpacity(
-                            opacity: (m.content is td.MessageVideo ? !chrome : chrome) && !_closing ? 1 : 0,
-                            duration: const Duration(milliseconds: 200),
-                            child: Container(
-                              key: const ValueKey('caption'),
-                              width: double.infinity,
-                              constraints: BoxConstraints(maxHeight: _size.height * 0.35),
-                              padding: const EdgeInsets.fromLTRB(16, 32, 16, 28),
-                              decoration: const BoxDecoration(
-                                // Deep enough that white text reads over any frame.
-                                gradient: LinearGradient(
-                                  begin: Alignment.bottomCenter,
-                                  end: Alignment.topCenter,
-                                  colors: [Color(0xF2000000), Color(0xB3000000), Color(0x00000000)],
-                                  stops: [0, 0.65, 1],
-                                ),
-                              ),
-                              child: SafeArea(
-                                top: false,
-                                child: SingleChildScrollView(
-                                  child: Semantics(
-                                    label: 'Caption',
-                                    child: FormattedTextView(
-                                      caption,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 15,
-                                        height: 1.35,
-                                        shadows: [Shadow(color: Colors.black, blurRadius: 6)],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+          // The route has no Scaffold: without a Material ancestor every Text
+          // gets the yellow debug underline and the video dock's Slider,
+          // IconButtons and InkWells throw instead of responding.
+          return Material(
+            type: MaterialType.transparency,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: ColoredBox(color: Colors.black.withValues(alpha: _backdropOpacity)),
                 ),
-              ),
-              AnimatedOpacity(
-                opacity: chrome ? 1 : 0,
-                duration: const Duration(milliseconds: 200),
-                child: IgnorePointer(
-                  ignoring: !chrome,
-                  child: SafeArea(
-                    child: Row(
+                Positioned.fill(
+                  child: RawGestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    gestures: _gestures,
+                    child: Stack(
                       children: [
-                        IconButton(
-                          tooltip: 'Close',
-                          icon: const Icon(Icons.close_rounded, color: Colors.white),
-                          onPressed: _close,
-                        ),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                m.isOutgoing ? 'You' : Display.senderName(cache, m.senderId),
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                              ),
-                              Text(
-                                Display.listTime(Display.messageDate(m), DateTime.now()),
-                                style: const TextStyle(color: Colors.white70, fontSize: 12),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (widget.messages.length > 1)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 16),
-                            child: Text(
-                              '${_index + 1} / ${widget.messages.length}',
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                          ),
+                        for (final i in pages) _pageAt(i),
                       ],
                     ),
                   ),
                 ),
-              ),
-            ],
+                // Above the gesture layer, so a vertical drag on a long
+                // caption scrolls it instead of dragging the picture away.
+                // Sideways swipes still page; a tap puts it away.
+                if (caption != null) _captionLayer(caption, captionShown),
+                AnimatedOpacity(
+                  opacity: topBar ? 1 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: IgnorePointer(
+                    ignoring: !topBar,
+                    child: _topBar(cache, m),
+                  ),
+                ),
+                if (_notice case final notice?)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: MediaQuery.paddingOf(context).top + 64,
+                    child: Center(
+                      child: Semantics(
+                        liveRegion: true,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(notice, style: const TextStyle(color: Colors.white)),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           );
         },
       ),
     );
   }
+}
+
+/// A top-bar action: a tap, and optionally a hold.
+class _BarButton extends StatelessWidget {
+  const _BarButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.onLongPress,
+    this.mirrored = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+
+  /// The reply arrow flipped reads as "forward", like Telegram's.
+  final bool mirrored;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: label,
+    child: Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: InkResponse(
+        radius: 22,
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: SizedBox.square(
+          dimension: 44,
+          child: Transform.flip(
+            flipX: mirrored,
+            child: Icon(icon, color: Colors.white, size: 22),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class _RRectClipper extends CustomClipper<RRect> {
@@ -749,14 +1063,22 @@ class _Picture extends StatelessWidget {
 /// Resolves a video to a local path or a loopback stream URL, then plays.
 class _VideoPage extends StatefulWidget {
   const _VideoPage({
+    super.key,
     required this.file,
     required this.mime,
     required this.width,
     required this.height,
     required this.onChrome,
+    this.onEnded,
     this.loop = false,
     this.active = true,
+    this.controls = true,
   });
+
+  final VoidCallback? onEnded;
+
+  /// Off while flying back to the chat.
+  final bool controls;
 
   final td.File file;
   final String mime;
@@ -804,16 +1126,26 @@ class _VideoPageState extends State<_VideoPage> {
   Widget build(BuildContext context) {
     final s = _source;
     if (s == null) return const SizedBox.expand();
-    return Opacity(
+    // Cross-fades over the thumbnail once the first frame is up, instead of
+    // snapping in.
+    return AnimatedOpacity(
       opacity: _firstFrame ? 1 : 0,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
       child: VideoPlayerView(
         source: s.source,
         isLocalFile: s.local,
         aspectRatio: widget.height == 0 ? null : widget.width / widget.height,
         loop: widget.loop,
         paused: !widget.active,
+        showControls: widget.controls,
         prefs: context.read<AppPreferences>(),
         onControlsVisibilityChanged: widget.onChrome,
+        onEnded: () {
+          // Rewound and stopped: the poster frame shows until it plays again.
+          if (mounted) setState(() => _firstFrame = false);
+          widget.onEnded?.call();
+        },
         onProgress: (position, _, _) {
           if (!_firstFrame && position > Duration.zero && mounted) setState(() => _firstFrame = true);
         },

@@ -21,6 +21,7 @@ import androidx.work.Worker
 import androidx.work.WorkerParameters
 import dev.lumina.lumina.LuminaEngine
 import dev.lumina.lumina.MainActivity
+import dev.lumina.lumina.R
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -139,7 +140,7 @@ class KeepAliveService : Service() {
             Notification.Builder(this).setPriority(Notification.PRIORITY_MIN)
         }
         return builder
-            .setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
+            .setSmallIcon(R.drawable.ic_stat_lumina)
             .setContentTitle("Lumina is connected")
             .setContentText("Receiving messages and calls")
             .setContentIntent(Background.openApp(this))

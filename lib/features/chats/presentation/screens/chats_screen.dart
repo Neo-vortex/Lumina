@@ -143,98 +143,103 @@ class _ChatsScreenState extends State<ChatsScreen> {
       builder: (context, lens) {
         final current = lens.current;
         final many = lens.entries.length > 1;
+        final below = _searching ? null : ext.belowHeader(context);
         return Scaffold(
-          body: SafeArea(
-            bottom: false,
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _searching
-                            ? TextField(
-                                controller: _search,
-                                autofocus: true,
-                                onChanged: _onQuery,
-                                onSubmitted: _submitSearch,
-                                decoration: const InputDecoration(
-                                  hintText: 'Search chats and people',
-                                  border: InputBorder.none,
-                                ),
-                              )
-                            : current == null
-                            ? const SizedBox.shrink()
-                            : LensTitle(
-                                entry: current,
-                                color: ext.lensColor(current),
-                                onTap: many ? () => _pickLens(lens) : null,
-                                onHoldStart: many && _gesturePicker(context)
-                                    ? (d) => _holdLens(lens, d)
-                                    : null,
-                                onHoldMove: (d) => _gesture?.move(d.globalPosition),
-                                onHoldEnd: (_) => _gesture?.end(),
-                                onHoldCancel: () => _gesture?.cancel(),
-                              ),
-                      ),
-                      if (!_searching) ...ext.headerActions(context),
-                      IconButton(
-                        tooltip: _searching ? 'Close search' : 'Search',
-                        icon: Icon(_searching ? Icons.close_rounded : Icons.search_rounded),
-                        onPressed: () => setState(() {
-                          _searching = !_searching;
-                          _search.clear();
-                          _results = null;
-                        }),
-                      ),
-                    ],
-                  ),
-                ),
-                if (isBot && !_botNoticeDismissed)
+          backgroundColor: Colors.transparent,
+          body: ext.background(
+            context,
+            SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                    child: Dismissible(
-                      key: const ValueKey('bot-limits'),
-                      onDismissed: (_) => setState(() => _botNoticeDismissed = true),
-                      child: BotLimitationsCard(caps!.limitations),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _searching
+                              ? TextField(
+                                  controller: _search,
+                                  autofocus: true,
+                                  onChanged: _onQuery,
+                                  onSubmitted: _submitSearch,
+                                  decoration: const InputDecoration(
+                                    hintText: 'Search chats and people',
+                                    border: InputBorder.none,
+                                  ),
+                                )
+                              : current == null
+                              ? const SizedBox.shrink()
+                              : LensTitle(
+                                  entry: current,
+                                  color: ext.lensColor(current),
+                                  onTap: many ? () => _pickLens(lens) : null,
+                                  onHoldStart: many && _gesturePicker(context)
+                                      ? (d) => _holdLens(lens, d)
+                                      : null,
+                                  onHoldMove: (d) => _gesture?.move(d.globalPosition),
+                                  onHoldEnd: (_) => _gesture?.end(),
+                                  onHoldCancel: () => _gesture?.cancel(),
+                                ),
+                        ),
+                        if (!_searching) ...ext.headerActions(context),
+                        IconButton(
+                          tooltip: _searching ? 'Close search' : 'Search',
+                          icon: Icon(_searching ? Icons.close_rounded : Icons.search_rounded),
+                          onPressed: () => setState(() {
+                            _searching = !_searching;
+                            _search.clear();
+                            _results = null;
+                          }),
+                        ),
+                      ],
                     ),
                   ),
-                Expanded(
-                  child: _results != null
-                      ? _ResultsList(
-                          results: _results!,
-                          messageHits: _messageHits,
-                          query: _search.text.trim(),
-                          onOpen: _open,
-                          onOpenMessage: (hit) =>
-                              Navigator.of(context)
-                                  .push(ConversationScreen.route(hit.chatId, focusMessageId: hit.messageId)),
-                        )
-                      : PageView.custom(
-                          controller: _pages,
-                          onPageChanged: context.read<LensCubit>().select,
-                          childrenDelegate: SliverChildBuilderDelegate(
-                            (context, i) {
-                              final e = lens.entries[i];
-                              return ChatListPage(
-                                key: ValueKey(e.key),
-                                entry: e,
-                                isBot: isBot,
-                                tint: many ? ext.lensColor(e) : null,
-                                onOpen: _open,
-                              );
-                            },
-                            childCount: lens.entries.length,
-                            findChildIndexCallback: (key) {
-                              final k = (key as ValueKey<String>).value;
-                              final i = lens.entries.indexWhere((e) => e.key == k);
-                              return i < 0 ? null : i;
-                            },
+                  ?below,
+                  if (isBot && !_botNoticeDismissed)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                      child: Dismissible(
+                        key: const ValueKey('bot-limits'),
+                        onDismissed: (_) => setState(() => _botNoticeDismissed = true),
+                        child: BotLimitationsCard(caps!.limitations),
+                      ),
+                    ),
+                  Expanded(
+                    child: _results != null
+                        ? _ResultsList(
+                            results: _results!,
+                            messageHits: _messageHits,
+                            query: _search.text.trim(),
+                            onOpen: _open,
+                            onOpenMessage: (hit) => Navigator.of(context)
+                                .push(ConversationScreen.route(hit.chatId, focusMessageId: hit.messageId)),
+                          )
+                        : PageView.custom(
+                            controller: _pages,
+                            onPageChanged: context.read<LensCubit>().select,
+                            childrenDelegate: SliverChildBuilderDelegate(
+                              (context, i) {
+                                final e = lens.entries[i];
+                                return ChatListPage(
+                                  key: ValueKey(e.key),
+                                  entry: e,
+                                  isBot: isBot,
+                                  tint: many ? ext.lensColor(e) : null,
+                                  onOpen: _open,
+                                );
+                              },
+                              childCount: lens.entries.length,
+                              findChildIndexCallback: (key) {
+                                final k = (key as ValueKey<String>).value;
+                                final i = lens.entries.indexWhere((e) => e.key == k);
+                                return i < 0 ? null : i;
+                              },
+                            ),
                           ),
-                        ),
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
         );

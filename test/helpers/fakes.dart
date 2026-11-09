@@ -65,10 +65,10 @@ class FakeSecureStore extends SecureStore {
   var discards = 0;
 
   @override
-  Future<String> databaseEncryptionKey() async => key ??= 'bmV3';
+  Future<String> databaseEncryptionKey({String? scope}) async => key ??= 'bmV3';
 
   @override
-  Future<void> discardDatabaseEncryptionKey() async {
+  Future<void> discardDatabaseEncryptionKey({String? scope}) async {
     key = null;
     discards++;
   }

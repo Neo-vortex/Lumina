@@ -6,6 +6,7 @@ import '../../../../core/telegram/display.dart';
 import '../../../../core/telegram/telegram_cache.dart';
 import '../../../../core/telegram/widgets/td_file_image.dart';
 import '../../../../core/theme/glow_colors.dart';
+import '../../../../core/widgets/lumina_glass.dart';
 import 'content/media_content.dart';
 
 /// Pinned message banner (spec §6.2); tap jumps to the message.
@@ -20,56 +21,66 @@ class PinnedBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final cache = context.read<TelegramCache>();
     final visual = visualOf(message.content);
-    return Material(
-      color: GlowColors.surface,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
-          decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: GlowColors.outline)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 3,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: GlowColors.violet,
-                  borderRadius: BorderRadius.circular(2),
-                  boxShadow: glow(GlowColors.violet, intensity: 0.5),
-                ),
-              ),
-              const SizedBox(width: 10),
-              if (visual != null && (visual.file != null || visual.mini != null)) ...[
-                _Thumb(file: visual.file, mini: visual.mini, isVideo: visual.isVideo),
-                const SizedBox(width: 10),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Pinned message',
-                      style: TextStyle(color: GlowColors.violet, fontSize: 12, fontWeight: FontWeight.w600),
+    // A glass card floating under the header, not a solid band.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 2, 10, 0),
+      child: LuminaGlass(
+        grouped: true,
+        shadow: false,
+        radius: 18,
+        tintOpacity: 0.5,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 7, 4, 7),
+              child: Row(
+                children: [
+                  Container(
+                    width: 3,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: GlowColors.violet,
+                      borderRadius: BorderRadius.circular(2),
                     ),
-                    Text(
-                      Display.preview(cache, message),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 14),
-                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  if (visual != null && (visual.file != null || visual.mini != null)) ...[
+                    _Thumb(file: visual.file, mini: visual.mini, isVideo: visual.isVideo),
+                    const SizedBox(width: 10),
                   ],
-                ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Pinned message',
+                          style: TextStyle(
+                            color: GlowColors.violet,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          Display.preview(cache, message),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (onUnpin != null)
+                    IconButton(
+                      tooltip: 'Unpin',
+                      icon: const Icon(Icons.close_rounded, size: 18, color: GlowColors.textMuted),
+                      onPressed: onUnpin,
+                    ),
+                ],
               ),
-              if (onUnpin != null)
-                IconButton(
-                  tooltip: 'Unpin',
-                  icon: const Icon(Icons.close_rounded, size: 18, color: GlowColors.textMuted),
-                  onPressed: onUnpin,
-                ),
-            ],
+            ),
           ),
         ),
       ),

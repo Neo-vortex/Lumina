@@ -1,3 +1,7 @@
+import 'package:flutter/services.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/gestures.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -33,17 +37,34 @@ class VideoNoteContent extends StatefulWidget {
   State<VideoNoteContent> createState() => _VideoNoteContentState();
 }
 
-class _VideoNoteContentState extends State<VideoNoteContent> {
+class _VideoNoteContentState extends State<VideoNoteContent> with SingleTickerProviderStateMixin {
   ({String source, bool local})? _playing;
+
+  /// The player reports its position a few times a second; between reports
+  /// the ring is extrapolated every frame so it runs smoothly.
+  late final Ticker _ticker = createTicker(_tick);
+  Duration _basePosition = Duration.zero;
+  final _baseClock = Stopwatch();
   final _progress = ValueNotifier<double>(0);
   final _seek = ValueNotifier<Duration?>(null);
+
+  /// The knob grows while it's held.
+  final _grab = ValueNotifier<bool>(false);
   Duration _duration = Duration.zero;
   bool _scrubbing = false;
 
+  void _tick(Duration _) {
+    if (_playing == null || _scrubbing || _duration == Duration.zero) return;
+    final at = _basePosition + _baseClock.elapsed;
+    _progress.value = (at.inMicroseconds / _duration.inMicroseconds).clamp(0.0, 1.0);
+  }
+
   @override
   void dispose() {
+    _ticker.dispose();
     _progress.dispose();
     _seek.dispose();
+    _grab.dispose();
     super.dispose();
   }
 
@@ -52,14 +73,25 @@ class _VideoNoteContentState extends State<VideoNoteContent> {
     final f = ringFraction(local, Size.square(size));
     _progress.value = f;
     _seek.value = _duration * f;
+    _basePosition = _duration * f;
+    _baseClock
+      ..reset()
+      ..start();
   }
 
   Future<void> _toggle() async {
     if (_playing != null) {
+      _ticker.stop();
+      _baseClock.stop();
       _progress.value = 0;
       setState(() => _playing = null);
       return;
     }
+    _basePosition = Duration.zero;
+    _baseClock
+      ..reset()
+      ..start();
+    if (!_ticker.isActive) _ticker.start();
     final files = context.read<FileStore>();
     final stream = context.read<TdStreamServer>();
     final f = files[widget.note.video.id] ?? widget.note.video;
@@ -88,23 +120,39 @@ class _VideoNoteContentState extends State<VideoNoteContent> {
             button: true,
             label: 'Video message, ${Display.duration(widget.note.duration)}',
             excludeSemantics: true,
-            child: GestureDetector(
-              onTap: _toggle,
-              // Dragging near the edge while playing scrubs along the ring.
-              // Only while playing, so swipe-to-reply still works otherwise.
-              onPanStart: _playing == null
-                  ? null
-                  : (d) {
-                      final r = (d.localPosition - const Offset(size / 2, size / 2)).distance;
-                      _scrubbing = r > size / 2 - 36;
-                      if (_scrubbing) _scrub(d.localPosition, size);
+            child: RawGestureDetector(
+              behavior: HitTestBehavior.opaque,
+              gestures: {
+                TapGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
+                  TapGestureRecognizer.new,
+                  (t) => t.onTap = _toggle,
+                ),
+                // Touching the ring band while playing grabs it at once, ahead of
+                // the list's scroll and swipe-to-reply, and drags along the ring.
+                // Anywhere else (or when not playing) it steps aside.
+                _RingGrabRecognizer: GestureRecognizerFactoryWithHandlers<_RingGrabRecognizer>(
+                  _RingGrabRecognizer.new,
+                  (g) => g
+                    ..accepts = (local) {
+                      if (_playing == null || _duration == Duration.zero) return false;
+                      final r = (local - const Offset(size / 2, size / 2)).distance;
+                      return r > size / 2 - 40 && r < size / 2 + 12;
+                    }
+                    ..onStart = (local) {
+                      _scrubbing = true;
+                      _grab.value = true;
+                      HapticFeedback.selectionClick();
+                      _scrub(local, size);
+                    }
+                    ..onUpdate = (local) {
+                      _scrub(local, size);
+                    }
+                    ..onEnd = () {
+                      _scrubbing = false;
+                      _grab.value = false;
                     },
-              onPanUpdate: _playing == null
-                  ? null
-                  : (d) {
-                      if (_scrubbing) _scrub(d.localPosition, size);
-                    },
-              onPanEnd: _playing == null ? null : (_) => _scrubbing = false,
+                ),
+              },
               child: SizedBox.square(
                 dimension: size,
                 child: Stack(
@@ -130,7 +178,11 @@ class _VideoNoteContentState extends State<VideoNoteContent> {
                                     if (ended) {
                                       _toggle();
                                     } else if (!_scrubbing && duration > Duration.zero) {
-                                      _progress.value = position.inMilliseconds / duration.inMilliseconds;
+                                      // Re-anchor the extrapolation on each report.
+                                      _basePosition = position;
+                                      _baseClock
+                                        ..reset()
+                                        ..start();
                                     }
                                   },
                                 )
@@ -154,7 +206,9 @@ class _VideoNoteContentState extends State<VideoNoteContent> {
                     ),
                     IgnorePointer(
                       child: RepaintBoundary(
-                        child: CustomPaint(painter: _RingPainter(_progress, playing: _playing != null)),
+                        child: CustomPaint(
+                          painter: _RingPainter(_progress, _grab, playing: _playing != null),
+                        ),
                       ),
                     ),
                   ],
@@ -182,9 +236,11 @@ class _VideoNoteContentState extends State<VideoNoteContent> {
 
 /// The track and glowing progress arc round a round video.
 class _RingPainter extends CustomPainter {
-  _RingPainter(this.progress, {required this.playing}) : super(repaint: progress);
+  _RingPainter(this.progress, this.grab, {required this.playing})
+    : super(repaint: Listenable.merge([progress, grab]));
 
   final ValueNotifier<double> progress;
+  final ValueNotifier<bool> grab;
   final bool playing;
 
   @override
@@ -197,7 +253,32 @@ class _RingPainter extends CustomPainter {
         ..strokeWidth = 2
         ..color = GlowColors.cyan.withValues(alpha: playing ? 0.25 : 0.8),
     );
-    if (!playing || progress.value <= 0) return;
+    if (!playing) return;
+    final f = progress.value.clamp(0.0, 1.0);
+    // The knob at the arc's end: where to grab to scrub.
+    final angle = -math.pi / 2 + 2 * math.pi * f;
+    final knob = rect.center + Offset(math.cos(angle), math.sin(angle)) * (rect.width / 2);
+    final r = grab.value ? 9.0 : 6.0;
+    void drawKnob() {
+      canvas.drawCircle(
+        knob,
+        r + 5,
+        Paint()
+          ..color = GlowColors.cyan.withValues(alpha: grab.value ? 0.45 : 0.3)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+      );
+      canvas.drawCircle(knob, r, Paint()..color = Colors.white);
+      canvas.drawCircle(
+        knob,
+        r,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.5
+          ..color = GlowColors.cyan,
+      );
+    }
+
+    if (f <= 0) return drawKnob();
     canvas.drawArc(
       rect,
       -math.pi / 2,
@@ -209,8 +290,44 @@ class _RingPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round
         ..color = GlowColors.cyan,
     );
+    drawKnob();
   }
 
   @override
   bool shouldRepaint(_RingPainter old) => old.playing != playing || old.progress != progress;
+}
+
+/// Claims a pointer the moment it lands where [accepts] says (the ring band of a
+/// playing video), so the drag isn't lost to scrolling; elsewhere it rejects at
+/// once and other gestures proceed as usual.
+class _RingGrabRecognizer extends OneSequenceGestureRecognizer {
+  bool Function(Offset local) accepts = (_) => false;
+  void Function(Offset local)? onStart;
+  void Function(Offset local)? onUpdate;
+  VoidCallback? onEnd;
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    final local = event.localPosition;
+    if (!accepts(local)) return;
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
+    onStart?.call(local);
+  }
+
+  @override
+  void handleEvent(PointerEvent event) {
+    if (event is PointerMoveEvent) {
+      onUpdate?.call(event.localPosition);
+    } else if (event is PointerUpEvent || event is PointerCancelEvent) {
+      onEnd?.call();
+      stopTrackingPointer(event.pointer);
+    }
+  }
+
+  @override
+  void didStopTrackingLastPointer(int pointer) {}
+
+  @override
+  String get debugDescription => 'ring grab';
 }

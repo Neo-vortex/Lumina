@@ -1,9 +1,12 @@
+import '../../../../core/build/build_flavor.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/storage/app_preferences.dart';
 import '../../../../core/theme/glow_colors.dart';
 import '../../../../core/widgets/glow_sheet.dart';
+import '../../../../core/widgets/lumina_glass.dart' show GlassMode;
 import '../../../conversation/data/messages_repository.dart';
 import '../../../backgrounds/presentation/background_picker_screen.dart';
 import '../screens/swipe_settings_screen.dart';
@@ -13,8 +16,15 @@ import 'settings_section.dart';
 class PrivacySettings extends StatelessWidget {
   const PrivacySettings({super.key});
 
+  // Rebuilt on every preference change: this section is a const widget,
+  // which the page's own rebuild skips (switches didn't move).
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: context.read<AppPreferences>().changes,
+    builder: (context, _) => _build(context),
+  );
+
+  Widget _build(BuildContext context) {
     final prefs = context.read<AppPreferences>();
     return SettingsSection(
       title: 'Privacy',
@@ -68,8 +78,8 @@ class GestureSettings extends StatelessWidget {
     children: [
       ListTile(
         leading: const Icon(Icons.swipe_rounded, color: GlowColors.violet),
-        title: const Text('Swipe gestures'),
-        subtitle: const Text('What swiping left or right does on messages and chats'),
+        title: const Text('Gestures'),
+        subtitle: const Text('Swipes on messages and chats, and double-tapping a message'),
         trailing: const Icon(Icons.chevron_right_rounded),
         onTap: () => Navigator.of(context).push(SwipeSettingsScreen.route()),
       ),
@@ -80,8 +90,116 @@ class GestureSettings extends StatelessWidget {
         trailing: const Icon(Icons.chevron_right_rounded),
         onTap: () => Navigator.of(context).push(BackgroundPickerScreen.route()),
       ),
+      ListTile(
+        leading: const Icon(Icons.auto_awesome_rounded, color: GlowColors.cyan),
+        title: const Text('Chat list background'),
+        subtitle: const Text('Aurora glow, a photo or a colour behind your chats'),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: () => Navigator.of(context).push(BackgroundPickerScreen.route(forChatList: true)),
+      ),
+      const _TextSizeTile(),
+      const _GlassTile(),
     ],
   );
+}
+
+/// Text size across the app, with a live preview line.
+class _TextSizeTile extends StatelessWidget {
+  const _TextSizeTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final prefs = context.read<AppPreferences>();
+    return ListenableBuilder(
+      listenable: prefs.changes,
+      builder: (context, _) {
+        final v = prefs.textScale;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.format_size_rounded, color: GlowColors.violet),
+                  const SizedBox(width: 16),
+                  const Expanded(child: Text('Text size', style: TextStyle(fontSize: 16))),
+                  Text('${(v * 100).round()}%', style: const TextStyle(color: GlowColors.textMuted)),
+                ],
+              ),
+              Row(
+                children: [
+                  const Text('A', style: TextStyle(fontSize: 12, color: GlowColors.textMuted)),
+                  Expanded(
+                    child: Slider(
+                      value: v,
+                      min: 0.85,
+                      max: 1.4,
+                      divisions: 11,
+                      onChanged: (x) => prefs.textScale = double.parse(x.toStringAsFixed(2)),
+                    ),
+                  ),
+                  const Text('A', style: TextStyle(fontSize: 22, color: GlowColors.textMuted)),
+                ],
+              ),
+              if (v != 1.0)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(onPressed: () => prefs.textScale = 1.0, child: const Text('Reset')),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Liquid glass, light blur or solid chat chrome.
+class _GlassTile extends StatelessWidget {
+  const _GlassTile();
+
+  static String _label(GlassMode m) => switch (m) {
+    GlassMode.light => 'Light glass (smooth)',
+    GlassMode.full => 'Real glass (liquid, heavier)',
+    GlassMode.adaptive => 'Real glass while still, light while scrolling',
+    GlassMode.off => 'Off (solid, smoothest)',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final prefs = context.read<AppPreferences>();
+    return ListenableBuilder(
+      listenable: prefs.changes,
+      builder: (context, _) => ListTile(
+        leading: const Icon(Icons.blur_on_rounded, color: GlowColors.cyan),
+        title: const Text('Glass effects'),
+        subtitle: Text('Chat header and composer: ${_label(prefs.glassMode)}'),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: () async {
+          final m = await showGlowSheet<GlassMode>(
+            context,
+            title: 'Glass effects',
+            builder: (context) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final m in GlassMode.values)
+                  ListTile(
+                    title: Text(_label(m)),
+                    trailing: m == prefs.glassMode
+                        ? const Icon(Icons.check_rounded, color: GlowColors.violet)
+                        : null,
+                    onTap: () => Navigator.pop(context, m),
+                  ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          );
+          if (m != null) prefs.glassMode = m;
+        },
+      ),
+    );
+  }
 }
 
 /// Quick reactions (shown first on the message menu) and whether emoji,
@@ -131,12 +249,15 @@ class ReactionSettings extends StatelessWidget {
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => _pick(context, prefs),
           ),
-          SwitchListTile(
-            value: prefs.aiReactionSuggestion,
-            onChanged: (v) => prefs.aiReactionSuggestion = v,
-            title: const Text('AI reaction suggestion'),
-            subtitle: const Text('When you tap a message, the on-device AI suggests one reaction (marked ✨)'),
-          ),
+          if (kOnDeviceLlm)
+            SwitchListTile(
+              value: prefs.aiReactionSuggestion,
+              onChanged: (v) => prefs.aiReactionSuggestion = v,
+              title: const Text('AI reaction suggestion'),
+              subtitle: const Text(
+                'When you tap a message, the on-device AI suggests one reaction (marked ✨)',
+              ),
+            ),
           SwitchListTile(
             value: prefs.animatedEmoji,
             onChanged: (v) => prefs.animatedEmoji = v,
@@ -289,8 +410,15 @@ class MapSettings extends StatelessWidget {
 class LinkSettings extends StatelessWidget {
   const LinkSettings({super.key});
 
+  // Rebuilt on every preference change: this section is a const widget,
+  // which the page's own rebuild skips (switches didn't move).
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: context.read<AppPreferences>().changes,
+    builder: (context, _) => _build(context),
+  );
+
+  Widget _build(BuildContext context) {
     final prefs = context.read<AppPreferences>();
     return SettingsSection(
       title: 'Links',
@@ -322,8 +450,15 @@ class LinkSettings extends StatelessWidget {
 class StorySettings extends StatelessWidget {
   const StorySettings({super.key});
 
+  // Rebuilt on every preference change: this section is a const widget,
+  // which the page's own rebuild skips (switches didn't move).
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: context.read<AppPreferences>().changes,
+    builder: (context, _) => _build(context),
+  );
+
+  Widget _build(BuildContext context) {
     final prefs = context.read<AppPreferences>();
     return SettingsSection(
       title: 'Stories',
@@ -345,8 +480,15 @@ class ChannelAdsSettings extends StatelessWidget {
 
   final bool isPremium;
 
+  // Rebuilt on every preference change: this section is a const widget,
+  // which the page's own rebuild skips (switches didn't move).
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: context.read<AppPreferences>().changes,
+    builder: (context, _) => _build(context),
+  );
+
+  Widget _build(BuildContext context) {
     final prefs = context.read<AppPreferences>();
     return SettingsSection(
       title: 'Channels',
@@ -377,8 +519,15 @@ class ChannelAdsSettings extends StatelessWidget {
 class MediaPlaybackSettings extends StatelessWidget {
   const MediaPlaybackSettings({super.key});
 
+  // Rebuilt on every preference change: this section is a const widget,
+  // which the page's own rebuild skips (switches didn't move).
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: context.read<AppPreferences>().changes,
+    builder: (context, _) => _build(context),
+  );
+
+  Widget _build(BuildContext context) {
     final prefs = context.read<AppPreferences>();
     return SettingsSection(
       title: 'Playback',
@@ -396,9 +545,32 @@ class MediaPlaybackSettings extends StatelessWidget {
           trailing: Text('${prefs.playbackSpeed.toStringAsFixed(2)}×'),
         ),
         SwitchListTile(
+          value: prefs.sendSound,
+          onChanged: (v) => prefs.sendSound = v,
+          title: const Text('Send sound'),
+          subtitle: const Text('A soft sound when a message goes out (never on silent)'),
+        ),
+        SwitchListTile(
           value: prefs.autoplayVideos,
           onChanged: (v) => prefs.autoplayVideos = v,
-          title: const Text('Autoplay videos and GIFs'),
+          title: const Text('Autoplay videos in chats'),
+          subtitle: const Text('Downloaded videos play muted when you stop scrolling on them'),
+        ),
+        ListTile(
+          title: const Text('Video quality'),
+          subtitle: const Text('What videos download and play in. Low saves data; Telegram keeps smaller copies'),
+          trailing: DropdownButton<VideoQuality>(
+            value: prefs.videoQuality,
+            underline: const SizedBox.shrink(),
+            onChanged: (v) {
+              if (v != null) prefs.videoQuality = v;
+            },
+            items: const [
+              DropdownMenuItem(value: VideoQuality.low, child: Text('Low')),
+              DropdownMenuItem(value: VideoQuality.auto, child: Text('Auto')),
+              DropdownMenuItem(value: VideoQuality.original, child: Text('Original')),
+            ],
+          ),
         ),
       ],
     );

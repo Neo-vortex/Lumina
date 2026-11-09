@@ -165,19 +165,32 @@ class CallService : Service() {
         fun incoming(context: Context, title: String, video: Boolean): Notification {
             channels(context)
             val full = openApp(context, "open", 3)
-            return builder(context, INCOMING_CHANNEL)
+            val decline = broadcast(context, ACTION_DECLINE, 4)
+            val answer = openApp(context, "accept", 5)
+            val b = builder(context, INCOMING_CHANNEL)
                 .setSmallIcon(android.R.drawable.stat_sys_phone_call)
                 .setContentTitle(title)
                 .setContentText(if (video) "Incoming video call" else "Incoming call")
                 .setCategory(Notification.CATEGORY_CALL)
                 .setPriority(Notification.PRIORITY_MAX)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setOngoing(true)
                 .setContentIntent(full)
                 .setFullScreenIntent(full, true)
-                .addAction(
-                    Notification.Action.Builder(null, "Decline", broadcast(context, ACTION_DECLINE, 4)).build(),
-                )
-                .addAction(Notification.Action.Builder(null, "Answer", openApp(context, "accept", 5)).build())
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // The system's call layout: ranked first, shown in full on the
+                // lock screen, Answer / Decline buttons in green and red.
+                try {
+                    val caller = android.app.Person.Builder().setName(title).setImportant(true).build()
+                    return b.setStyle(Notification.CallStyle.forIncomingCall(caller, decline, answer))
+                        .build()
+                } catch (e: Exception) {
+                    Log.w(TAG, "CallStyle failed, plain notification instead", e)
+                }
+            }
+            return b
+                .addAction(Notification.Action.Builder(null, "Decline", decline).build())
+                .addAction(Notification.Action.Builder(null, "Answer", answer).build())
                 .build()
         }
     }

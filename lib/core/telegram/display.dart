@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 import 'package:intl/intl.dart';
 
-import '../theme/glow_colors.dart';
 import 'telegram_cache.dart';
 
 /// Human-facing text for TDLib entities, shared by every feature.
@@ -37,13 +36,17 @@ abstract final class Display {
 
   /// Stable accent per id, from the app palette (not Telegram's).
   static Color accentFor(int id) {
+    // Soft tones, each at least 7 : 1 on an incoming bubble (names and
+    // initials stay readable; saturated hues "vibrate" on dark).
     const palette = [
-      GlowColors.cyan,
-      GlowColors.violet,
-      GlowColors.amber,
-      GlowColors.coral,
-      GlowColors.teal,
-      GlowColors.magenta,
+      Color(0xFFFF8A80), // red
+      Color(0xFFFFB74D), // orange
+      Color(0xFFB39DFF), // violet
+      Color(0xFFA5D6A7), // green
+      Color(0xFF67E8F9), // cyan
+      Color(0xFF90CAF9), // blue
+      Color(0xFFF48FB1), // pink
+      Color(0xFFFFE082), // yellow
     ];
     return palette[id.abs() % palette.length];
   }
@@ -124,6 +127,32 @@ abstract final class Display {
     return '${(bytes / 1024 / 1024 / 1024).toStringAsFixed(2)} GB';
   }
 
+  /// A call message as Telegram words it: direction and outcome, and how
+  /// long it lasted when it connected.
+  static ({String title, String? detail, bool missed, bool outgoing}) call(td.Message m) {
+    final c = m.content as td.MessageCall;
+    final kind = c.isVideo ? 'video call' : 'call';
+    final out = m.isOutgoing;
+    final (String title, bool missed) = switch (c.discardReason) {
+      td.CallDiscardReasonMissed() => (out ? 'Cancelled $kind' : 'Missed $kind', !out),
+      td.CallDiscardReasonDeclined() => ('Declined $kind', false),
+      td.CallDiscardReasonDisconnected() when c.duration == 0 => ('${out ? 'Outgoing' : 'Incoming'} $kind · failed', !out),
+      _ when c.duration == 0 && !out => ('Missed $kind', true),
+      _ when c.duration == 0 => ('Cancelled $kind', false),
+      _ => ('${out ? 'Outgoing' : 'Incoming'} $kind', false),
+    };
+    final detail = c.duration > 0 ? _callLength(c.duration) : null;
+    return (title: title, detail: detail, missed: missed, outgoing: out);
+  }
+
+  /// "42 s", "3 min 05 s", "1 h 02 min".
+  static String _callLength(int seconds) {
+    final d = Duration(seconds: seconds);
+    if (d.inHours > 0) return '${d.inHours} h ${d.inMinutes.remainder(60).toString().padLeft(2, '0')} min';
+    if (d.inMinutes > 0) return '${d.inMinutes} min ${d.inSeconds.remainder(60).toString().padLeft(2, '0')} s';
+    return '${d.inSeconds} s';
+  }
+
   /// One-line summary of a message for chat list rows, replies and banners.
   static String preview(TelegramCache cache, td.Message? m) {
     if (m == null) return '';
@@ -149,7 +178,10 @@ abstract final class Display {
       td.MessageLocation() => 'Location',
       td.MessageLiveLocation() => 'Live location',
       td.MessageVenue() => 'Venue',
-      td.MessageCall(:final isVideo) => isVideo ? 'Video call' : 'Call',
+      td.MessageCall() => switch (call(m)) {
+        (:final title, detail: final d?, missed: _, outgoing: _) => '$title ($d)',
+        (:final title, detail: null, missed: _, outgoing: _) => title,
+      },
       td.MessageExpiredPhoto() => 'Disappearing photo',
       td.MessageExpiredVideo() => 'Disappearing video',
       td.MessageExpiredVoiceNote() => 'Disappearing voice message',
@@ -184,6 +216,10 @@ abstract final class Display {
             ? '$who left'
             : '$who removed ${userName(cache.users[userId])}',
       td.MessagePinMessage() => '$who pinned a message',
+      td.MessageChatSetBackground(:final onlyForSelf) =>
+        onlyForSelf ? '$who set a new background for this chat' : '$who set a new background for both of you',
+      td.MessageChatSetTheme() => '$who changed the chat theme',
+      td.MessageChatBoost() => '$who boosted the chat',
       td.MessageScreenshotTaken() => '$who took a screenshot',
       td.MessageChatUpgradeTo() || td.MessageChatUpgradeFrom() => 'Group upgraded to supergroup',
       td.MessageChatSetMessageAutoDeleteTime(:final messageAutoDeleteTime) =>

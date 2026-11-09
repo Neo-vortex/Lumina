@@ -3,17 +3,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
-import '../../../core/platform/system_channel.dart';
 import '../../../core/telegram/display.dart';
 import '../../../core/telegram/telegram_cache.dart';
 import '../../../core/telegram/widgets/animated_sticker.dart';
 import '../../../core/telegram/widgets/chat_avatar.dart';
 import '../../../core/telegram/widgets/td_file_image.dart';
 import '../../../core/theme/glow_colors.dart';
-import '../../../core/widgets/delete_confirm.dart';
-import '../../../core/widgets/glow_button.dart';
 import '../../../core/widgets/glow_sheet.dart';
 import '../../chats/data/chats_repository.dart';
+import '../../contacts/presentation/widgets/contact_sheets.dart';
 import '../data/user_profile_repository.dart';
 import 'profile_photo_viewer.dart';
 
@@ -58,12 +56,49 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   late final _cache = context.read<TelegramCache>();
   td.UserFullInfo? _full;
   final _gallery = GlobalKey<_GalleryState>();
+
+  /// How far the header photo is pulled down (logical px).
+  final _pull = ValueNotifier<double>(0);
+
+  /// The viewer is up: no more pulls open another (a second copy made the
+  /// first back gesture look like it did nothing).
+  var _viewerOpen = false;
+
+  Future<void> _openFromPull() async {
+    if (_pulled || _viewerOpen) return;
+    _pulled = true;
+    _viewerOpen = true;
+    HapticFeedback.selectionClick();
+    _springBack();
+    await _gallery.currentState?.open();
+    _viewerOpen = false;
+    _pull.value = 0;
+  }
+
+  /// Eases the stretched header back.
+  void _springBack() {
+    final from = _pull.value;
+    if (from == 0) return;
+    const steps = 10;
+    for (var i = 1; i <= steps; i++) {
+      Future<void>.delayed(Duration(milliseconds: 16 * i), () {
+        if (mounted) _pull.value = from * (1 - Curves.easeOut.transform(i / steps));
+      });
+    }
+  }
+
   var _pulled = false;
   List<td.ChatPhoto> _photos = const [];
   List<td.Story> _posts = const [];
 
   td.User? get _user => _cache.users[widget.userId];
   bool get _blocked => _full?.blockList != null;
+
+  @override
+  void dispose() {
+    _pull.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -115,6 +150,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ('secret', Icons.lock_rounded, 'Start secret chat', GlowColors.teal),
             ('edit', Icons.edit_rounded, user.isContact ? 'Edit contact' : 'Add to contacts', null),
             ('share', Icons.share_rounded, 'Share contact', null),
+            ('phone', Icons.save_alt_rounded, 'Save to phone', null),
             ('qr', Icons.qr_code_2_rounded, 'Show QR code', null),
             (
               'block',
@@ -142,8 +178,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         case 'edit':
           await _editContact(user);
         case 'share':
-          final phone = user.phoneNumber.isEmpty ? '' : '\n+${user.phoneNumber}';
-          await const SystemChannel().shareText('${Display.userName(user)}$phone\n$_link');
+          await showShareContact(context, user.id);
+        case 'phone':
+          await saveContactToPhone(context, user.id);
         case 'qr':
           widget.onShowQr?.call(_link, Display.userName(user));
         case 'block':
@@ -161,48 +198,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           await _repo.setBlocked(user.id, !_blocked);
           await _load();
         case 'delete':
-          final ok = await confirmDelete(context, title: 'Delete ${Display.userName(user)} from contacts?');
-          if (ok == null) return;
-          await _repo.deleteContact(user.id);
-          if (mounted) setState(() {});
+          if (await deleteContact(context, user.id) && mounted) setState(() {});
       }
     } catch (e) {
       if (mounted) _snack('$e');
     }
   }
 
+  /// Add or rename; works for people whose number is hidden too.
   Future<void> _editContact(td.User user) async {
-    final first = TextEditingController(text: user.firstName);
-    final last = TextEditingController(text: user.lastName);
-    final save = await showGlowSheet<bool>(
-      context,
-      title: user.isContact ? 'Edit contact' : 'Add to contacts',
-      builder: (context) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: first,
-              decoration: const InputDecoration(labelText: 'First name'),
-            ),
-            TextField(
-              controller: last,
-              decoration: const InputDecoration(labelText: 'Last name'),
-            ),
-            const SizedBox(height: 16),
-            GlowButton(label: 'Save', onPressed: () => Navigator.pop(context, true)),
-          ],
-        ),
-      ),
-    );
-    if (save == true && first.text.trim().isNotEmpty) {
-      await _repo.saveContact(user, firstName: first.text.trim(), lastName: last.text.trim());
-      if (mounted) setState(() {});
-    }
-    first.dispose();
-    last.dispose();
+    if (await showContactEditor(context, user.id) && mounted) setState(() {});
   }
 
   @override
@@ -216,17 +221,26 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return DefaultTabController(
       length: ProfileTab.values.length,
       child: Scaffold(
-        // Pulling down at the top opens the photos full screen.
+        // Pulling down at the top stretches the photo with the finger; far
+        // enough (or let go past halfway) and it grows into the full-screen
+        // viewer.
         body: NotificationListener<ScrollNotification>(
           onNotification: (n) {
             if (n is OverscrollNotification &&
-                n.overscroll < -12 &&
                 n.metrics.extentBefore == 0 &&
-                !_pulled) {
-              _pulled = true;
-              _gallery.currentState?.open();
+                n.overscroll < 0 &&
+                !_pulled &&
+                !_viewerOpen) {
+              _pull.value = (_pull.value - n.overscroll).clamp(0.0, 140.0);
+              if (_pull.value >= 90) _openFromPull();
+            } else if (n is ScrollUpdateNotification && n.metrics.extentBefore > 0 && _pull.value > 0) {
+              _pull.value = 0;
             }
-            if (n is ScrollEndNotification) _pulled = false;
+            if (n is ScrollEndNotification) {
+              if (_pull.value >= 45 && !_pulled && !_viewerOpen) _openFromPull();
+              _pulled = false;
+              _springBack();
+            }
             return false;
           },
           child: NestedScrollView(
@@ -235,8 +249,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               // Not in the app bar's flexible space: its layers there swallowed
               // the gallery's swipes and taps.
               SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 320,
+                child: ValueListenableBuilder<double>(
+                  valueListenable: _pull,
+                  builder: (context, pull, child) => SizedBox(height: 320 + pull, child: child),
                   child: _Gallery(key: _gallery, user: user, photos: _photos, personal: _full?.personalPhoto),
                 ),
               ),
@@ -271,6 +286,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         _blocked ? 'Blocked' : Display.status(user),
                         style: TextStyle(color: _blocked ? GlowColors.coral : GlowColors.textMuted),
                       ),
+                      if (!user.isContact && user.type is td.UserTypeRegular) ...[
+                        const SizedBox(height: 12),
+                        // Plain to find, also for people with a hidden number.
+                        OutlinedButton.icon(
+                          onPressed: () => _editContact(user),
+                          icon: const Icon(Icons.person_add_rounded, size: 18),
+                          label: const Text('Add to contacts'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: GlowColors.cyan,
+                            side: const BorderSide(color: GlowColors.cyan),
+                            shape: const StadiumBorder(),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -415,10 +444,11 @@ class _GalleryState extends State<_Gallery> {
   }
 
   /// Full screen, starting at the photo on show.
-  void open() {
+  /// Completes when the viewer closes.
+  Future<void> open() async {
     final photos = _all;
     if (photos.isEmpty) return;
-    Navigator.of(context).push(ProfilePhotoViewer.route(photos, _page.clamp(0, photos.length - 1)));
+    await Navigator.of(context).push(ProfilePhotoViewer.route(photos, _page.clamp(0, photos.length - 1)));
   }
 
   void _go(int delta, int count) {
@@ -456,9 +486,13 @@ class _GalleryState extends State<_Gallery> {
                 excludeSemantics: true,
                 child: sizes.isEmpty
                     ? ChatAvatar.user(widget.user, size: 120)
-                    : TdFileImage(
-                        file: sizes.last.photo,
-                        placeholderBytes: Display.minithumbnail(photos[i].minithumbnail),
+                    // Flies into the full-screen viewer.
+                    : Hero(
+                        tag: ProfilePhotoViewer.heroTag(photos[i]),
+                        child: TdFileImage(
+                          file: sizes.last.photo,
+                          placeholderBytes: Display.minithumbnail(photos[i].minithumbnail),
+                        ),
                       ),
               );
             },

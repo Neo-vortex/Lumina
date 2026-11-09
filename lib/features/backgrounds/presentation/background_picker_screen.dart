@@ -7,6 +7,7 @@ import '../../../core/storage/app_preferences.dart';
 import '../../../core/tdlib/td_client.dart';
 import '../../../core/telegram/widgets/td_file_image.dart';
 import '../../../core/theme/glow_colors.dart';
+import '../../../core/widgets/aurora_background.dart';
 import '../../../core/widgets/glow_button.dart';
 import '../domain/chat_backdrop.dart';
 import 'chat_backdrop_view.dart';
@@ -15,13 +16,17 @@ import 'chat_backdrop_view.dart';
 /// gallery, your photo or a colour fill, with blur and dim and a live
 /// preview. With [chat] it sets that chat's background in Telegram (for
 /// you, or for both in private chats); without, the default in Settings.
+/// With [forChatList], the chat list's background (aurora, plain, photo,
+/// gallery or fill).
 class BackgroundPickerScreen extends StatefulWidget {
-  const BackgroundPickerScreen({super.key, this.chat});
+  const BackgroundPickerScreen({super.key, this.chat, this.forChatList = false});
 
   final td.Chat? chat;
+  final bool forChatList;
 
-  static Route<void> route({td.Chat? chat}) =>
-      MaterialPageRoute(builder: (_) => BackgroundPickerScreen(chat: chat));
+  static Route<void> route({td.Chat? chat, bool forChatList = false}) => MaterialPageRoute(
+    builder: (_) => BackgroundPickerScreen(chat: chat, forChatList: forChatList),
+  );
 
   static const fills = <List<int>>[
     [0x1B1F3B, 0x0E1220],
@@ -46,33 +51,60 @@ class _BackgroundPickerScreenState extends State<BackgroundPickerScreen> {
       .then((b) => b.backgrounds)
       .catchError((Object _) => <td.Background>[]);
 
-  // The choice: one of these is set.
-  var _glow = false;
+  // The choice: one of these is set. [_special] is 'glow', 'aurora' or 'plain'.
+  String? _special;
   td.Background? _remote;
   String? _photo;
   List<int>? _fill;
-  late double _blur = widget.chat == null ? _prefs.backdropBlur : 0;
-  late double _dim = widget.chat == null ? _prefs.backdropDim : 0.35;
+  late double _blur = _list
+      ? _prefs.listBackdropBlur
+      : widget.chat == null
+      ? _prefs.backdropBlur
+      : 0;
+  late double _dim = _list
+      ? _prefs.listBackdropDim
+      : widget.chat == null
+      ? _prefs.backdropDim
+      : 0.35;
+  late bool _drift = _prefs.listAuroraDrift;
   var _forBoth = false;
+
+  bool get _list => widget.forChatList;
+
+  /// The aurora is (or would stay) the chat list's background.
+  bool get _auroraShown =>
+      _special == 'aurora' ||
+      (_special == null &&
+          _remote == null &&
+          _photo == null &&
+          _fill == null &&
+          _list &&
+          _prefs.listBackdropKind == 'aurora');
 
   bool get _isChat => widget.chat != null;
   bool get _private => widget.chat?.type is td.ChatTypePrivate;
 
-  void _pick({bool glow = false, td.Background? remote, String? photo, List<int>? fill}) => setState(() {
-    _glow = glow;
+  void _pick({String? special, td.Background? remote, String? photo, List<int>? fill}) => setState(() {
+    _special = special;
     _remote = remote;
     _photo = photo;
     _fill = fill;
   });
 
   ChatBackdrop get _preview {
-    final spec = switch ((_glow, _remote, _photo, _fill)) {
-      (true, _, _, _) => const BackdropGlow(),
+    final spec = switch ((_special, _remote, _photo, _fill)) {
+      ('glow', _, _, _) => const BackdropGlow(),
+      ('aurora', _, _, _) => BackdropAurora(drift: _drift),
+      ('plain', _, _, _) => const BackdropPlain(),
       (_, final r?, _, _) when r.document != null => BackdropImage(file: r.document!.document),
       (_, _, final p?, _) => BackdropImage(path: p),
       (_, _, _, final f?) => BackdropFill([for (final c in f) Color(0xFF000000 | c)]),
-      _ => resolveBackdrop(widget.chat, _prefs).spec,
+      _ => switch (_list ? resolveListBackdrop(_prefs).spec : resolveBackdrop(widget.chat, _prefs).spec) {
+        BackdropAurora() => BackdropAurora(drift: _drift),
+        final other => other,
+      },
     };
+    if (_list && spec is! BackdropImage) return ChatBackdrop(spec);
     return ChatBackdrop(spec, blur: _blur, dim: _dim);
   }
 
@@ -84,11 +116,34 @@ class _BackgroundPickerScreenState extends State<BackgroundPickerScreen> {
   Future<void> _apply() async {
     final messenger = ScaffoldMessenger.of(context);
     final nav = Navigator.of(context);
+    if (_list) {
+      _prefs
+        ..listBackdropBlur = _blur
+        ..listBackdropDim = _dim
+        ..listAuroraDrift = _drift;
+      if (_special == 'aurora' || _special == 'plain') {
+        _prefs.listBackdropKind = _special!;
+      } else if (_remote?.document != null) {
+        _prefs
+          ..listBackdropKind = 'telegram'
+          ..listBackdropFileId = _remote!.document!.document.id;
+      } else if (_photo != null) {
+        _prefs
+          ..listBackdropKind = 'photo'
+          ..listBackdropPath = _photo;
+      } else if (_fill != null) {
+        _prefs
+          ..listBackdropKind = 'fill'
+          ..listBackdropColors = _fill!;
+      }
+      nav.maybePop();
+      return;
+    }
     if (!_isChat) {
       _prefs
         ..backdropBlur = _blur
         ..backdropDim = _dim;
-      if (_glow) {
+      if (_special == 'glow') {
         _prefs.backdropKind = 'glow';
       } else if (_remote?.document != null) {
         _prefs
@@ -165,7 +220,15 @@ class _BackgroundPickerScreenState extends State<BackgroundPickerScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(_isChat ? 'Chat background' : 'Default chat background')),
+    appBar: AppBar(
+      title: Text(
+        _list
+            ? 'Chat list background'
+            : _isChat
+            ? 'Chat background'
+            : 'Default chat background',
+      ),
+    ),
     body: Column(
       children: [
         // Live preview with sample bubbles.
@@ -173,17 +236,29 @@ class _BackgroundPickerScreenState extends State<BackgroundPickerScreen> {
           height: 200,
           child: ChatBackdropView(
             backdrop: _preview,
-            child: const Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  _Sample(text: 'How does it look?', outgoing: false),
-                  SizedBox(height: 8),
-                  _Sample(text: 'Lovely ✨', outgoing: true),
-                ],
-              ),
-            ),
+            child: _list
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _SampleRow(name: 'Lumina', text: 'How does it look?', color: GlowColors.violet),
+                        SizedBox(height: 14),
+                        _SampleRow(name: 'Friends', text: 'Lovely ✨', color: GlowColors.teal),
+                      ],
+                    ),
+                  )
+                : const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        _Sample(text: 'How does it look?', outgoing: false),
+                        SizedBox(height: 8),
+                        _Sample(text: 'Lovely ✨', outgoing: true),
+                      ],
+                    ),
+                  ),
           ),
         ),
         Expanded(
@@ -195,11 +270,33 @@ class _BackgroundPickerScreenState extends State<BackgroundPickerScreen> {
                 child: ListView(
                   scrollDirection: Axis.horizontal,
                   children: [
-                    if (!_isChat)
+                    if (_list) ...[
+                      _tile(
+                        key: const ValueKey('aurora'),
+                        selected: _special == 'aurora',
+                        onTap: () => _pick(special: 'aurora'),
+                        child: SizedBox(
+                          width: 72,
+                          child: AuroraBackground(
+                            drift: false,
+                            child: const Center(child: Text('Aurora', textAlign: TextAlign.center)),
+                          ),
+                        ),
+                      ),
+                      _tile(
+                        key: const ValueKey('plain'),
+                        selected: _special == 'plain',
+                        onTap: () => _pick(special: 'plain'),
+                        child: const ColoredBox(
+                          color: GlowColors.background,
+                          child: SizedBox(width: 72, child: Center(child: Text('Plain'))),
+                        ),
+                      ),
+                    ] else if (!_isChat)
                       _tile(
                         key: const ValueKey('glow'),
-                        selected: _glow,
-                        onTap: () => _pick(glow: true),
+                        selected: _special == 'glow',
+                        onTap: () => _pick(special: 'glow'),
                         child: const SizedBox(
                           width: 72,
                           child: Center(child: Text('Lumina\nglow', textAlign: TextAlign.center)),
@@ -267,6 +364,13 @@ class _BackgroundPickerScreenState extends State<BackgroundPickerScreen> {
                 },
               ),
               const SizedBox(height: 8),
+              if (_list && _auroraShown)
+                SwitchListTile(
+                  value: _drift,
+                  onChanged: (v) => setState(() => _drift = v),
+                  title: const Text('Gentle motion'),
+                  subtitle: const Text('The glows drift slowly; off keeps them still'),
+                ),
               _Slider(label: 'Blur', value: _blur, max: 20, onChanged: (v) => setState(() => _blur = v)),
               _Slider(label: 'Dim', value: _dim, max: 0.8, onChanged: (v) => setState(() => _dim = v)),
               if (_private)
@@ -306,6 +410,39 @@ class _Slider extends StatelessWidget {
       SizedBox(width: 48, child: Text(label)),
       Expanded(
         child: Slider(value: value.clamp(0, max), max: max, onChanged: onChanged),
+      ),
+    ],
+  );
+}
+
+/// A chat-list row for the preview.
+class _SampleRow extends StatelessWidget {
+  const _SampleRow({required this.name, required this.text, required this.color});
+
+  final String name;
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      CircleAvatar(
+        radius: 22,
+        backgroundColor: color,
+        child: Text(
+          name[0],
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+            Text(text, style: const TextStyle(color: GlowColors.textMuted)),
+          ],
+        ),
       ),
     ],
   );

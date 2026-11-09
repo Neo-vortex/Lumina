@@ -69,6 +69,7 @@ class _VideoNoteRecorderScreenState extends State<VideoNoteRecorderScreen> {
     if (cam == null || _processing) return;
     if (!_recording) {
       await cam.startVideoRecording();
+      await _brighten(cam);
       HapticFeedback.lightImpact();
       _elapsed = Duration.zero;
       _timer = Timer.periodic(const Duration(milliseconds: 200), (_) {
@@ -80,6 +81,7 @@ class _VideoNoteRecorderScreenState extends State<VideoNoteRecorderScreen> {
     }
     _timer?.cancel();
     final file = await cam.stopVideoRecording();
+    unawaited(cam.setExposureOffset(0).then((_) {}, onError: (Object _) {}));
     setState(() {
       _recording = false;
       _processing = true;
@@ -93,6 +95,25 @@ class _VideoNoteRecorderScreenState extends State<VideoNoteRecorderScreen> {
       });
     } else {
       Navigator.pop(context, content);
+    }
+  }
+
+  /// Recording rebinds CameraX onto the video template, which exposes the front
+  /// camera darker than the preview on many phones (the fixed frame rate alone
+  /// did not prevent it). A one-stop exposure boost while recording brings it
+  /// back in line, within what the camera supports.
+  static const _recordingBoostEv = 1.0;
+
+  Future<void> _brighten(CameraController cam) async {
+    try {
+      final max = await cam.getMaxExposureOffset();
+      if (max <= 0) return;
+      final step = await cam.getExposureOffsetStepSize();
+      var ev = _recordingBoostEv.clamp(0.0, max);
+      if (step > 0) ev = (ev / step).round() * step;
+      await cam.setExposureOffset(ev);
+    } on CameraException {
+      // Exposure compensation unsupported: record as is.
     }
   }
 

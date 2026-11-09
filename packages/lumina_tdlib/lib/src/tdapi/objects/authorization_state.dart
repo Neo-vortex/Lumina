@@ -393,13 +393,13 @@ final class AuthorizationStateWaitOtherDeviceConfirmation extends AuthorizationS
 /// The user is unregistered and needs to accept terms of service and enter their first name and last name to finish registration. Call registerUser to accept the terms of service and provide the data
 final class AuthorizationStateWaitRegistration extends AuthorizationState {
   const AuthorizationStateWaitRegistration({
-    required this.termsOfService,
+    this.termsOfService,
     this.extra,
     this.clientId,
   });
 
-  /// Telegram terms of service
-  final TermsOfService termsOfService;
+  /// Telegram terms of service; may be null
+  final TermsOfService? termsOfService;
 
   @override
   final dynamic extra;
@@ -413,7 +413,7 @@ final class AuthorizationStateWaitRegistration extends AuthorizationState {
   String get currentObjectId => defaultObjectId;
 
   factory AuthorizationStateWaitRegistration.fromJson(Map<String, dynamic> json) => AuthorizationStateWaitRegistration(
-    termsOfService: TermsOfService.fromJson(_map(json['terms_of_service'])),
+    termsOfService: json['terms_of_service'] == null ? null : TermsOfService.fromJson(_map(json['terms_of_service'])),
     extra: json['@extra'],
     clientId: json['@client_id'] as int?,
   );
@@ -421,7 +421,7 @@ final class AuthorizationStateWaitRegistration extends AuthorizationState {
   @override
   Map<String, dynamic> toJson() => {
     '@type': defaultObjectId,
-    'terms_of_service': termsOfService.toJson(),
+    'terms_of_service': termsOfService?.toJson(),
   };
 
   @override

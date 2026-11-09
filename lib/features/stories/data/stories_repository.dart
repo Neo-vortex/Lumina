@@ -112,6 +112,13 @@ class StoriesRepository extends ChangeNotifier {
     await _client.invoke<td.Ok>(td.CloseStory(storyPosterChatId: chatId, storyId: storyId));
   }
 
+  /// Deletes one of the user's (or their channel's) stories.
+  Future<void> delete(int chatId, int storyId) async {
+    await _client.invoke<td.Ok>(td.DeleteStory(storyPosterChatId: chatId, storyId: storyId));
+    _stories.remove((chatId, storyId));
+    await refresh(chatId).then((_) {}, onError: (_) {});
+  }
+
   Future<void> react(int chatId, int storyId, String? emoji) => _client.invoke<td.Ok>(
     td.SetStoryReaction(
       storyPosterChatId: chatId,

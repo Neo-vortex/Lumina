@@ -76,6 +76,9 @@ class TelegramCache {
   final _events = StreamController<CacheEvent>.broadcast(sync: true);
 
   final chats = <int, td.Chat>{};
+
+  /// Message effects this account may send (reaction effects first).
+  List<int> messageEffectIds = const [];
   final users = <int, td.User>{};
   final basicGroups = <int, td.BasicGroup>{};
   final supergroups = <int, td.Supergroup>{};
@@ -91,6 +94,7 @@ class TelegramCache {
   bool folderTagsEnabled = false;
 
   final _unread = <String, UnreadCount>{};
+  final _unreadMessages = <String, UnreadCount>{};
 
   /// Default mute duration per chat type (private, group, channel), for
   /// chats whose settings say "use the default".
@@ -109,6 +113,12 @@ class TelegramCache {
       case td.UpdateNewChat(:final chat):
         chats[chat.id] = chat;
         _emit(ChatChanged(chat.id, orderChanged: true));
+      case td.UpdateChatBackground(:final chatId, :final background):
+        // The chat screen draws its backdrop from chat.background.
+        _patchChat(
+          chatId,
+          (c) => background != null ? c.copyWith(background: background) : _rebuild(c, clearBackground: true),
+        );
       case td.UpdateChatTitle(:final chatId, :final title):
         _patchChat(chatId, (c) => c.copyWith(title: title));
       case td.UpdateChatPhoto(:final chatId, :final photo):
@@ -153,6 +163,8 @@ class TelegramCache {
             _emit(ChatChanged(c.id));
           }
         }
+      case td.UpdateAvailableMessageEffects(:final reactionEffectIds, :final stickerEffectIds):
+        messageEffectIds = [...reactionEffectIds, ...stickerEffectIds];
       case td.UpdateChatAvailableReactions(:final chatId, :final availableReactions):
         _patchChat(chatId, (c) => c.copyWith(availableReactions: availableReactions));
       case td.UpdateChatHasScheduledMessages(:final chatId, :final hasScheduledMessages):
@@ -190,6 +202,10 @@ class TelegramCache {
       case td.UpdateUnreadChatCount(:final chatList, :final unreadCount, :final unreadUnmutedCount):
         _unread[listKey(chatList)] = (chats: unreadCount, unmuted: unreadUnmutedCount);
         _emit(UnreadCountChanged(chatList));
+      case td.UpdateUnreadMessageCount(:final chatList, :final unreadCount, :final unreadUnmutedCount):
+        // Messages, not chats: `chats` holds the message total here.
+        _unreadMessages[listKey(chatList)] = (chats: unreadCount, unmuted: unreadUnmutedCount);
+        _emit(UnreadCountChanged(chatList));
       default:
         break;
     }
@@ -223,6 +239,12 @@ class TelegramCache {
   }
 
   UnreadCount unreadIn(td.ChatList list) => _unread[listKey(list)] ?? (chats: 0, unmuted: 0);
+
+  /// Unread *messages* in [list]: (all, unmuted).
+  ({int all, int unmuted}) unreadMessagesIn(td.ChatList list) {
+    final u = _unreadMessages[listKey(list)];
+    return (all: u?.chats ?? 0, unmuted: u?.unmuted ?? 0);
+  }
 
   /// Folder ids [chat] is listed in.
   List<int> foldersOf(td.Chat chat) => [
@@ -290,6 +312,7 @@ class TelegramCache {
     mainListPosition = 0;
     folderTagsEnabled = false;
     _unread.clear();
+    _unreadMessages.clear();
     users.clear();
     basicGroups.clear();
     supergroups.clear();
@@ -372,6 +395,7 @@ class TelegramCache {
     bool clearLastMessage = false,
     bool clearDraft = false,
     bool clearPhoto = false,
+    bool clearBackground = false,
   }) => td.Chat(
     id: c.id,
     type: c.type,
@@ -408,7 +432,7 @@ class TelegramCache {
     availableReactions: c.availableReactions,
     messageAutoDeleteTime: c.messageAutoDeleteTime,
     emojiStatus: c.emojiStatus,
-    background: c.background,
+    background: clearBackground ? null : c.background,
     theme: c.theme,
     actionBar: c.actionBar,
     businessBotManageBar: c.businessBotManageBar,

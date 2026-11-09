@@ -7,80 +7,78 @@ import '../../../../core/theme/glow_colors.dart';
 import '../../../../core/widgets/delete_confirm.dart';
 import '../../data/chats_repository.dart';
 import 'chat_list_extensions.dart';
+import 'chat_peek.dart';
 
-/// Long-press actions on a chat row.
-Future<void> showChatActions(
+/// One action on a chat (pin, mute, leave…), shared by the chat peek and its fallback sheet.
+class ChatActionEntry {
+  const ChatActionEntry(this.icon, this.label, this.run, {this.color});
+  final IconData icon;
+  final String label;
+  final Color? color;
+
+  /// Runs with the chat list's context (still mounted after the peek closes).
+  final Future<void> Function(BuildContext context) run;
+}
+
+/// The actions for [chat] in [list], in display order.
+List<ChatActionEntry> chatActionEntries(
   BuildContext context,
   td.Chat chat, {
   td.ChatList list = const td.ChatListMain(),
-}) async {
-  Feedback.forLongPress(context);
+}) {
   final repo = context.read<ChatsRepository>();
   final cache = context.read<TelegramCache>();
   final pinned = cache.positionIn(chat, list)?.isPinned ?? false;
   final muted = cache.isMuted(chat);
   final unread = chat.unreadCount > 0 || chat.isMarkedAsUnread;
   final isGroupish = chat.type is td.ChatTypeBasicGroup || chat.type is td.ChatTypeSupergroup;
-  final messenger = ScaffoldMessenger.of(context);
-  final outer = context;
-  final extra = ChatListExtensions.of(context).chatActions(chat);
-
-  Future<void> run(Future<void> Function() action) async {
-    Navigator.of(context).pop();
+  Future<void> Function(BuildContext) guarded(Future<void> Function() action) => (context) async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
       await action();
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('$e')));
     }
-  }
-
-  await showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: GlowColors.surfaceHigh,
-    showDragHandle: true,
-    builder: (context) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: Icon(pinned ? Icons.push_pin_outlined : Icons.push_pin_rounded),
-            title: Text(pinned ? 'Unpin' : 'Pin'),
-            onTap: () => run(() => repo.setPinned(chat.id, !pinned, list: list)),
-          ),
-          ListTile(
-            leading: Icon(unread ? Icons.mark_chat_read_rounded : Icons.mark_chat_unread_rounded),
-            title: Text(unread ? 'Mark as read' : 'Mark as unread'),
-            onTap: () => run(() => unread ? repo.markRead(chat) : repo.setMarkedUnread(chat.id, true)),
-          ),
-          ListTile(
-            leading: Icon(muted ? Icons.notifications_rounded : Icons.notifications_off_rounded),
-            title: Text(muted ? 'Unmute' : 'Mute'),
-            onTap: () => run(() => repo.setMuted(chat.id, !muted)),
-          ),
-          for (final a in extra)
-            ListTile(
-              leading: Icon(a.icon),
-              title: Text(a.label),
-              onTap: () {
-                Navigator.of(context).pop();
-                a.run(outer).ignore();
-              },
-            ),
-          ListTile(
-            leading: const Icon(Icons.logout_rounded, color: GlowColors.coral),
-            title: Text(
-              isGroupish ? (cache.isChannel(chat) ? 'Leave channel' : 'Leave group') : 'Delete chat',
-              style: const TextStyle(color: GlowColors.coral),
-            ),
-            onTap: () {
-              Navigator.of(context).pop();
-              confirmAndDeleteChat(outer, chat).ignore();
-            },
-          ),
-        ],
-      ),
+  };
+  return [
+    ChatActionEntry(
+      pinned ? Icons.push_pin_outlined : Icons.push_pin_rounded,
+      pinned ? 'Unpin' : 'Pin',
+      guarded(() => repo.setPinned(chat.id, !pinned, list: list)),
     ),
-  );
+    ChatActionEntry(
+      unread ? Icons.mark_chat_read_rounded : Icons.mark_chat_unread_rounded,
+      unread ? 'Mark as read' : 'Mark as unread',
+      guarded(() => unread ? repo.markRead(chat) : repo.setMarkedUnread(chat.id, true)),
+    ),
+    ChatActionEntry(
+      muted ? Icons.notifications_rounded : Icons.notifications_off_rounded,
+      muted ? 'Unmute' : 'Mute',
+      guarded(() => repo.setMuted(chat.id, !muted)),
+    ),
+    for (final a in ChatListExtensions.of(context).chatActions(chat)) ChatActionEntry(a.icon, a.label, a.run),
+    ChatActionEntry(
+      Icons.logout_rounded,
+      isGroupish ? (cache.isChannel(chat) ? 'Leave channel' : 'Leave group') : 'Delete chat',
+      (context) => confirmAndDeleteChat(context, chat),
+      color: GlowColors.coral,
+    ),
+  ];
+}
+
+/// Long-press on a chat row: the chat's latest messages without opening it
+/// (nothing is marked read), with its actions underneath.
+Future<void> showChatActions(
+  BuildContext context,
+  td.Chat chat, {
+  td.ChatList list = const td.ChatListMain(),
+  VoidCallback? onOpen,
+}) async {
+  Feedback.forLongPress(context);
+  final entries = chatActionEntries(context, chat, list: list);
+  final picked = await Navigator.of(context)
+      .push<ChatActionEntry>(ChatPeek.route(chat, entries: entries, onOpen: onOpen));
+  if (picked != null && context.mounted) await picked.run(context);
 }
 
 /// Every chat delete or leave confirms; private chats offer "also delete

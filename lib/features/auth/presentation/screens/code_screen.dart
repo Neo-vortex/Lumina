@@ -46,14 +46,21 @@ class _CodeScreenState extends State<CodeScreen> {
     super.dispose();
   }
 
+  /// The code last sent: auto-submit at full length and then the button (or
+  /// keyboard Done) must not send it twice. Cleared when an error comes back.
+  String? _sent;
+
   void _submit() {
-    if (_code.text.trim().isEmpty) return;
+    final code = _code.text.trim();
+    if (code.isEmpty || code == _sent) return;
+    _sent = code;
     context.read<AuthBloc>().add(AuthCodeSubmitted(_code.text));
   }
 
   @override
   Widget build(BuildContext context) {
     final error = context.select((AuthBloc b) => b.state.inlineError);
+    if (error != null) _sent = null; // a wrong code may be retyped and sent again
     final busy = context.select((AuthBloc b) => b.state.busy);
     final info = widget.step.info;
     final kind = _describe(info.type, info.phoneNumber);

@@ -17,7 +17,12 @@ void main() {
     expect(p.scale, 2);
     expect(p.apply(const Offset(100, 400)), const Offset(100, 400));
     // Moving the fingers pans with them.
-    final moved = z.pinch(start: z, startFocal: const Offset(100, 400), focal: const Offset(130, 380), scale: 2);
+    final moved = z.pinch(
+      start: z,
+      startFocal: const Offset(100, 400),
+      focal: const Offset(130, 380),
+      scale: 2,
+    );
     expect(moved.apply(const Offset(100, 400)), const Offset(130, 380));
   });
 

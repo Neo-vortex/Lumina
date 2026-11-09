@@ -36,7 +36,12 @@ class Zoom {
 
   /// [start] was the zoom when two fingers landed at [startFocal]; the
   /// content point that was under them stays under [focal].
-  Zoom pinch({required Zoom start, required Offset startFocal, required Offset focal, required double scale}) {
+  Zoom pinch({
+    required Zoom start,
+    required Offset startFocal,
+    required Offset focal,
+    required double scale,
+  }) {
     final s = start.scale * scale;
     final content = (startFocal - start.offset) / start.scale;
     return Zoom(scale: s, offset: focal - content * s);
@@ -109,7 +114,4 @@ int settlePage({required double position, required double velocity, required int
   required double aspect,
   required Rect from,
   required Rect to,
-}) => (
-  clip: Rect.lerp(from, to, t)!,
-  image: Rect.lerp(coverRect(aspect, from), to, t)!,
-);
+}) => (clip: Rect.lerp(from, to, t)!, image: Rect.lerp(coverRect(aspect, from), to, t)!);

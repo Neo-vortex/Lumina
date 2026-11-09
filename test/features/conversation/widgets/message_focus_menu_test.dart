@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lumina_tdlib/api.dart' as td;
 import 'package:lumina/core/storage/app_preferences.dart';
 import 'package:lumina/core/telegram/file_store.dart';
 import 'package:lumina/features/conversation/presentation/widgets/message_menu.dart';
@@ -162,5 +163,56 @@ void main() {
     final card = find.ancestor(of: find.text('Reply'), matching: find.byType(Material)).first;
     expect(tester.getRect(card).bottom, lessThanOrEqualTo(keyboardTop));
     expect(tester.getRect(find.byKey(const ValueKey('quick-reactions'))).top, greaterThanOrEqualTo(0));
+  });
+
+  testWidgets('a failed message offers Retry first, and Retry all when several failed', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    late Future<({MessageAction? action, String? reaction})?> result;
+    final failed = fakeMessage(1, outgoing: true).copyWith(
+      sendingState: const td.MessageSendingStateFailed(
+        error: td.TdError(code: 400, message: 'FILE_PARTS_INVALID'),
+        canRetry: true,
+        needAnotherSender: false,
+        needAnotherReplyQuote: false,
+        needDropReply: false,
+        requiredPaidMessageStarCount: 0,
+        retryAfter: 0,
+      ),
+    );
+    await tester.pumpWidget(
+      MultiRepositoryProvider(
+        providers: [
+          RepositoryProvider.value(value: AppPreferences.inMemory()),
+          RepositoryProvider(create: (_) => FileStore(FakeTdClient())),
+        ],
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => result = showMessageMenu(
+                context,
+                message: failed,
+                properties: null,
+                reactions: Future.value(const <String>[]),
+                protectedContent: false,
+                failedInChat: 3,
+              ),
+              child: const Text('go'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('go'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Retry'), findsOneWidget);
+    expect(find.text('Retry all (3)'), findsOneWidget);
+    expect(find.text('Reply'), findsNothing);
+    await tester.tap(find.text('Retry'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect((await result)?.action, MessageAction.retry);
   });
 }

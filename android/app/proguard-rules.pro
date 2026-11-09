@@ -1,0 +1,7 @@
+-dontwarn com.it_nomads.fluttersecurestorage.FlutterSecureStorage
+-dontwarn com.it_nomads.fluttersecurestorage.FlutterSecureStorageConfig
+-dontwarn com.it_nomads.fluttersecurestorage.FlutterSecureStoragePlugin$MethodResultWrapper
+-dontwarn com.it_nomads.fluttersecurestorage.FlutterSecureStoragePlugin$MethodRunner$1$1
+-dontwarn com.it_nomads.fluttersecurestorage.FlutterSecureStoragePlugin$MethodRunner$1$2
+-dontwarn com.it_nomads.fluttersecurestorage.SecurePreferencesCallback
+-dontwarn com.it_nomads.fluttersecurestorage.UpgradeInspector

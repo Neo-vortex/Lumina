@@ -5,6 +5,7 @@ import 'package:lumina_tdlib/api.dart' as td;
 import '../../../../../core/telegram/auto_download_gate.dart';
 import '../../../../../core/telegram/download_registry.dart';
 import '../../../../../core/telegram/file_store.dart';
+import '../../../../../core/telegram/video_files.dart';
 
 /// Starts the downloads Settings → Auto-download allows for [messages] when
 /// they first show: videos, files, voice and video messages and music.
@@ -25,7 +26,7 @@ class AutoFetch extends StatefulWidget {
 
 class _AutoFetchState extends State<AutoFetch> {
   static (td.File, MediaKind)? _target(td.MessageContent c) => switch (c) {
-    td.MessageVideo(:final video) => (video.video, MediaKind.videos),
+    td.MessageVideo() => (VideoFiles.pick(c), MediaKind.videos),
     td.MessageDocument(:final document) => (document.document, MediaKind.files),
     td.MessageVoiceNote(:final voiceNote) => (voiceNote.voice, MediaKind.voice),
     td.MessageVideoNote(:final videoNote) => (videoNote.video, MediaKind.videoMessages),

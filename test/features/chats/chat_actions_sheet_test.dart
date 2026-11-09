@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lumina/core/tdlib/td_client.dart';
 import 'package:lumina/core/telegram/telegram_cache.dart';
 import 'package:lumina/features/chats/data/chats_repository.dart';
 import 'package:lumina/features/chats/presentation/widgets/chat_actions_sheet.dart';
@@ -28,6 +29,7 @@ void main() {
       MultiRepositoryProvider(
         providers: [
           RepositoryProvider.value(value: cache),
+          RepositoryProvider<TdClient>.value(value: client),
           RepositoryProvider.value(
             value: ChatsRepository(client: client, cache: cache),
           ),
@@ -56,5 +58,10 @@ void main() {
     await tester.tap(find.text('Add to folder…'));
     await tester.pumpAndSettle();
     expect(ran, [1]);
+
+    // Peeking reads history but never opens the chat or marks anything read.
+    expect(client.sentOf<td.GetChatHistory>(), isNotEmpty);
+    expect(client.sentOf<td.OpenChat>(), isEmpty);
+    expect(client.sentOf<td.ViewMessages>(), isEmpty);
   });
 }

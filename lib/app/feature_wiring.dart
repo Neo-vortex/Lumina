@@ -1,7 +1,9 @@
+import 'package:provider/provider.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../features/contacts/data/contacts_repository.dart';
 import '../features/media_panel/data/media_panel_repository.dart';
 import '../features/profile/data/user_profile_repository.dart';
 import '../core/media/audio_playback.dart';
@@ -29,9 +31,17 @@ import '../features/bots/data/bots_repository.dart';
 import '../features/auto_download/data/network_monitor.dart';
 import '../features/auto_download/presentation/auto_download_settings.dart';
 import '../features/proxy/data/proxy_repository.dart';
+import '../core/build/build_flavor.dart';
+import '../core/tdlib/td_paths.dart';
+import '../features/session_backup/data/session_backup.dart';
+import '../features/session_backup/presentation/session_backup_settings.dart';
 import '../features/assistant/data/action_extractor.dart';
 import '../features/auth/presentation/widgets/auth_scaffold.dart';
 import '../core/telegram/internal_links.dart';
+import '../core/telegram/profile_opener.dart';
+import 'app_chat_links.dart';
+import 'share_intake.dart';
+import 'app_profiles.dart';
 import '../features/proxy/data/proxy_config.dart';
 import '../features/proxy/presentation/screens/proxy_screen.dart';
 import '../features/proxy/presentation/widgets/proxy_link_dialog.dart';
@@ -164,11 +174,16 @@ List<RepositoryProvider<Object>> featureProviders() => [
     ),
     dispose: (h) => h.dispose(),
   ),
+  RepositoryProvider<SessionBackupService>(
+    create: (c) => SessionBackupService(paths: c.read<TdPaths>(), secure: c.read<SecureStore>()),
+    dispose: (s) => s.dispose(),
+  ),
   RepositoryProvider<ModelInstaller>(
     lazy: false,
     // Shortly after launch, off the UI thread (the copy runs natively).
     create: (_) =>
-        ModelInstaller()..schedulePreinstall(const [BundledModel.actionModel, BundledModel.whisperBase]),
+        ModelInstaller()
+          ..schedulePreinstall(const [if (kOnDeviceLlm) BundledModel.actionModel, BundledModel.whisperBase]),
     dispose: (m) => m.dispose(),
   ),
   RepositoryProvider<ActionExtractor>(
@@ -199,6 +214,7 @@ List<RepositoryProvider<Object>> featureProviders() => [
   ),
   // Not lazy: posts notifications from the moment TDLib is up, also when the
   // engine was started without UI by the background worker.
+  RepositoryProvider<ProfileOpener>(create: (c) => appProfileOpener(c.read<ComposeFlows>())),
   RepositoryProvider<InternalLinks>(create: (_) => InternalLinks(appLinkHandlers())),
   RepositoryProvider<NotificationCenter>(
     lazy: false,
@@ -211,6 +227,7 @@ List<RepositoryProvider<Object>> featureProviders() => [
         final context = appNavigatorKey.currentContext;
         if (context != null) context.read<InternalLinks>().tryOpen(context, url).ignore();
       },
+      openShare: (text, files) => receiveShare(text, files).ignore(),
     ),
     dispose: (n) => n.dispose(),
   ),
@@ -233,6 +250,10 @@ List<RepositoryProvider<Object>> featureProviders() => [
   ),
   RepositoryProvider<ChatInfoRepository>(
     create: (c) => ChatInfoRepository(client: c.read<TdClient>(), cache: c.read<TelegramCache>()),
+  ),
+  RepositoryProvider<ContactsRepository>(
+    create: (c) => ContactsRepository(client: c.read<TdClient>(), cache: c.read<TelegramCache>()),
+    dispose: (r) => r.dispose(),
   ),
   RepositoryProvider<StorageRepository>(
     create: (c) => StorageRepository(
@@ -274,8 +295,12 @@ List<RepositoryProvider<Object>> featureProviders() => [
     dispose: (r) => r.dispose(),
   ),
   RepositoryProvider<ChatListExtensions>(
-    create: (c) =>
-        AppChatListExtensions(folders: c.read<FoldersRepository>(), cache: c.read<TelegramCache>()),
+    create: (c) => AppChatListExtensions(
+      folders: c.read<FoldersRepository>(),
+      cache: c.read<TelegramCache>(),
+      prefs: c.read<AppPreferences>(),
+      stories: c.read<StoriesRepository>(),
+    ),
   ),
   RepositoryProvider<ChatRowExtensions>(
     create: (c) =>
@@ -287,8 +312,9 @@ List<RepositoryProvider<Object>> featureProviders() => [
       (context) => [
         SettingsEntry(SettingsCategory.chats, (_) => const FolderSettings(), forBots: false),
         SettingsEntry(SettingsCategory.media, (_) => const SpeechSettings()),
-        SettingsEntry(SettingsCategory.media, (_) => const AiSettings()),
+        if (kOnDeviceLlm) SettingsEntry(SettingsCategory.media, (_) => const AiSettings()),
         SettingsEntry(SettingsCategory.notifications, (_) => const ConnectionModeSettings()),
+        SettingsEntry(SettingsCategory.data, (_) => const SessionBackupSettings()),
         SettingsEntry(SettingsCategory.notifications, (_) => const BackgroundSettings()),
         SettingsEntry(
           SettingsCategory.data,
@@ -306,6 +332,12 @@ List<RepositoryProvider<Object>> featureProviders() => [
 
 ComposeActions _composeActions(ComposeFlows flows) => ComposeActions([
   ComposeAction(icon: Icons.edit_rounded, label: 'New message', onSelected: flows.newMessage),
+  ComposeAction(
+    icon: Icons.bookmark_rounded,
+    label: 'Saved Messages',
+    onSelected: flows.savedMessages,
+    botAllowed: false,
+  ),
   ComposeAction(icon: Icons.group_add_rounded, label: 'New group', onSelected: flows.newGroup),
   ComposeAction(icon: Icons.campaign_rounded, label: 'New channel', onSelected: flows.newChannel),
   ComposeAction(icon: Icons.lock_rounded, label: 'Secret chat', onSelected: flows.newSecretChat),
@@ -354,5 +386,13 @@ List<InternalLinkHandler> appLinkHandlers() => [
   InternalLinkHandler(
     matches: (uri) => ProxyConfig.parseLink(uri.toString()) != null,
     open: (context, uri) => confirmProxyLink(context, ProxyConfig.parseLink(uri.toString())!),
+  ),
+  // Invite links and message links (before plain usernames: t.me/name/123).
+  ...chatLinkHandlers(),
+  // Last: t.me/username opens the profile (or the group/channel/bot chat).
+  InternalLinkHandler(
+    matches: (uri) => ProfileOpener.usernameOf(uri) != null,
+    open: (context, uri) =>
+        context.read<ProfileOpener>().openUsername(context, ProfileOpener.usernameOf(uri)!),
   ),
 ];

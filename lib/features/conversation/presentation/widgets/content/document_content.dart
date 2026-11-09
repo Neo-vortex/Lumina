@@ -78,28 +78,31 @@ class DocumentContent extends StatelessWidget {
                       dimension: 48,
                       child: Stack(
                         alignment: Alignment.center,
+                        clipBehavior: Clip.none,
                         children: [
-                          Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: textColor.withValues(alpha: 0.12),
-                            ),
-                            clipBehavior: Clip.antiAlias,
-                            child: document.thumbnail != null
-                                ? TdFileImage(
-                                    file: document.thumbnail!.file,
-                                    placeholderBytes: Display.minithumbnail(document.minithumbnail),
-                                  )
-                                : Center(
-                                    child: Text(
-                                      ext.length > 4 ? ext.substring(0, 4) : ext,
-                                      style: TextStyle(
-                                        color: textColor,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 12,
+                          Positioned.fill(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: textColor.withValues(alpha: 0.12),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: document.thumbnail != null
+                                  ? TdFileImage(
+                                      file: document.thumbnail!.file,
+                                      placeholderBytes: Display.minithumbnail(document.minithumbnail),
+                                    )
+                                  : Center(
+                                      child: Text(
+                                        ext.length > 4 ? ext.substring(0, 4) : ext,
+                                        style: TextStyle(
+                                          color: textColor,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 12,
+                                        ),
                                       ),
                                     ),
-                                  ),
+                            ),
                           ),
                           if (f.isDownloading || f.isUploading)
                             SmoothProgress(
@@ -110,8 +113,26 @@ class DocumentContent extends StatelessWidget {
                                 color: GlowColors.cyan,
                               ),
                             ),
+                          // A corner badge, so the file type (PDF, ZIP…) stays readable.
                           if (!f.isDownloaded && !f.isDownloading && !f.isUploading)
-                            Icon(Icons.download_rounded, color: textColor),
+                            Positioned(
+                              right: -2,
+                              bottom: -2,
+                              child: Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: GlowColors.cyan,
+                                  border: Border.all(color: GlowColors.surface, width: 1.5),
+                                ),
+                                child: const Icon(
+                                  Icons.arrow_downward_rounded,
+                                  size: 13,
+                                  color: GlowColors.onAccent,
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),

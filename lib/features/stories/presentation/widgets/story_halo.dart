@@ -106,13 +106,14 @@ class _HaloPainter extends CustomPainter {
       colors: const [GlowColors.violet, GlowColors.cyan, GlowColors.magenta, GlowColors.violet],
       transform: GradientRotation(turn * 2 * math.pi),
     ).createShader(rect);
+    // The soft outer ring: a wide faint stroke instead of a mask blur (cheap
+    // while the list scrolls).
     canvas.drawOval(
-      r,
+      r.inflate(2),
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 4
-        ..shader = shader
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 3 + 3 * breath),
+        ..strokeWidth = 5 + 2 * breath
+        ..color = GlowColors.violet.withValues(alpha: 0.18 + 0.12 * breath),
     );
     canvas.drawOval(
       r,

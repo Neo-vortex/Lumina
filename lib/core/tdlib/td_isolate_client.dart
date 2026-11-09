@@ -7,6 +7,7 @@ import 'package:lumina_tdlib/api.dart' as td;
 import 'invoke_router.dart';
 import 'td_client.dart';
 import 'td_errors.dart';
+import 'unsupported_api.dart';
 import 'isolates/td_isolates.dart';
 import 'isolates/td_messages.dart';
 
@@ -33,6 +34,14 @@ class TdIsolateClient implements TdClient {
   StreamSubscription<Object?>? _subscription;
 
   Isolate? _receiver;
+
+  /// Completes when this client's receiver isolate has exited.
+  Completer<void> _receiverGone = Completer<void>();
+
+  /// The previous client's receiver, still finishing its last `td_receive`.
+  /// TDLib aborts the whole process if two threads call `td_receive` at once,
+  /// so a new receiver (switching servers, restoring a session) waits for it.
+  static Future<void> _lastReceiverGone = Future.value();
   Isolate? _sender;
   RawReceivePort? _receiverExit;
   RawReceivePort? _senderExit;
@@ -67,11 +76,14 @@ class TdIsolateClient implements TdClient {
   }
 
   Future<void> _spawnReceiver() async {
+    await _lastReceiverGone;
     _receiverReady = Completer<void>();
     _receiverExit?.close();
+    final gone = _receiverGone = Completer<void>();
     final exit = _receiverExit = RawReceivePort();
     exit.handler = (_) {
       exit.close();
+      if (!gone.isCompleted) gone.complete();
       if (_disposed || _receiverExit != exit) return;
       debugPrint('TDLib receiver isolate exited; respawning');
       _receiverControl = null;
@@ -175,7 +187,15 @@ class TdIsolateClient implements TdClient {
     }
     final (extra, result) = _router.register(timeout: timeout);
     commands.send(SendCommand(clientId, extra, function));
-    final object = await result;
+    final td.TdObject object;
+    try {
+      object = await result;
+    } on TdException catch (e) {
+      // A self-hosted server without this API: the app shows a toast.
+      if (UnsupportedApi.matches(e))
+        UnsupportedApi.report('${function.toJson()['@type'] ?? function.runtimeType}');
+      rethrow;
+    }
     if (object is T) return object;
     throw TdTransportException('Expected $T, got ${object.runtimeType}');
   }
@@ -223,13 +243,23 @@ class TdIsolateClient implements TdClient {
   @override
   Future<void> dispose() async {
     _disposed = true;
-    _receiverExit?.close();
+    // The receiver's exit port stays open: its exit is what tells the next
+    // client it may start receiving (see [_lastReceiverGone]).
     _senderExit?.close();
-    _receiverControl?.send(const StopReceiver());
+    final control = _receiverControl;
+    final gone = _receiver == null ? Future<void>.value() : _receiverGone.future;
+    // A receiver that won't stop in time is killed; the kill only lands once
+    // its blocking td_receive returns, which the exit port still reports.
+    _lastReceiverGone = gone.timeout(const Duration(seconds: 15), onTimeout: () {});
+    control?.send(const StopReceiver());
+    unawaited(
+      gone.timeout(const Duration(seconds: 3), onTimeout: () => _receiver?.kill(priority: Isolate.immediate)),
+    );
     _sender?.kill();
     _router.failAll('TDLib client disposed');
     await _subscription?.cancel();
     _fromBackground.close();
     await _updates.close();
+    await _lastReceiverGone;
   }
 }

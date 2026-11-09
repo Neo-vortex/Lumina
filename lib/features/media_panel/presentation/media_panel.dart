@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
 import '../../../core/telegram/widgets/animated_sticker.dart';
+import '../../../core/telegram/widgets/gif_preview.dart';
 import '../../../core/telegram/widgets/looping_gif.dart';
 import '../../../core/telegram/widgets/td_file_image.dart';
 import '../../../core/theme/glow_colors.dart';
@@ -28,49 +29,167 @@ class MediaPanel extends StatefulWidget {
   final ValueChanged<String> onEmoji;
   final VoidCallback onSent;
 
+  /// How far the panel is expanded above its keyboard height right now
+  /// (0 when collapsed). The chat leaves its layout alone for this part:
+  /// the expansion covers the messages instead of re-laying them out on
+  /// every frame (that relayout made expanding flicker and stutter).
+  static double expandedBy = 0;
+
   @override
   State<MediaPanel> createState() => _MediaPanelState();
 }
 
-class _MediaPanelState extends State<MediaPanel> {
+class _MediaPanelState extends State<MediaPanel> with SingleTickerProviderStateMixin {
   var _tab = 0;
   static const _tabs = ['Emoji', 'Stickers', 'GIFs'];
 
+  /// 0 = keyboard height, 1 = expanded (most of the screen). Dragging the
+  /// handle moves it; scrolling the content up expands it first, pulling
+  /// down at the top collapses it, like Telegram.
+  late final _open = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
+
   @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    height: widget.height,
-    decoration: BoxDecoration(
-      color: GlowColors.surface,
-      border: Border(top: BorderSide(color: GlowColors.violet.withValues(alpha: 0.35))),
-    ),
+  void dispose() {
+    _open.dispose();
+    _pull.dispose();
+    MediaPanel.expandedBy = 0;
+    super.dispose();
+  }
+
+  double get _extra {
+    final max = MediaQuery.sizeOf(context).height * 0.75 - MediaQuery.paddingOf(context).top;
+    return (max - widget.height).clamp(0.0, double.infinity);
+  }
+
+  /// Dragged down below its collapsed height: past [_dismissAt] (or flung)
+  /// the panel closes.
+  final _pull = ValueNotifier<double>(0);
+  static const _dismissAt = 90.0;
+
+  /// Pulled down past the top of the content while collapsed.
+  var _overPull = 0.0;
+
+  void _close() {
+    _pull.value = 0;
+    // The composer's "done" callback hides the panel.
+    widget.onSent();
+  }
+
+  void _drag(DragUpdateDetails d) {
+    final dy = d.delta.dy;
+    // Collapsed and going down (or already pulled): the panel follows the
+    // finger towards closing.
+    if (_open.value == 0 && (dy > 0 || _pull.value > 0)) {
+      _pull.value = (_pull.value + dy).clamp(0.0, widget.height);
+      return;
+    }
+    final extra = _extra;
+    if (extra <= 0) return;
+    _open.value = (_open.value - dy / extra).clamp(0.0, 1.0);
+  }
+
+  void _settle(DragEndDetails d) {
+    final v = d.velocity.pixelsPerSecond.dy;
+    if (_pull.value > 0) {
+      if (_pull.value > _dismissAt || v > 700) {
+        _close();
+      } else {
+        _pull.value = 0;
+      }
+      return;
+    }
+    final open = v.abs() > 400 ? v < 0 : _open.value > 0.5;
+    _open.animateTo(open ? 1 : 0, curve: Curves.easeOutCubic);
+  }
+
+  bool _onScroll(ScrollNotification n) {
+    if (n.metrics.axis != Axis.vertical || n.depth != 0) return false;
+    // Scrolling the content up while collapsed: expand first.
+    if (n is ScrollUpdateNotification && n.dragDetails != null && (n.scrollDelta ?? 0) > 2 && _open.value < 1) {
+      if (!_open.isAnimating) _open.animateTo(1, curve: Curves.easeOutCubic);
+    }
+    // Pulled down past the top while expanded: collapse; collapsed: a long
+    // pull closes the panel.
+    if (n is OverscrollNotification && n.dragDetails != null && n.overscroll < -2) {
+      if (_open.value > 0) {
+        if (!_open.isAnimating) _open.animateTo(0, curve: Curves.easeOutCubic);
+      } else if (!_open.isAnimating) {
+        _overPull -= n.overscroll;
+        if (_overPull > _dismissAt * 1.4) {
+          _overPull = 0;
+          _close();
+        }
+      }
+    }
+    if (n is ScrollEndNotification) _overPull = 0;
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: Listenable.merge([_open, _pull]),
+    builder: (context, child) {
+      MediaPanel.expandedBy = _extra * _open.value;
+      return Transform.translate(
+        offset: Offset(0, _pull.value),
+        child: Container(
+          width: double.infinity,
+          height: widget.height + MediaPanel.expandedBy,
+          decoration: BoxDecoration(
+            color: GlowColors.surface,
+            border: Border(top: BorderSide(color: GlowColors.violet.withValues(alpha: 0.35))),
+          ),
+          child: child,
+        ),
+      );
+    },
     child: Column(
       children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-          child: Row(
+        // The handle and the tab row both drag the panel open or closed.
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onVerticalDragUpdate: _drag,
+          onVerticalDragEnd: _settle,
+          child: Column(
             children: [
-              for (var i = 0; i < _tabs.length; i++)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _TabPill(
-                    label: _tabs[i],
-                    selected: i == _tab,
-                    onTap: () => setState(() => _tab = i),
-                  ),
+              Semantics(
+                button: true,
+                label: 'Expand or collapse the panel',
+                onTap: () => _open.animateTo(_open.value > 0.5 ? 0 : 1, curve: Curves.easeOutCubic),
+                child: Container(
+                  margin: const EdgeInsets.only(top: 6),
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(color: GlowColors.outlineStrong, borderRadius: BorderRadius.circular(2)),
                 ),
+              ),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
+                child: Row(
+                  children: [
+                    for (var i = 0; i < _tabs.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: _TabPill(label: _tabs[i], selected: i == _tab, onTap: () => setState(() => _tab = i)),
+                      ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
         Expanded(
-          child: IndexedStack(
-            index: _tab,
-            children: [
-              _EmojiTab(onEmoji: widget.onEmoji),
-              _tab == 1 ? _StickerTab(chatId: widget.chatId, onSent: widget.onSent) : const SizedBox.shrink(),
-              _tab == 2 ? _GifTab(chatId: widget.chatId, onSent: widget.onSent) : const SizedBox.shrink(),
-            ],
+          child: NotificationListener<ScrollNotification>(
+            onNotification: _onScroll,
+            child: IndexedStack(
+              index: _tab,
+              children: [
+                _EmojiTab(onEmoji: widget.onEmoji),
+                _tab == 1 ? _StickerTab(chatId: widget.chatId, onSent: widget.onSent) : const SizedBox.shrink(),
+                _tab == 2 ? _GifTab(chatId: widget.chatId, onSent: widget.onSent) : const SizedBox.shrink(),
+              ],
+            ),
           ),
         ),
       ],
@@ -99,10 +218,7 @@ class _TabPill extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(
-          color: selected ? GlowColors.violet : GlowColors.textMuted,
-          fontWeight: FontWeight.w600,
-        ),
+        style: TextStyle(color: selected ? GlowColors.violet : GlowColors.textMuted, fontWeight: FontWeight.w600),
       ),
     ),
   );
@@ -154,21 +270,87 @@ class _EmojiTabState extends State<_EmojiTab> {
     ),
   );
 
+  final _query = TextEditingController();
+  Timer? _debounce;
+  List<String>? _results; // null: not searching
+  var _searchSeq = 0;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _query.dispose();
+    super.dispose();
+  }
+
+  void _onQuery(String q) {
+    _debounce?.cancel();
+    final text = q.trim();
+    if (text.isEmpty) {
+      setState(() => _results = null);
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 200), () async {
+      final seq = ++_searchSeq;
+      final lang = Localizations.maybeLocaleOf(context)?.languageCode;
+      final langs = {'en', ?lang}.toList();
+      List<String> found;
+      try {
+        found = await _repo.searchEmoji(text, languages: langs);
+      } catch (_) {
+        found = const [];
+      }
+      // Only the latest query lands.
+      if (mounted && seq == _searchSeq && _query.text.trim().isNotEmpty) setState(() => _results = found);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final recent = _repo.recentEmoji;
+    final results = _results;
     return Column(
       children: [
-        Expanded(
-          child: CustomScrollView(
-            slivers: [
-              if (recent.isNotEmpty) ...[_header('Recent'), _grid(recent)],
-              for (var i = 0; i < emojiCategories.length; i++) ...[
-                _header(emojiCategories[i].$2, key: _keys[i]),
-                _grid(emojiCategories[i].$3),
-              ],
-            ],
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+          child: TextField(
+            controller: _query,
+            onChanged: _onQuery,
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: 'Search emoji',
+              prefixIcon: const Icon(Icons.search_rounded),
+              suffixIcon: _query.text.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Clear',
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      onPressed: () {
+                        _query.clear();
+                        _onQuery('');
+                      },
+                    ),
+              filled: true,
+              fillColor: GlowColors.surfaceHigh,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+            ),
           ),
+        ),
+        Expanded(
+          child: results != null
+              ? (results.isEmpty
+                    ? const Center(
+                        child: Text('No emoji found', style: TextStyle(color: GlowColors.textMuted)),
+                      )
+                    : CustomScrollView(slivers: [_grid(results)]))
+              : CustomScrollView(
+                  slivers: [
+                    if (recent.isNotEmpty) ...[_header('Recent'), _grid(recent)],
+                    for (var i = 0; i < emojiCategories.length; i++) ...[
+                      _header(emojiCategories[i].$2, key: _keys[i]),
+                      _grid(emojiCategories[i].$3),
+                    ],
+                  ],
+                ),
         ),
         // Category rail.
         SizedBox(
@@ -180,6 +362,16 @@ class _EmojiTabState extends State<_EmojiTab> {
                 InkResponse(
                   radius: 18,
                   onTap: () {
+                    if (_results != null) {
+                      _query.clear();
+                      setState(() => _results = null);
+                      // Jump once the category list is back.
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        final c = _keys[i].currentContext;
+                        if (c != null) Scrollable.ensureVisible(c);
+                      });
+                      return;
+                    }
                     final c = _keys[i].currentContext;
                     if (c != null) Scrollable.ensureVisible(c, duration: const Duration(milliseconds: 250));
                   },
@@ -258,7 +450,7 @@ class _StickerTabState extends State<_StickerTab> {
                 selected: _setId == set.id,
                 onTap: () => _select(set.id),
                 child: set.covers.isNotEmpty
-                    ? AnimatedSticker(sticker: set.covers.first, size: 30)
+                    ? AnimatedSticker(sticker: set.covers.first, size: 30, repeat: true)
                     : set.thumbnail != null
                     ? TdFileImage(file: set.thumbnail!.file, fit: BoxFit.contain)
                     : Text(set.title.characters.first),
@@ -289,10 +481,10 @@ class _StickerTabState extends State<_StickerTab> {
                 excludeSemantics: true,
                 child: InkResponse(
                   onTap: () => _send(list[i]),
-                  // Plays once as it appears, then rests (no endless frames).
+                  // Loops like Telegram's panel (it used to play once and stop).
                   child: Padding(
                     padding: const EdgeInsets.all(4),
-                    child: AnimatedSticker(sticker: list[i], size: 72),
+                    child: AnimatedSticker(sticker: list[i], size: 72, repeat: true),
                   ),
                 ),
               ),
@@ -373,7 +565,8 @@ class _GifTabState extends State<_GifTab> {
       onTap: onTap,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: LoopingGif(
+        // Software-decoded, like Telegram: every cell loops at once.
+        child: GifPreview(
           file: gif.animation,
           thumbnail: gif.thumbnail?.file,
           paused: _scrolling,
@@ -469,8 +662,10 @@ class _GifTabState extends State<_GifTab> {
     },
     // A decoder per GIF: past the phone's limit they stall after a few
     // frames, so only so many loop at once and none off screen.
+    // 12 of the phone's 16 hardware decoders: every cell of the collapsed
+    // panel plays; past that (expanded) they take turns.
     child: GifBudget(
-      max: 8,
+      max: 12,
       child: GridView.builder(
         cacheExtent: 0,
         padding: const EdgeInsets.all(6),

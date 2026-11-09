@@ -62,7 +62,9 @@ class DecodePlan {
 /// picture; it fades to nothing as the scans fill in.
 double blurFor(double progress) {
   final left = (1 - progress.clamp(0.0, 1.0));
-  return 9 * left * left;
+  // Just enough to melt the blocks of the first scans; a stronger blur
+  // threw away the detail they already carry.
+  return 3.5 * left * left;
 }
 
 // ---- Widgets ------------------------------------------------------------------
@@ -70,11 +72,17 @@ double blurFor(double progress) {
 /// Baked blurred minithumbnails, shared by every tile showing the same one.
 final _blurred = <int, Future<ui.Image>>{};
 
-Future<ui.Image> _bakeBlur(ui.Image src, {required int width, required int height, required double sigma}) {
+Future<ui.Image> _bakeBlur(
+  ui.Image src, {
+  required int width,
+  required int height,
+  required double sigma,
+  FilterQuality quality = FilterQuality.medium,
+}) {
   final recorder = ui.PictureRecorder();
   final canvas = Canvas(recorder);
   final paint = Paint()
-    ..filterQuality = FilterQuality.medium
+    ..filterQuality = quality
     ..imageFilter = sigma <= 0
         ? null
         : ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma, tileMode: TileMode.clamp);
@@ -93,9 +101,27 @@ Future<ui.Image> blurredMinithumbnail(Uint8List bytes) {
   return _blurred[key] ??= () async {
     final codec = await ui.instantiateImageCodec(bytes);
     final src = (await codec.getNextFrame()).image;
-    // Upscale 4× and blur there: a smooth gradient field, not 40 big pixels.
-    final image = await _bakeBlur(src, width: src.width * 4, height: src.height * 4, sigma: 7);
+    // Telegram-style: the ~40 px preview is enlarged with a smooth (bicubic)
+    // filter in two 2× steps, then blurred only enough to hide its JPEG
+    // blocks (about 0.7 source px; Telegram's stack blur is radius 3 at
+    // this size). A wide gaussian over it left a single colour halo; this
+    // keeps the shapes and colours readable until the photo arrives.
+    final twice = await _bakeBlur(
+      src,
+      width: src.width * 2,
+      height: src.height * 2,
+      sigma: 0,
+      quality: FilterQuality.high,
+    );
     src.dispose();
+    final image = await _bakeBlur(
+      twice,
+      width: twice.width * 2,
+      height: twice.height * 2,
+      sigma: 2.8,
+      quality: FilterQuality.high,
+    );
+    twice.dispose();
     return image;
   }();
 }

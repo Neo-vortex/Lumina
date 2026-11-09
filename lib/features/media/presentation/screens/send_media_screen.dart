@@ -12,6 +12,7 @@ import '../../../../core/widgets/glow_background.dart';
 import '../../../../core/widgets/send_options_sheet.dart';
 import '../../data/media_sender.dart';
 import '../widgets/video_convert_sheet.dart';
+import '../widgets/video_player_view.dart';
 import '../../../../core/widgets/smooth_progress.dart';
 
 /// What the review screen hands back to the conversation.
@@ -164,6 +165,14 @@ class _SendMediaScreenState extends State<SendMediaScreen> {
     }
   }
 
+  /// Width / height of a video from its probe; photos fill the space and
+  /// letterbox inside it.
+  static double? _aspectOf(PickedMedia m) {
+    final p = m.probe;
+    if (m.kind != MediaKind.video || p == null || p.width == 0 || p.height == 0) return null;
+    return p.width / p.height;
+  }
+
   @override
   Widget build(BuildContext context) {
     final single = widget.items.length == 1;
@@ -178,18 +187,40 @@ class _SendMediaScreenState extends State<SendMediaScreen> {
         child: Column(
           children: [
             Expanded(
-              child: GridView.builder(
-                padding: const EdgeInsets.all(12),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: single ? 1 : 2,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: single ? 0.9 : 1,
-                ),
-                itemCount: widget.items.length,
-                itemBuilder: (context, i) =>
-                    _Tile(media: widget.items[i], onConvert: () => _convert(widget.items[i])),
-              ),
+              child: single && visual
+                  // One photo or video: as big as the space allows, in its own
+                  // shape (no bars, no empty half screen).
+                  ? Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                      child: Center(
+                        child: switch (_aspectOf(widget.items.first)) {
+                          final a? => AspectRatio(
+                            aspectRatio: a,
+                            child: _Tile(
+                              media: widget.items.first,
+                              onConvert: () => _convert(widget.items.first),
+                            ),
+                          ),
+                          null => _Tile(
+                            media: widget.items.first,
+                            whole: true,
+                            onConvert: () => _convert(widget.items.first),
+                          ),
+                        },
+                      ),
+                    )
+                  : GridView.builder(
+                      padding: const EdgeInsets.all(12),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: single ? 1 : 2,
+                        mainAxisSpacing: 10,
+                        crossAxisSpacing: 10,
+                        childAspectRatio: single ? 0.9 : 1,
+                      ),
+                      itemCount: widget.items.length,
+                      itemBuilder: (context, i) =>
+                          _Tile(media: widget.items[i], onConvert: () => _convert(widget.items[i])),
+                    ),
             ),
             if (_status != null)
               Padding(
@@ -289,10 +320,86 @@ class _SendMediaScreenState extends State<SendMediaScreen> {
   }
 }
 
-class _Tile extends StatelessWidget {
-  const _Tile({required this.media, required this.onConvert});
+/// A frame from the video, letterboxed so the whole picture shows; tap to
+/// play it (muted, looping) right in the tile, tap again to pause.
+class _VideoPreview extends StatefulWidget {
+  const _VideoPreview({super.key, required this.media});
 
   final PickedMedia media;
+
+  @override
+  State<_VideoPreview> createState() => _VideoPreviewState();
+}
+
+class _VideoPreviewState extends State<_VideoPreview> {
+  late final Future<String?> _frame = context.read<MediaSender>().ffmpeg.previewFrame(widget.media.path);
+  var _playing = false;
+
+  double? get _aspect {
+    final p = widget.media.probe;
+    return p == null || p.width == 0 || p.height == 0 ? null : p.width / p.height;
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: () => setState(() => _playing = !_playing),
+    child: ColoredBox(
+      color: Colors.black,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (_playing)
+            IgnorePointer(
+              child: VideoPlayerView(
+                source: widget.media.path,
+                isLocalFile: true,
+                aspectRatio: _aspect,
+                loop: true,
+                muted: true,
+                showControls: false,
+              ),
+            )
+          else
+            FutureBuilder<String?>(
+              future: _frame,
+              builder: (context, snap) => switch (snap.data) {
+                final path? => Image.file(File(path), fit: BoxFit.contain, gaplessPlayback: true),
+                _ when snap.connectionState != ConnectionState.done => const Center(
+                  child: SizedBox.square(
+                    dimension: 28,
+                    child: CircularProgressIndicator(strokeWidth: 2.4, color: GlowColors.cyan),
+                  ),
+                ),
+                _ => const Center(child: Icon(Icons.movie_rounded, size: 48, color: GlowColors.textMuted)),
+              },
+            ),
+          if (!_playing)
+            Center(
+              child: Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.black.withValues(alpha: 0.45),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: const Icon(Icons.play_arrow_rounded, size: 38, color: Colors.white),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _Tile extends StatelessWidget {
+  const _Tile({required this.media, required this.onConvert, this.whole = false});
+
+  final PickedMedia media;
+
+  /// Shown alone: the whole photo, letterboxed, instead of a cropped square.
+  final bool whole;
   final VoidCallback onConvert;
 
   @override
@@ -306,9 +413,13 @@ class _Tile extends StatelessWidget {
         children: [
           Container(color: GlowColors.surfaceHigh),
           if (media.kind == MediaKind.photo)
-            Image.file(File(media.path), fit: BoxFit.cover, cacheWidth: 800)
+            Image.file(
+              File(media.path),
+              fit: whole ? BoxFit.contain : BoxFit.cover,
+              cacheWidth: whole ? 1440 : 800,
+            )
           else if (media.kind == MediaKind.video)
-            const Center(child: Icon(Icons.movie_rounded, size: 48, color: GlowColors.textMuted))
+            _VideoPreview(key: ValueKey(media.path), media: media)
           else if (media.kind == MediaKind.audio)
             Center(
               child: Column(

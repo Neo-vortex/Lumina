@@ -37,6 +37,23 @@ android {
         versionName = flutter.versionName
     }
 
+    // Two builds: `full` bundles the on-device LLM (SmolLM2 + llama.cpp),
+    // `lite` leaves it out. Whisper (speech) is in both. Build with
+    // `--flavor full` or `--flavor lite`; Dart reads it via appFlavor
+    // (lib/core/build/build_flavor.dart), the model asset is flavor-scoped in
+    // pubspec.yaml, and lite's llama.cpp libraries are stripped below.
+    flavorDimensions += "ai"
+    productFlavors {
+        create("full") {
+            dimension = "ai"
+            isDefault = true
+        }
+        create("lite") {
+            dimension = "ai"
+            versionNameSuffix = "-lite"
+        }
+    }
+
     packaging {
         jniLibs {
             // libVLC and ffmpeg-kit both bundle the NDK C++ runtime.
@@ -67,7 +84,25 @@ android {
             proguardFiles("calls-rules.pro")
             // JNI-bound classes of libVLC (video playback).
             proguardFiles("media-rules.pro")
+            proguardFiles("proguard-rules.pro")
         }
+    }
+}
+
+// llamadart's native libraries (whisper_edge links whisper.cpp statically and
+// needs none of them).
+androidComponents {
+    onVariants(selector().withFlavor("ai" to "lite")) { variant ->
+        variant.packaging.jniLibs.excludes.addAll(
+            listOf(
+                "lib/*/libllama*.so",
+                "lib/*/libggml*.so",
+                "lib/*/libmtmd.so",
+                "lib/*/libLiteRt*.so",
+                "lib/*/libGemmaModelConstraintProvider.so",
+                "lib/*/libwebgpu_dawn.so",
+            ),
+        )
     }
 }
 

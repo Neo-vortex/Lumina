@@ -109,6 +109,11 @@ class MainActivity : FlutterActivity() {
             intent.data?.let { MessageNotifications.openLink(it.toString()) }
             intent.data = null
         }
+        if (intent != null && (intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_SEND_MULTIPLE)) {
+            // Once only (a recreated activity keeps its intent).
+            intent.action = null
+            receiveShare(intent)
+        }
         val action = intent?.getStringExtra(CallChannel.EXTRA_CALL_ACTION) ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
@@ -116,6 +121,49 @@ class MainActivity : FlutterActivity() {
         }
         intent.removeExtra(CallChannel.EXTRA_CALL_ACTION)
         calls?.onNotificationAction(action)
+    }
+
+    /**
+     * Shared from another app: the text and any files. The files are copied
+     * into cache/shared_in at once (read access to the other app's URIs ends
+     * with this activity), then Dart picks the chat.
+     */
+    @Suppress("DEPRECATION")
+    private fun receiveShare(intent: Intent) {
+        val uris = mutableListOf<Uri>()
+        if (intent.action == Intent.ACTION_SEND_MULTIPLE) {
+            intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.let { uris += it }
+        } else {
+            intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)?.let { uris += it }
+        }
+        intent.clipData?.let { clip ->
+            for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { if (it !in uris) uris += it }
+        }
+        val text = listOfNotNull(
+            intent.getStringExtra(Intent.EXTRA_SUBJECT)?.takeIf { it.isNotBlank() },
+            intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()?.takeIf { it.isNotBlank() },
+        ).distinct().joinToString("\n")
+        val fallbackType = intent.type
+        io.execute {
+            val dir = File(cacheDir, "shared_in/${System.currentTimeMillis()}").apply { mkdirs() }
+            val files = uris.mapIndexedNotNull { i, uri ->
+                runCatching {
+                    var name: String? = null
+                    contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                        ?.use { c -> if (c.moveToFirst()) name = c.getString(0) }
+                    val safe = (name ?: uri.lastPathSegment ?: "shared_$i").replace('/', '_')
+                    val out = File(dir, safe)
+                    contentResolver.openInputStream(uri)!!.use { input -> out.outputStream().use { input.copyTo(it) } }
+                    mapOf(
+                        "path" to out.path,
+                        "name" to safe,
+                        "mime" to (contentResolver.getType(uri) ?: fallbackType ?: "application/octet-stream"),
+                    )
+                }.getOrNull()
+            }
+            if (text.isEmpty() && files.isEmpty()) return@execute
+            main.post { MessageNotifications.openShare(text, files) }
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -215,6 +263,38 @@ class MainActivity : FlutterActivity() {
                 val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
                 result.success(pm.isIgnoringBatteryOptimizations(packageName))
             }
+            // A fresh process: TDLib reads its server (LUMINA_SERVER) once.
+            "restartApp" -> {
+                result.success(true)
+                startActivity(
+                    Intent(this, RestartActivity::class.java)
+                        .putExtra(RestartActivity.EXTRA_PID, android.os.Process.myPid())
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
+            "notificationsEnabled" -> result.success(
+                androidx.core.app.NotificationManagerCompat.from(this).areNotificationsEnabled(),
+            )
+            "openNotificationSettings" -> result.success(
+                start(
+                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, packageName),
+                ),
+            )
+            // Android 14+: without this, an incoming call on a locked phone is
+            // only a quiet lock-screen notification, never the call screen.
+            "canUseFullScreenIntent" -> result.success(
+                Build.VERSION.SDK_INT < 34 ||
+                    (getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager)
+                        .canUseFullScreenIntent(),
+            )
+            "openFullScreenIntentSettings" -> result.success(
+                Build.VERSION.SDK_INT >= 34 &&
+                    start(
+                        Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
+                            .setData(Uri.parse("package:$packageName")),
+                    ),
+            )
             "openBatterySettings" -> result.success(start(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)))
             "insertCalendarEvent" -> {
                 val intent = Intent(Intent.ACTION_INSERT)
@@ -263,6 +343,17 @@ class MainActivity : FlutterActivity() {
                 }
             }
             "openUrl" -> result.success(start(Intent(Intent.ACTION_VIEW, Uri.parse(call.argument<String>("url")))))
+            // The phone's own "new contact" screen, prefilled (no permission needed).
+            "saveToPhoneContacts" -> {
+                val insert = Intent(android.provider.ContactsContract.Intents.Insert.ACTION)
+                    .setType(android.provider.ContactsContract.RawContacts.CONTENT_TYPE)
+                    .putExtra(android.provider.ContactsContract.Intents.Insert.NAME, call.argument<String>("name") ?: "")
+                val phone = call.argument<String>("phone") ?: ""
+                if (phone.isNotEmpty()) insert.putExtra(android.provider.ContactsContract.Intents.Insert.PHONE, phone)
+                val note = call.argument<String>("note") ?: ""
+                if (note.isNotEmpty()) insert.putExtra(android.provider.ContactsContract.Intents.Insert.NOTES, note)
+                result.success(start(insert))
+            }
             "shareText" -> {
                 val share = Intent(Intent.ACTION_SEND)
                     .setType("text/plain")
@@ -276,7 +367,33 @@ class MainActivity : FlutterActivity() {
                 else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri)
                 result.success(start(intent))
             }
-            // Copies a file into the shared gallery (Pictures/Lumina).
+            // Android's share sheet for a file: a copy in cache/share goes
+            // out through the FileProvider (never the TDLib folders).
+            "shareFile" -> {
+                val path = call.argument<String>("path")!!
+                val mime = call.argument<String>("mime") ?: "*/*"
+                val name = call.argument<String>("name") ?: File(path).name
+                io.execute {
+                    val uri = runCatching {
+                        val dir = File(cacheDir, "share").apply { mkdirs() }
+                        dir.listFiles()?.forEach { it.delete() }
+                        val copy = File(dir, name.replace('/', '_'))
+                        File(path).copyTo(copy, overwrite = true)
+                        androidx.core.content.FileProvider.getUriForFile(this, "$packageName.share", copy)
+                    }.getOrNull()
+                    main.post {
+                        if (uri == null) return@post result.success(false)
+                        val share = Intent(Intent.ACTION_SEND)
+                            .setType(mime)
+                            .putExtra(Intent.EXTRA_STREAM, uri)
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        share.clipData = android.content.ClipData.newRawUri(name, uri)
+                        result.success(start(Intent.createChooser(share, null).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)))
+                    }
+                }
+            }
+            // Copies a file into the shared gallery (Pictures/Lumina, or
+            // Movies/Lumina for videos).
             "saveToGallery" -> {
                 val path = call.argument<String>("path")!!
                 val mime = call.argument<String>("mime") ?: "image/jpeg"
@@ -287,10 +404,16 @@ class MainActivity : FlutterActivity() {
                             put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
                             put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mime)
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/Lumina")
+                                put(
+                                    android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                                    if (mime.startsWith("video/")) "Movies/Lumina" else "Pictures/Lumina",
+                                )
                             }
                         }
-                        val uri = contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)!!
+                        val collection = if (mime.startsWith("video/"))
+                            android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                        else android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                        val uri = contentResolver.insert(collection, values)!!
                         contentResolver.openOutputStream(uri)!!.use { out -> File(path).inputStream().use { it.copyTo(out) } }
                         true
                     }.getOrDefault(false)
@@ -298,6 +421,11 @@ class MainActivity : FlutterActivity() {
                 }
             }
             "sdkInt" -> result.success(Build.VERSION.SDK_INT)
+            // Silent or vibrate: UI sounds (the send sound) stay quiet.
+            "ringerSilent" -> {
+                val audio = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+                result.success(audio.ringerMode != android.media.AudioManager.RINGER_MODE_NORMAL)
+            }
             else -> result.notImplemented()
         }
     }

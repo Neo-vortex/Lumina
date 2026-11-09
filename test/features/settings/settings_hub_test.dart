@@ -94,6 +94,12 @@ void main() {
     await pumpHub(tester, bot: true);
     expect(find.text('Privacy'), findsNothing);
     await open(tester, 'Chats');
+    // Below the gesture and reaction sections: scroll down to it.
+    await tester.scrollUntilVisible(
+      find.text('Show link previews in chats'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
     expect(find.text('Show link previews in chats'), findsOneWidget);
     expect(find.text('Hide stories'), findsNothing);
     expect(find.text('Hide channel ads'), findsNothing);

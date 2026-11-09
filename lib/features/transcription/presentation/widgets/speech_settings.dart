@@ -30,8 +30,15 @@ class SpeechSettings extends StatelessWidget {
     'ko': '한국어',
   };
 
+  // Rebuilt on every preference change: this section is a const widget,
+  // which the page's own rebuild skips (switches didn't move).
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: context.read<AppPreferences>().changes,
+    builder: (context, _) => _build(context),
+  );
+
+  Widget _build(BuildContext context) {
     final prefs = context.read<AppPreferences>();
     final models = context.read<ModelInstaller>();
     return SettingsSection(

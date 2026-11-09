@@ -6,6 +6,7 @@ import 'package:lumina/core/storage/app_preferences.dart';
 import 'package:lumina/core/telegram/custom_emoji_store.dart';
 import 'package:lumina/core/telegram/file_store.dart';
 import 'package:lumina/core/telegram/widgets/formatted_text_view.dart';
+import 'package:lumina/core/telegram/widgets/lottie_frame_cache.dart';
 import 'package:lumina/core/telegram/widgets/td_file_image.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
@@ -53,17 +54,16 @@ void main() {
 
   testWidgets('a TGS custom emoji animates in text', (tester) async {
     await pump(tester, AppPreferences.inMemory());
-    expect(find.byType(LottieBuilder), findsOneWidget);
-    expect(
-      tester.widget<LottieBuilder>(find.byType(LottieBuilder)).repeat,
-      isTrue,
-      reason: 'loops like Telegram',
-    );
+    // Looping emoji in text play from pre-drawn frames (CachedLottie), not
+    // a live Lottie player each.
+    expect(find.byType(CachedLottie), findsOneWidget, reason: 'loops like Telegram');
+    expect(find.byType(LottieBuilder), findsNothing);
   });
 
   testWidgets('with animations off it shows its static image', (tester) async {
     await pump(tester, AppPreferences.inMemory()..animatedEmoji = false);
     expect(find.byType(LottieBuilder), findsNothing);
+    expect(find.byType(CachedLottie), findsNothing);
     expect(find.byType(TdFileImage), findsOneWidget);
   });
 }

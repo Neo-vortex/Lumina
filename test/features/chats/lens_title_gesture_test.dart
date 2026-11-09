@@ -28,11 +28,11 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.text('All chats'));
+    await tester.tap(find.byType(LensTitle));
     await tester.pump(const Duration(milliseconds: 400));
     expect(events, ['tap']);
 
-    final g = await tester.startGesture(tester.getCenter(find.text('All chats')));
+    final g = await tester.startGesture(tester.getCenter(find.byType(LensTitle)));
     await tester.pump(const Duration(milliseconds: 300));
     await g.moveBy(const Offset(0, 120));
     await tester.pump();
@@ -44,7 +44,7 @@ void main() {
   testWidgets('without hold callbacks a slow press is still a tap', (tester) async {
     var taps = 0;
     await tester.pumpWidget(host(LensTitle(entry: entry, color: Colors.purple, onTap: () => taps++)));
-    final g = await tester.startGesture(tester.getCenter(find.text('All chats')));
+    final g = await tester.startGesture(tester.getCenter(find.byType(LensTitle)));
     await tester.pump(const Duration(milliseconds: 600));
     await g.up();
     expect(taps, 1, reason: 'tap-only titles keep today’s behaviour: a slow press still opens the list');
@@ -64,7 +64,7 @@ void main() {
       ),
     );
     await tester.pumpWidget(title(hold: true));
-    final g = await tester.startGesture(tester.getCenter(find.text('All chats')));
+    final g = await tester.startGesture(tester.getCenter(find.byType(LensTitle)));
     await tester.pump(const Duration(milliseconds: 300));
     expect(events, ['start']);
     await tester.pumpWidget(title(hold: false)); // e.g. folders dropped to one

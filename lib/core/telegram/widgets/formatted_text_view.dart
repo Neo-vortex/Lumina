@@ -6,6 +6,7 @@ import 'package:lumina_tdlib/api.dart' as td;
 
 import '../custom_emoji_store.dart';
 import '../link_opener.dart';
+import '../profile_opener.dart';
 import 'td_file_image.dart';
 import 'animated_sticker.dart';
 import '../../storage/app_preferences.dart';
@@ -232,7 +233,13 @@ class _FormattedTextViewState extends State<FormattedTextView> {
           case td.TextEntityTypeMention():
             style = style.copyWith(color: link);
             final w = whole(e);
-            if (widget.onMention != null) recognizer = _tap(() => widget.onMention!(w.substring(1)));
+            final onMention = widget.onMention;
+            final opener = ProfileOpener.maybeOf(context);
+            if (onMention != null) {
+              recognizer = _tap(() => onMention(w.substring(1)));
+            } else if (opener != null) {
+              recognizer = _tap(() => opener.openUsername(context, w.substring(1)));
+            }
           case td.TextEntityTypeMediaTimestamp(:final mediaTimestamp):
             style = style.copyWith(color: link, decoration: TextDecoration.underline);
             if (widget.onMediaTimestamp != null) {
@@ -240,8 +247,10 @@ class _FormattedTextViewState extends State<FormattedTextView> {
             }
           case td.TextEntityTypeHashtag() || td.TextEntityTypeCashtag() || td.TextEntityTypeBotCommand():
             style = style.copyWith(color: link);
-          case td.TextEntityTypeMentionName():
+          case td.TextEntityTypeMentionName(:final userId):
             style = style.copyWith(color: link);
+            final opener = ProfileOpener.maybeOf(context);
+            if (opener != null) recognizer = _tap(() => opener.openUser(context, userId));
           case td.TextEntityTypeCustomEmoji(:final customEmojiId):
             customEmoji = customEmojiId;
         }

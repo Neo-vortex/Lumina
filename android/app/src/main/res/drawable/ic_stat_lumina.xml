@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar icon for Lumina's own notifications (white silhouette). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:pivotX="54" android:pivotY="54" android:scaleX="1.35" android:scaleY="1.35">
+        <path android:pathData="M 38.4 73.6 A 25 25 0 1 1 46.2 77.8 L 36 83 Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="6"
+            android:strokeLineJoin="round" android:strokeLineCap="round" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M54,53m-11,0a11,11 0,1 1,22 0a11,11 0,1 1,-22 0" />
+    </group>
+</vector>

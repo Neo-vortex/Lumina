@@ -343,6 +343,47 @@ class _ChatStoriesState extends State<_ChatStories> with SingleTickerProviderSta
     if (mounted) _hold(false);
   }
 
+  Future<void> _delete(td.Story story) async {
+    _hold(true);
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete story?'),
+        content: const Text('It disappears for everyone who can see it.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: GlowColors.coral),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (sure != true) return _hold(false);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await _repo.delete(story.posterChatId, story.id);
+    } catch (_) {
+      if (mounted) _hold(false);
+      messenger.showSnackBar(const SnackBar(content: Text('Could not delete the story')));
+      return;
+    }
+    if (!mounted) return;
+    HapticFeedback.mediumImpact();
+    messenger.showSnackBar(const SnackBar(content: Text('Story deleted')));
+    // Already gone: nothing to close.
+    _story = null;
+    _held = false;
+    _infos = [
+      for (final i in _infos)
+        if (i.storyId != story.id) i,
+    ];
+    if (_infos.isEmpty) return widget.onFinished();
+    _show(_index.clamp(0, _infos.length - 1));
+  }
+
   Future<void> _react(String? emoji) async {
     final s = _story;
     if (s == null) return;
@@ -572,6 +613,12 @@ class _ChatStoriesState extends State<_ChatStories> with SingleTickerProviderSta
                         tooltip: 'Viewers',
                         onPressed: () => _showViewers(story, chat),
                         icon: const Icon(Icons.visibility_rounded, color: Colors.white),
+                      ),
+                    if (story != null && story.canBeDeleted)
+                      IconButton(
+                        tooltip: 'Delete story',
+                        onPressed: () => _delete(story),
+                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.white),
                       ),
                     if (story != null && !mine) ...[
                       _SaveButton(story: story, title: chat?.title ?? '', onBusy: _hold),

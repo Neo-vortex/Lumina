@@ -4,11 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
+import '../../../core/media/ui_sounds.dart';
 import '../../../core/tdlib/td_errors.dart';
 import '../../../core/telegram/telegram_cache.dart';
 import '../../../core/telegram/entity_edit.dart';
 import '../../../core/telegram/permissions.dart';
 import '../data/messages_repository.dart';
+import '../data/resend_content.dart';
 
 part 'conversation_state.dart';
 
@@ -297,6 +299,7 @@ class ConversationCubit extends Cubit<ConversationState> {
           options: options,
           linkPreviewOptions: linkPreview,
         );
+        UiSounds.sent().ignore();
       }
       emit(state.copyWith(replyTo: () => null, editing: () => null));
       return null;
@@ -321,6 +324,7 @@ class ConversationCubit extends Cubit<ConversationState> {
         options: options,
       );
       onSent?.call(pending);
+      UiSounds.sent().ignore();
       emit(state.copyWith(replyTo: () => null));
       return null;
     } on TdException catch (e) {
@@ -341,6 +345,7 @@ class ConversationCubit extends Cubit<ConversationState> {
         quote: state.replyQuote,
         options: options,
       );
+      UiSounds.sent().ignore();
       emit(state.copyWith(replyTo: () => null));
       return null;
     } on TdException catch (e) {
@@ -392,6 +397,45 @@ class ConversationCubit extends Cubit<ConversationState> {
   Future<void> delete(List<int> ids, {required bool forEveryone}) async {
     await _repository.delete(chatId, ids, forEveryone: forEveryone);
     clearSelection();
+  }
+
+  /// Failed messages in the loaded window that can be sent again.
+  List<td.Message> get retryableFailed => [
+    for (final m in state.messages)
+      if (m.sendingState is td.MessageSendingStateFailed && (_canResend(m) || resendContent(m) != null)) m,
+  ];
+
+  static bool _canResend(td.Message m) => switch (m.sendingState) {
+    td.MessageSendingStateFailed(canRetry: true) => true,
+    _ => false,
+  };
+
+  /// TDLib's resend when it allows one; otherwise (the server refused it for
+  /// good) the same content goes out as a new message and the failed copy is
+  /// removed.
+  Future<void> retry(td.Message m) async {
+    if (_canResend(m)) return _repository.resend(chatId, [m.id]);
+    final content = resendContent(m);
+    if (content == null) throw StateError('This message can\'t be sent again');
+    final reply = switch (m.replyTo) {
+      td.MessageReplyToMessage(:final messageId, chatId: final c) when c == chatId || c == 0 => messageId,
+      _ => null,
+    };
+    await _repository.sendContent(chatId, content, replyToMessageId: reply);
+    await _repository.delete(chatId, [m.id], forEveryone: false);
+  }
+
+  /// All of them, oldest first: TDLib's resend in one go, the rest one by one.
+  Future<void> retryAllFailed() async {
+    final failed = [...retryableFailed]..sort((a, b) => a.id.compareTo(b.id));
+    final resendable = [
+      for (final m in failed)
+        if (_canResend(m)) m.id,
+    ];
+    if (resendable.isNotEmpty) await _repository.resend(chatId, resendable);
+    for (final m in failed) {
+      if (!_canResend(m)) await retry(m);
+    }
   }
 
   Future<void> pin(td.Message m, {bool notify = false}) async {

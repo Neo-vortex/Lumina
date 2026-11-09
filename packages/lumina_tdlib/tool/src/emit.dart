@@ -338,7 +338,30 @@ List<T> _list<T>(Object? v, T Function(Object? e) item) =>
     v == null ? <T>[] : <T>[for (final e in v as List) item(e)];
 ''';
 
-Map<String, String> emitLibrary(TlSchema schema, TdlibVersion version) {
+/// Object fields Telegram always fills but that TDLib passes on as null when a
+/// self-hosted, Telegram-compatible server leaves them out (constructor →
+/// fields). Treated as "may be null".
+const _serverOptional = {
+  // auth.authorizationSignUpRequired without terms_of_service.
+  'authorizationStateWaitRegistration': {'terms_of_service'},
+};
+
+TlConstructor _withServerOptional(TlConstructor c) {
+  final optional = _serverOptional[c.name];
+  if (optional == null) return c;
+  return TlConstructor(
+    name: c.name,
+    result: c.result,
+    doc: c.doc,
+    isFunction: c.isFunction,
+    fields: [
+      for (final f in c.fields) optional.contains(f.name) ? TlField(f.name, f.type, '${f.doc}; may be null') : f,
+    ],
+  );
+}
+
+Map<String, String> emitLibrary(TlSchema raw, TdlibVersion version) {
+  final schema = TlSchema(raw.classes, [for (final o in raw.objects) _withServerOptional(o)], raw.functions);
   final abstractDocs = <String, String>{for (final c in schema.classes.values) c.name: c.doc};
   for (final o in schema.objects) {
     if (_cap(o.name) != o.result) abstractDocs.putIfAbsent(o.result, () => '');

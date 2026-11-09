@@ -53,7 +53,8 @@ enum _Tile {
   contact('Contact', Icons.person_rounded, GlowColors.cyan, 'Share someone'),
   poll('Poll', Icons.poll_rounded, GlowColors.violet, 'Ask the chat'),
   music('Music', Icons.music_note_rounded, GlowColors.magenta, 'Audio files'),
-  roundVideo('Round video', Icons.radio_button_checked_rounded, GlowColors.teal, 'Quick video note');
+  roundVideo('Round video', Icons.radio_button_checked_rounded, GlowColors.teal, 'Quick video note'),
+  dice('Dice & games', Icons.casino_rounded, GlowColors.amber, 'Roll, shoot, score: the server decides');
 
   const _Tile(this.label, this.icon, this.color, this.hint);
   final String label;
@@ -177,6 +178,9 @@ Future<AttachPick?> pickAttachments(
       return const ContactPick();
     case 'location':
       return showLocationSheet(context);
+    case 'dice':
+      final emoji = await _pickDice(context);
+      return emoji == null ? null : ContentPick(td.InputMessageDice(emoji: emoji, clearDraft: false));
     case 'poll':
       return switch (await composePoll(context)) {
         final c? => ContentPick(c),
@@ -201,6 +205,62 @@ Future<AttachPick?> pickAttachments(
   }
   return null;
 }
+
+/// The six Telegram games; the result is rolled by the server.
+Future<String?> _pickDice(BuildContext context) => showModalBottomSheet<String>(
+  context: context,
+  backgroundColor: GlowColors.surface,
+  shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+  builder: (context) => SafeArea(
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Throw something', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          const Text('Nobody can pick the result', style: TextStyle(color: GlowColors.textMuted)),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            alignment: WrapAlignment.center,
+            children: [
+              for (final (e, name) in const [
+                ('🎲', 'Dice'),
+                ('🎯', 'Darts'),
+                ('🏀', 'Basketball'),
+                ('⚽', 'Football'),
+                ('🎳', 'Bowling'),
+                ('🎰', 'Slots'),
+              ])
+                InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: () => Navigator.pop(context, e),
+                  child: Container(
+                    width: 96,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: GlowColors.surfaceHigh,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: GlowColors.outline),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(e, style: const TextStyle(fontSize: 34)),
+                        const SizedBox(height: 4),
+                        Text(name, style: const TextStyle(fontSize: 12, color: GlowColors.textMuted)),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  ),
+);
 
 /// Tile names, most used first. Ties keep the declared order (file,
 /// location, contact…), so a fresh install sees a stable grid.

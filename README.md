@@ -27,6 +27,16 @@ tool/flutter.sh build apk --release --split-per-abi
 Requirements: Flutter ≥ 3.47 (Dart 3.13), Android SDK, an arm64 device or an
 x86_64 emulator. minSdk 24.
 
+### Myket mirrors
+
+Gradle plugin and Android dependency downloads use Myket Maven automatically.
+The Gradle Wrapper also downloads Gradle from Myket. Flutter package and engine
+downloads continue to use the Flutter CDN configured in your environment (such
+as the China mirror).
+
+Android SDK packages are installed separately. Download the needed archives
+from Myket's Android SDK CSV and extract them under `ANDROID_SDK_ROOT`.
+
 ## Test
 
 ```sh

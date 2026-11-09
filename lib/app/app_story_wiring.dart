@@ -3,6 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
 import '../core/storage/app_preferences.dart';
+import '../core/telegram/telegram_cache.dart';
+import '../core/telegram/widgets/chat_avatar.dart';
+import '../core/theme/glow_colors.dart';
 import '../features/auth/bloc/auth_bloc.dart';
 import '../features/auth/domain/auth_step.dart';
 import '../features/chat_info/data/chat_info_repository.dart';
@@ -91,5 +94,131 @@ class AppChatInfoExtensions extends ChatInfoExtensions {
         slivers: (context) => savedHistorySlivers(context, chat.id),
       ),
     ];
+  }
+}
+
+/// People's stories in a row under the chat list title: yours first (or a
+/// "+" to post one), then everyone else, unseen first. Hidden when nobody
+/// has a story or the user hid stories.
+class StoryStrip extends StatelessWidget {
+  const StoryStrip({super.key, required this.stories, required this.prefs});
+
+  final StoriesRepository stories;
+  final AppPreferences prefs;
+
+  static const _avatar = 54.0;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: Listenable.merge([stories, prefs.changes]),
+    builder: (context, _) {
+      final me = switch (context.read<AuthBloc>().state.step) {
+        AuthReady(:final me, :final capabilities) when !capabilities.isBot => me.id,
+        _ => null,
+      };
+      final feed = prefs.hideStories || me == null ? const <td.ChatActiveStories>[] : stories.feed;
+      final others = [
+        for (final s in feed)
+          if (s.chatId != me) s,
+      ];
+      final mine = me == null ? null : stories.of(me);
+      return AnimatedSize(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topCenter,
+        child: others.isEmpty && mine == null
+            ? const SizedBox(width: double.infinity)
+            : SizedBox(
+                height: 92,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  children: [
+                    _item(
+                      context,
+                      chatId: me!,
+                      label: 'Your story',
+                      active: mine,
+                      onTap: mine == null
+                          ? () => postStoryAsMe(context)
+                          : () => Navigator.of(context).push(StoryViewerScreen.route([me])),
+                    ),
+                    for (var i = 0; i < others.length; i++)
+                      _item(
+                        context,
+                        chatId: others[i].chatId,
+                        active: others[i],
+                        onTap: () => Navigator.of(context)
+                            .push(StoryViewerScreen.route([for (final s in others) s.chatId], initial: i)),
+                      ),
+                  ],
+                ),
+              ),
+      );
+    },
+  );
+
+  Widget _item(
+    BuildContext context, {
+    required int chatId,
+    required td.ChatActiveStories? active,
+    required VoidCallback onTap,
+    String? label,
+  }) {
+    final chat = context.read<TelegramCache>().chats[chatId];
+    final name = label ?? (chat?.title.split(' ').first ?? '');
+    final avatar = chat == null
+        ? const CircleAvatar(radius: _avatar / 2, backgroundColor: GlowColors.surfaceHigh)
+        : ChatAvatar.chat(chat, size: _avatar);
+    return Semantics(
+      button: true,
+      label: active == null ? 'Post a story' : '$name, story',
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: SizedBox(
+          width: 68,
+          child: Column(
+            children: [
+              const SizedBox(height: 4),
+              if (active == null)
+                // Your avatar with a "+" to post.
+                GestureDetector(
+                  onTap: onTap,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Padding(padding: const EdgeInsets.all(4), child: avatar),
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: GlowColors.active,
+                            border: Border.all(color: GlowColors.background, width: 2),
+                          ),
+                          child: const Icon(Icons.add_rounded, size: 15, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                StoryHalo(size: _avatar, unseen: StoryFeed.hasUnseen(active), onTap: onTap, child: avatar),
+              const SizedBox(height: 4),
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11.5, color: GlowColors.text),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

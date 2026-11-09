@@ -188,11 +188,11 @@ void main() {
   testWidgets('album: swiping pages, and every picture shows the album caption', (tester) async {
     messages = [photo(1, caption: 'Trip', album: 9), photo(2, album: 9)];
     await openViewer(tester);
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.textContaining('1 of 2'), findsOneWidget);
     expect(find.text('Trip'), findsOneWidget);
     await tester.flingFrom(const Offset(300, 400), const Offset(-200, 0), 1500);
     await tester.pumpAndSettle();
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.textContaining('2 of 2'), findsOneWidget);
     expect(find.text('Trip'), findsOneWidget);
   });
 

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lumina_tdlib/api.dart' as td;
 
+import '../../../../core/widgets/chat_scrolling.dart';
+import '../../../../core/widgets/delivery_ticks.dart';
 import '../../../../core/telegram/display.dart';
 import '../../../../core/telegram/telegram_cache.dart';
 import '../../../../core/telegram/widgets/chat_avatar.dart';
@@ -29,6 +31,9 @@ class TimelineChatRow extends StatefulWidget {
     this.tint,
   });
 
+  /// Every row is this tall (the list relies on it).
+  static const height = 72.0;
+
   final td.Chat chat;
   final bool isFirst;
   final bool isLast;
@@ -45,14 +50,27 @@ class TimelineChatRow extends StatefulWidget {
 
 class _TimelineChatRowState extends State<TimelineChatRow> with SingleTickerProviderStateMixin {
   late final AnimationController _pulse = AnimationController(vsync: this, duration: Motion.pulse);
+  var _lastPulse = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   void didUpdateWidget(TimelineChatRow oldWidget) {
     super.didUpdateWidget(oldWidget);
     final before = oldWidget.chat.lastMessage, after = widget.chat.lastMessage;
-    if (after != null && before?.id != after.id && !after.isOutgoing && Motion.ambientEnabled(context)) {
-      _pulse.forward(from: 0);
+    if (after == null || before?.id == after.id || after.isOutgoing || !Motion.ambientEnabled(context)) return;
+    // Each pulse animates the row at the display rate. Busy channels (muted,
+    // several posts a second) kept some row pulsing at all times, so the
+    // list never went idle and every scroll frame carried the pulses too.
+    // Only chats that notify you pulse, at most every few seconds, and
+    // never while the list moves.
+    final now = DateTime.now();
+    if (context.read<TelegramCache>().isMuted(widget.chat) ||
+        ChatScrolling.moving.value ||
+        _pulse.isAnimating ||
+        now.difference(_lastPulse) < const Duration(seconds: 4)) {
+      return;
     }
+    _lastPulse = now;
+    _pulse.forward(from: 0);
   }
 
   @override
@@ -105,7 +123,7 @@ class _TimelineChatRowState extends State<TimelineChatRow> with SingleTickerProv
               text: 'Draft: ',
               style: TextStyle(color: GlowColors.coral),
             ),
-            TextSpan(text: draftText),
+            TextSpan(text: _oneLine(draftText)),
           ],
         ),
         maxLines: 1,
@@ -120,7 +138,7 @@ class _TimelineChatRowState extends State<TimelineChatRow> with SingleTickerProv
           ? 'You: '
           : '';
       preview = Text(
-        '$sender${Display.preview(cache, last)}',
+        _oneLine('$sender${Display.preview(cache, last)}'),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(color: GlowColors.textMuted),
@@ -138,14 +156,14 @@ class _TimelineChatRowState extends State<TimelineChatRow> with SingleTickerProv
         if (muted) 'muted',
         if (pinned) 'pinned',
         if (lastDate != null) Display.listTime(lastDate, now),
-        if (actions.isEmpty) Display.preview(cache, last),
+        if (actions.isEmpty) _oneLine(Display.preview(cache, last)),
       ].join(', '),
       excludeSemantics: true,
       child: InkWell(
         onTap: widget.onTap,
         onLongPress: widget.onLongPress,
         child: SizedBox(
-          height: 76,
+          height: TimelineChatRow.height, // Telegram's row is 70 dp (DialogCell); a touch more air
           child: Row(
             children: [
               // The ribbon: thread + node.
@@ -154,7 +172,7 @@ class _TimelineChatRowState extends State<TimelineChatRow> with SingleTickerProv
                 child: AnimatedBuilder(
                   animation: _pulse,
                   builder: (context, _) => CustomPaint(
-                    size: const Size(36, 76),
+                    size: const Size(36, TimelineChatRow.height),
                     painter: _RibbonPainter(
                       tint: tint,
                       nodeSize: nodeSize * (1 + 0.5 * math.sin(_pulse.value * math.pi)),
@@ -169,7 +187,7 @@ class _TimelineChatRowState extends State<TimelineChatRow> with SingleTickerProv
               _decoratedAvatar(
                 context,
                 chat,
-                ChatAvatar.chat(chat, size: 50, glowIntensity: unread > 0 ? 0.35 : 0, online: online),
+                ChatAvatar.chat(chat, size: 52, glowIntensity: unread > 0 ? 0.35 : 0, online: online),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -225,13 +243,20 @@ class _TimelineChatRowState extends State<TimelineChatRow> with SingleTickerProv
                     Row(
                       children: [
                         Expanded(child: preview),
+                        // Pinned shows next to the counters, never under them.
+                        if (pinned && (unread > 0 || chat.unreadMentionCount > 0))
+                          const Padding(
+                            padding: EdgeInsets.only(left: 6, right: 2),
+                            child: Icon(Icons.push_pin_rounded, size: 14, color: GlowColors.textMuted),
+                          ),
                         if (chat.unreadMentionCount > 0)
                           const _Badge(text: '@', color: GlowColors.magentaDeep),
                         if (unread > 0)
                           _Badge(
                             text: unread > 999 ? '999+' : '$unread',
-                            color: muted ? GlowColors.surfaceHigh : GlowColors.teal,
-                            foreground: muted ? GlowColors.textMuted : GlowColors.onAccent,
+                            // Cyan with dark text (12.2 : 1); muted chats a quiet grey pill.
+                            color: muted ? const Color(0xFF3A4150) : GlowColors.cyan,
+                            foreground: muted ? const Color(0xFFC3CAD5) : GlowColors.onAccent,
                           )
                         else if (pinned)
                           const Padding(
@@ -250,6 +275,24 @@ class _TimelineChatRowState extends State<TimelineChatRow> with SingleTickerProv
       ),
     );
   }
+
+  /// What one row line can show. Channel posts run to thousands of
+  /// characters, and Flutter shapes a paragraph's whole text before it
+  /// ellipsizes: each such row cost over a millisecond of layout as it
+  /// scrolled in (the chat list's stutter). Newlines go too (one line).
+  static String _oneLine(String text) {
+    var end = text.length;
+    if (end > 120) {
+      end = 120;
+      // Never split an emoji's surrogate pair.
+      final unit = text.codeUnitAt(end - 1);
+      if (unit >= 0xD800 && unit <= 0xDBFF) end--;
+    }
+    final cut = end == text.length ? text : text.substring(0, end);
+    return cut.contains('\n') ? cut.replaceAll(_newlines, ' ') : cut;
+  }
+
+  static final _newlines = RegExp(r'\s*\n\s*');
 
   static String _actionText(
     TelegramCache cache,
@@ -298,15 +341,11 @@ class _ReadMark extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       label: read ? 'read' : 'sent',
-      child: Container(
-        width: 9,
-        height: 9,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: read ? GlowColors.cyan : Colors.transparent,
-          border: Border.all(color: read ? GlowColors.cyan : GlowColors.textMuted, width: 1.4),
-          boxShadow: read ? glow(GlowColors.cyan, intensity: 0.5) : null,
-        ),
+      child: DeliveryTicks(
+        state: read ? TickState.read : TickState.sent,
+        color: GlowColors.textMuted,
+        readColor: GlowColors.ocean,
+        size: 14,
       ),
     );
   }
@@ -377,30 +416,70 @@ class _RibbonPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2 + 2, cy = size.height / 2;
-    final thread = Paint()
-      ..strokeWidth = 2
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: tint == null
-            ? [GlowColors.violet.withValues(alpha: 0.35), GlowColors.teal.withValues(alpha: 0.35)]
-            : [tint!.withValues(alpha: 0.45), tint!.withValues(alpha: 0.2)],
-      ).createShader(Offset.zero & size);
-    canvas.drawLine(Offset(cx, isFirst ? cy : 0), Offset(cx, isLast ? cy : size.height), thread);
-    if (glow > 0.05) {
-      canvas.drawCircle(
-        Offset(cx, cy),
-        nodeSize * (1.2 + glow),
-        Paint()
-          ..color = color.withValues(alpha: 0.25 * glow)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 6 + 8 * glow),
-      );
-    }
-    canvas.drawCircle(
-      Offset(cx, cy),
-      nodeSize / 2,
-      Paint()..color = Color.lerp(GlowColors.outlineStrong, color, 0.3 + 0.7 * glow)!,
+    final from = Offset(cx, isFirst ? cy : 0), to = Offset(cx, isLast ? cy : size.height);
+    final colors = tint == null
+        ? [GlowColors.violet, GlowColors.cyan]
+        : [tint!, Color.lerp(tint, GlowColors.cyan, 0.35)!];
+    Shader shader(double a, double b) => LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        colors.first.withValues(alpha: a),
+        colors.last.withValues(alpha: b),
+      ],
+    ).createShader(Offset.zero & size);
+    // A soft halo along the thread, then the thread itself: one line that
+    // visibly links the chats, brighter near recent ones. No mask blurs
+    // anywhere here: Impeller redraws every row each scroll frame, and ~20
+    // blurs a frame made the list stutter. Wide faint strokes read the same.
+    canvas.drawLine(
+      from,
+      to,
+      Paint()
+        ..strokeWidth = 7
+        ..strokeCap = StrokeCap.round
+        ..shader = shader(0.07 + 0.08 * glow, 0.05 + 0.08 * glow),
     );
+    canvas.drawLine(
+      from,
+      to,
+      Paint()
+        ..strokeWidth = 4
+        ..strokeCap = StrokeCap.round
+        ..shader = shader(0.12 + 0.12 * glow, 0.08 + 0.12 * glow),
+    );
+    canvas.drawLine(
+      from,
+      to,
+      Paint()
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round
+        ..shader = shader(0.55 + 0.3 * glow, 0.4 + 0.3 * glow),
+    );
+    final node = Offset(cx, cy);
+    // Glow around the node: always a little, more for recent chats. A radial
+    // gradient, not a blur.
+    final glowR = nodeSize * (1.6 + 1.4 * glow);
+    canvas.drawCircle(
+      node,
+      glowR,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            color.withValues(alpha: 0.30 + 0.30 * glow),
+            color.withValues(alpha: 0),
+          ],
+        ).createShader(Rect.fromCircle(center: node, radius: glowR)),
+    );
+    // A dark ring cuts the node out of the thread, then the bead.
+    canvas.drawCircle(node, nodeSize / 2 + 2, Paint()..color = GlowColors.background.withValues(alpha: 0.85));
+    canvas.drawCircle(
+      node,
+      nodeSize / 2,
+      Paint()..color = Color.lerp(colors.first, color, 0.4 + 0.6 * glow)!,
+    );
+    // A bright core makes it read as light rather than paint.
+    canvas.drawCircle(node, nodeSize / 5, Paint()..color = Colors.white.withValues(alpha: 0.35 + 0.4 * glow));
   }
 
   @override
